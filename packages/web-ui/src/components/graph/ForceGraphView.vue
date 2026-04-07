@@ -381,11 +381,17 @@ function focusNode(nodeId: string) {
 watch(() => graphStore.filteredNodes.length + graphStore.filteredEdges.length, () => {
   if (!cy) return;
 
-  // Check if clustering is needed
-  const totalNodes = graphStore.graphData?.nodes.length || 0;
-  if (clustering.needsClustering(totalNodes) && !useClusters.value) {
+  // Use FILTERED count for clustering decision, not total
+  const filteredCount = graphStore.filteredNodes.length;
+
+  if (clustering.needsClustering(filteredCount) && !useClusters.value) {
+    // Too many filtered nodes — enable clustering
     useClusters.value = true;
-    clustering.fetchClustered().then(() => refreshGraph());
+    clustering.fetchClustered(3).then(() => refreshGraph());
+  } else if (useClusters.value && !clustering.needsClustering(filteredCount)) {
+    // Filtered count dropped below threshold — disable clustering
+    useClusters.value = false;
+    refreshGraph();
   } else {
     refreshGraph();
   }
@@ -397,11 +403,12 @@ watch(() => graphStore.selectedNodeId, (nodeId) => {
 });
 
 onMounted(async () => {
-  // Check if clustering is needed
-  const totalNodes = graphStore.graphData?.nodes.length || 0;
-  if (clustering.needsClustering(totalNodes)) {
+  // Use FILTERED count for clustering decision
+  const filteredCount = graphStore.filteredNodes.length;
+
+  if (clustering.needsClustering(filteredCount)) {
     useClusters.value = true;
-    await clustering.fetchClustered();
+    await clustering.fetchClustered(3); // depth=3 for meaningful clusters
   }
 
   await nextTick();
@@ -438,8 +445,7 @@ defineExpose({ fitToView, focusNode });
         Fit
       </button>
       <button
-        v-if="clustering.needsClustering(graphStore.graphData?.nodes.length || 0)"
-        @click="useClusters = !useClusters; refreshGraph()"
+        @click="useClusters = !useClusters; if (useClusters) { clustering.fetchClustered(3).then(() => refreshGraph()) } else { refreshGraph() }"
         class="bg-gray-800/90 hover:bg-gray-700 rounded px-2 py-1 text-xs border border-gray-700"
       >
         {{ useClusters ? 'Expand All' : 'Cluster' }}

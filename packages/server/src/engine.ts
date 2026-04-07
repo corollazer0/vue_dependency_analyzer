@@ -235,7 +235,7 @@ export class AnalysisEngine {
     return toJSON(filtered);
   }
 
-  getGraphClustered(depth: number = 1): { clusters: ClusterNode[]; edges: ClusterEdge[] } {
+  getGraphClustered(depth: number = 3): { clusters: ClusterNode[]; edges: ClusterEdge[] } {
     const nodes = this.graph.getAllNodes();
     const edges = this.graph.getAllEdges();
 
@@ -251,20 +251,36 @@ export class AnalysisEngine {
     const clusterEdges: ClusterEdge[] = [];
     const nodeToCluster = new Map<string, string>();
 
-    for (const [dir, groupNodes] of groups) {
-      const clusterId = `cluster:${dir}`;
-      const kindCounts: Record<string, number> = {};
-      for (const n of groupNodes) {
-        kindCounts[n.kind] = (kindCounts[n.kind] || 0) + 1;
-        nodeToCluster.set(n.id, clusterId);
-      }
+    // Small groups (< 5 nodes) get their own individual nodes, not clusters
+    const MIN_CLUSTER_SIZE = 5;
 
-      clusters.push({
-        id: clusterId,
-        label: dir || '(root)',
-        childCount: groupNodes.length,
-        childKinds: kindCounts,
-      });
+    for (const [dir, groupNodes] of groups) {
+      if (groupNodes.length < MIN_CLUSTER_SIZE) {
+        // Too small to cluster — add as individual nodes
+        for (const n of groupNodes) {
+          nodeToCluster.set(n.id, n.id); // self-cluster
+          clusters.push({
+            id: n.id,
+            label: n.label,
+            childCount: 0, // signals it's an individual node
+            childKinds: { [n.kind]: 1 },
+          });
+        }
+      } else {
+        const clusterId = `cluster:${dir}`;
+        const kindCounts: Record<string, number> = {};
+        for (const n of groupNodes) {
+          kindCounts[n.kind] = (kindCounts[n.kind] || 0) + 1;
+          nodeToCluster.set(n.id, clusterId);
+        }
+
+        clusters.push({
+          id: clusterId,
+          label: dir || '(root)',
+          childCount: groupNodes.length,
+          childKinds: kindCounts,
+        });
+      }
     }
 
     // Aggregate edges between clusters
