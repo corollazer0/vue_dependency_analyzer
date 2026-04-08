@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useOrderStore } from '@/stores/orderStore'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useUserStore } from '@/stores/userStore'
+import { useFilter } from '@/composables/useFilter'
 import axios from 'axios'
 
 export function useNotification() {
-  const authStore = useAuthStore()
-  const orderStore = useOrderStore()
-  const { dragDrop } = useDragDrop()
+  const wishlistStore = useWishlistStore()
+  const userStore = useUserStore()
+  const { filter } = useFilter()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useNotification() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post(`/api/orders/${id}/cancel`)
-    return response.data
-    const response = await axios.post('/api/coupons/validate')
-    return response.data
+    const result = await axios.get(`/api/products/${id}/reviews`)
+    return result.data
+    const result1 = await axios.delete(`/api/products/${id}`)
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

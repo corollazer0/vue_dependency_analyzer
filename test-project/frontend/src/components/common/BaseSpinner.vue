@@ -1,55 +1,60 @@
 <template>
   <div class="common-baseSpinner">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-toast />
-    <user-form />
-    <user-dropdown />
+    <product-bulk-edit />
+    <product-bundle />
+    <order-invoice />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useCart } from '@/composables/useCart'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useLocalStorage } from '@/composables/useLocalStorage'
 import axios from 'axios'
-import BaseToast from '@/components/common/BaseToast.vue'
-import UserForm from '@/components/user/UserForm.vue'
-import UserDropdown from '@/components/user/UserDropdown.vue'
+import ProductBulkEdit from '@/components/product/ProductBulkEdit.vue'
+import ProductBundle from '@/components/product/ProductBundle.vue'
+import OrderInvoice from '@/components/order/OrderInvoice.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  size: { type: String, default: '' },
   modelValue: { type: String, default: '' },
-  items: { type: String, default: '' }
+  title: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
 const emit = defineEmits(['delete'])
 
-  const reviewStore = useReviewStore()
-  const cart = useCart()
+  const analyticsStore = useAnalyticsStore()
+
+
+  const localStorage = useLocalStorage()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post(`/api/products/${id}/reviews`)
+    const response = await axios.post(`/api/orders/${props.id}/cancel`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

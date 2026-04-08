@@ -1,52 +1,57 @@
 <template>
   <div class="auth-oAuthConsent">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-sort />
-    <user-stats />
+    <user-bio />
+    <icon-wrapper />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
 import { useInventoryStore } from '@/stores/inventoryStore'
-import { useOrder } from '@/composables/useOrder'
+import { useNotification } from '@/composables/useNotification'
 import axios from 'axios'
-import UserSort from '@/components/user/UserSort.vue'
-import UserStats from '@/components/user/UserStats.vue'
+import UserBio from '@/components/user/UserBio.vue'
+import IconWrapper from '@/components/common/IconWrapper.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  title: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['delete'])
 
   const inventoryStore = useInventoryStore()
-  const order = useOrder()
 
-  const localeValue = inject('locale')
 
-const loading = ref(false)
+  const notification = useNotification()
+
+  const configValue = inject('config')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/inventory/${id}`)
+    const response = await axios.delete(`/api/cart/items/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

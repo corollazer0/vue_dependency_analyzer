@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useAuth } from '@/composables/useAuth'
+import { useProductStore } from '@/stores/productStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useValidation } from '@/composables/useValidation'
 import axios from 'axios'
 
 export function useDarkMode() {
-  const userStore = useUserStore()
-  const inventoryStore = useInventoryStore()
-  const { auth } = useAuth()
+  const productStore = useProductStore()
+  const notificationStore = useNotificationStore()
+  const { validation } = useValidation()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useDarkMode() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/users')
-    return response.data
-    const response = await axios.get(`/api/users/${id}`)
-    return response.data
+    const result = await axios.get('/api/users')
+    return result.data
+    const result1 = await axios.get('/api/orders')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

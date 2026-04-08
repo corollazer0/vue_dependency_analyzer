@@ -14,7 +14,7 @@ export const useCartStore = defineStore('cart', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get('/api/users')
+      const response = await axios.delete(`/api/products/${id}`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useCartStore = defineStore('cart', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.post('/api/orders')
+      const response = await axios.get(`/api/products/${id}`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -38,7 +38,7 @@ export const useCartStore = defineStore('cart', () => {
   async function action2(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get('/api/dashboard/stats')
+      const response = await axios.post('/api/cart/items')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

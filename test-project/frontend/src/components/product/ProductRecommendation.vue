@@ -1,52 +1,57 @@
 <template>
   <div class="product-productRecommendation">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-tooltip />
-    <base-select />
+    <order-notes />
+    <user-modal />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/userStore'
-import { useValidation } from '@/composables/useValidation'
+import { useEventBus } from '@/composables/useEventBus'
 import axios from 'axios'
-import BaseTooltip from '@/components/common/BaseTooltip.vue'
-import BaseSelect from '@/components/common/BaseSelect.vue'
+import OrderNotes from '@/components/order/OrderNotes.vue'
+import UserModal from '@/components/user/UserModal.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
   modelValue: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['change'])
 
   const userStore = useUserStore()
-  const validation = useValidation()
+
+
+  const eventBus = useEventBus()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/coupons/validate')
+    const response = await axios.post('/api/orders')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

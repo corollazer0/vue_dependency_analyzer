@@ -6,11 +6,11 @@ export async function interceptorsAction0(id?: string, data?: any) {
 }
 
 export async function interceptorsAction1(id?: string, data?: any) {
-  const response = await axios.get('/api/categories')
+  const response = await axios.get(`/api/products/${id}/reviews`)
   return response.data
 }
 
 export async function interceptorsAction2(id?: string, data?: any) {
-  const response = await axios.get('/api/dashboard/revenue')
+  const response = await axios.get('/api/users')
   return response.data
 }

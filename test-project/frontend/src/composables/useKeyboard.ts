@@ -14,8 +14,8 @@ export function useKeyboard() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.delete(`/api/users/${id}`)
-    return response.data
+    const result = await axios.put(`/api/products/${id}`)
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

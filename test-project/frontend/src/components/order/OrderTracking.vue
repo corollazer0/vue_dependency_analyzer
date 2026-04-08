@@ -1,58 +1,63 @@
 <template>
   <div class="order-orderTracking">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <role-guard />
-    <user-table />
+    <mini-chart />
+    <activity-feed />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSearchStore } from '@/stores/searchStore'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useFilter } from '@/composables/useFilter'
-import { useLocalStorage } from '@/composables/useLocalStorage'
-import { validators } from '@/utils/validators'
+import { useOrderStore } from '@/stores/orderStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useDebounce } from '@/composables/useDebounce'
+import { useProduct } from '@/composables/useProduct'
+import { users } from '@/api/users'
 import axios from 'axios'
-import RoleGuard from '@/components/auth/RoleGuard.vue'
-import UserTable from '@/components/user/UserTable.vue'
+import MiniChart from '@/components/dashboard/MiniChart.vue'
+import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  size: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'delete'])
+const emit = defineEmits(['delete', 'select'])
 
-  const searchStore = useSearchStore()
-  const settingsStore = useSettingsStore()
-  const filter = useFilter()
-  const localStorage = useLocalStorage()
+  const orderStore = useOrderStore()
+  const analyticsStore = useAnalyticsStore()
 
 
+  const debounce = useDebounce()
+  const product = useProduct()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/orders')
-    const response = await axios.get('/api/settings')
-    data.value = response.data
+    const response = await axios.post('/api/products')
+    const response1 = await axios.post('/api/users')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,55 +1,60 @@
 <template>
   <div class="order-orderConfirmation">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-spinner />
-    <confirm-dialog />
-    <trusted-devices />
+    <ldap-login />
+    <product-detail />
+    <product-list />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useUser } from '@/composables/useUser'
+import { useCouponStore } from '@/stores/couponStore'
+import { useToast } from '@/composables/useToast'
 import axios from 'axios'
-import BaseSpinner from '@/components/common/BaseSpinner.vue'
-import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
-import TrustedDevices from '@/components/auth/TrustedDevices.vue'
+import LdapLogin from '@/components/auth/LdapLogin.vue'
+import ProductDetail from '@/components/product/ProductDetail.vue'
+import ProductList from '@/components/product/ProductList.vue'
 
 const props = defineProps({
   size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   variant: { type: String, default: '' },
-  disabled: { type: String, default: '' },
   items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['select'])
 
-  const reviewStore = useReviewStore()
-  const user = useUser()
+  const couponStore = useCouponStore()
 
-  const eventBusValue = inject('eventBus')
 
-const loading = ref(false)
+  const toast = useToast()
+
+  const loggerValue = inject('logger')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/orders/${id}/status`)
+    const response = await axios.get('/api/wishlist')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

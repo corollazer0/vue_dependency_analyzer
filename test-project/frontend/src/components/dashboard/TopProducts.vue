@@ -1,52 +1,57 @@
 <template>
   <div class="dashboard-topProducts">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-cancel />
-    <date-range-selector />
+    <order-receipt />
+    <user-activity />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useSearch } from '@/composables/useSearch'
 import axios from 'axios'
-import OrderCancel from '@/components/order/OrderCancel.vue'
-import DateRangeSelector from '@/components/dashboard/DateRangeSelector.vue'
+import OrderReceipt from '@/components/order/OrderReceipt.vue'
+import UserActivity from '@/components/user/UserActivity.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['delete'])
 
-  const notificationStore = useNotificationStore()
-  const localStorage = useLocalStorage()
-
+  const settingsStore = useSettingsStore()
 
 
-const loading = ref(false)
+  const search = useSearch()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/dashboard/stats')
+    const response = await axios.get('/api/wishlist')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

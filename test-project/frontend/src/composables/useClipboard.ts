@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useUserStore } from '@/stores/userStore'
 import axios from 'axios'
 
 export function useClipboard() {
-  const analyticsStore = useAnalyticsStore()
+  const userStore = useUserStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function useClipboard() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get(`/api/orders/${id}`)
-    return response.data
+    const result = await axios.get('/api/dashboard/stats')
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

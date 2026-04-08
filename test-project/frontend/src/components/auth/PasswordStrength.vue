@@ -1,52 +1,57 @@
 <template>
   <div class="auth-passwordStrength">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <biometric-auth />
-    <user-roles />
+    <user-badge />
+    <user-bio />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { useOrder } from '@/composables/useOrder'
+import { useClipboard } from '@/composables/useClipboard'
 import axios from 'axios'
-import BiometricAuth from '@/components/auth/BiometricAuth.vue'
-import UserRoles from '@/components/user/UserRoles.vue'
+import UserBadge from '@/components/user/UserBadge.vue'
+import UserBio from '@/components/user/UserBio.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['update'])
 
   const settingsStore = useSettingsStore()
-  const order = useOrder()
+
+
+  const clipboard = useClipboard()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/orders')
+    const response = await axios.post('/api/products')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

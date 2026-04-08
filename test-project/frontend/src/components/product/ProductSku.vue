@@ -1,61 +1,66 @@
 <template>
   <div class="product-productSku">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <activity-feed />
-    <sso-login />
-    <ldap-login />
+    <user-contacts />
+    <order-summary />
+    <order-search />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useClickOutside } from '@/composables/useClickOutside'
+import { useUserStore } from '@/stores/userStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useForm } from '@/composables/useForm'
 import { useDebounce } from '@/composables/useDebounce'
-import { helpers } from '@/utils/helpers'
+import { analytics } from '@/services/analytics'
 import axios from 'axios'
-import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
-import SsoLogin from '@/components/auth/SsoLogin.vue'
-import LdapLogin from '@/components/auth/LdapLogin.vue'
+import UserContacts from '@/components/user/UserContacts.vue'
+import OrderSummary from '@/components/order/OrderSummary.vue'
+import OrderSearch from '@/components/order/OrderSearch.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
-  title: { type: String, default: '' },
   items: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'select'])
+const emit = defineEmits(['select', 'change'])
 
-  const uIStore = useUIStore()
-  const settingsStore = useSettingsStore()
-  const clickOutside = useClickOutside()
+  const userStore = useUserStore()
+  const notificationStore = useNotificationStore()
+
+
+  const form = useForm()
   const debounce = useDebounce()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/wishlist')
-    const response = await axios.delete(`/api/users/${id}`)
-    data.value = response.data
+    const response = await axios.put(`/api/inventory/${props.id}`)
+    const response1 = await axios.post('/api/users')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

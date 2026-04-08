@@ -14,7 +14,7 @@ export const useCouponStore = defineStore('coupon', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get('/api/dashboard/revenue')
+      const response = await axios.get('/api/wishlist')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useCouponStore = defineStore('coupon', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get('/api/cart')
+      const response = await axios.get('/api/search')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

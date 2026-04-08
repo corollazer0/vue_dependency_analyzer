@@ -1,61 +1,66 @@
 <template>
   <div class="auth-identityVerify">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <pie-chart />
-    <user-export />
-    <user-bio />
+    <auth-error />
+    <base-avatar />
+    <base-pagination />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useUIStore } from '@/stores/uIStore'
-import { useCartStore } from '@/stores/cartStore'
-import { useNotification } from '@/composables/useNotification'
-import { useAuth } from '@/composables/useAuth'
-import { interceptors } from '@/api/interceptors'
+import { useUserStore } from '@/stores/userStore'
+import { useFetch } from '@/composables/useFetch'
+import { useClipboard } from '@/composables/useClipboard'
+import { logger } from '@/services/logger'
 import axios from 'axios'
-import PieChart from '@/components/dashboard/PieChart.vue'
-import UserExport from '@/components/user/UserExport.vue'
-import UserBio from '@/components/user/UserBio.vue'
+import AuthError from '@/components/auth/AuthError.vue'
+import BaseAvatar from '@/components/common/BaseAvatar.vue'
+import BasePagination from '@/components/common/BasePagination.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' },
-  items: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  title: { type: String, default: '' },
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'submit'])
+const emit = defineEmits(['update', 'close'])
 
   const uIStore = useUIStore()
-  const cartStore = useCartStore()
-  const notification = useNotification()
-  const auth = useAuth()
+  const userStore = useUserStore()
+
+
+  const fetch = useFetch()
+  const clipboard = useClipboard()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/users')
-    const response = await axios.post('/api/cart/items')
-    data.value = response.data
+    const response = await axios.post('/api/auth/register')
+    const response1 = await axios.get('/api/analytics/conversions')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

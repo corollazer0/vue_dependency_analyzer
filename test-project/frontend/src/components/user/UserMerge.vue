@@ -1,58 +1,63 @@
 <template>
   <div class="user-userMerge">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-search />
-    <user-form />
+    <order-summary />
+    <app-navigation />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useSearchStore } from '@/stores/searchStore'
-import { useAsync } from '@/composables/useAsync'
-import { useNotification } from '@/composables/useNotification'
-import { auth } from '@/api/auth'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { useGeolocation } from '@/composables/useGeolocation'
+import { products } from '@/api/products'
 import axios from 'axios'
-import UserSearch from '@/components/user/UserSearch.vue'
-import UserForm from '@/components/user/UserForm.vue'
+import OrderSummary from '@/components/order/OrderSummary.vue'
+import AppNavigation from '@/components/common/AppNavigation.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'update'])
+const emit = defineEmits(['delete', 'close'])
 
-  const uIStore = useUIStore()
-  const searchStore = useSearchStore()
-  const async = useAsync()
-  const notification = useNotification()
+  const settingsStore = useSettingsStore()
+  const authStore = useAuthStore()
 
 
+  const infiniteScroll = useInfiniteScroll()
+  const geolocation = useGeolocation()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/products')
-    const response = await axios.get('/api/products')
-    data.value = response.data
+    const response = await axios.put(`/api/products/${props.id}`)
+    const response1 = await axios.get('/api/dashboard/revenue')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

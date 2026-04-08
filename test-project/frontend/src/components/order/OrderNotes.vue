@@ -1,52 +1,57 @@
 <template>
   <div class="order-orderNotes">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <dashboard-widget />
-    <order-bulk-action />
+    <product-brand />
+    <product-image />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useDragDrop } from '@/composables/useDragDrop'
 import axios from 'axios'
-import DashboardWidget from '@/components/dashboard/DashboardWidget.vue'
-import OrderBulkAction from '@/components/order/OrderBulkAction.vue'
+import ProductBrand from '@/components/product/ProductBrand.vue'
+import ProductImage from '@/components/product/ProductImage.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  disabled: { type: String, default: '' },
-  title: { type: String, default: '' }
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['select'])
 
-  const userStore = useUserStore()
-  const mediaQuery = useMediaQuery()
-
+  const notificationStore = useNotificationStore()
 
 
-const loading = ref(false)
+  const dragDrop = useDragDrop()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/orders/${id}/status`)
+    const response = await axios.get('/api/orders')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

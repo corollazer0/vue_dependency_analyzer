@@ -1,55 +1,60 @@
 <template>
   <div class="auth-ldapLogin">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-popover />
-    <social-login />
-    <user-profile />
+    <spark-line />
+    <order-refund />
+    <order-tracking />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useClickOutside } from '@/composables/useClickOutside'
 import axios from 'axios'
-import UserPopover from '@/components/user/UserPopover.vue'
-import SocialLogin from '@/components/auth/SocialLogin.vue'
-import UserProfile from '@/components/user/UserProfile.vue'
+import SparkLine from '@/components/dashboard/SparkLine.vue'
+import OrderRefund from '@/components/order/OrderRefund.vue'
+import OrderTracking from '@/components/order/OrderTracking.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
   items: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['change'])
 
-  const analyticsStore = useAnalyticsStore()
-  const dragDrop = useDragDrop()
-
+  const reviewStore = useReviewStore()
 
 
-const loading = ref(false)
+  const clickOutside = useClickOutside()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/analytics/traffic')
+    const response = await axios.get('/api/settings')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

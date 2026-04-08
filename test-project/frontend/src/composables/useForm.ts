@@ -14,8 +14,8 @@ export function useForm() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/categories')
-    return response.data
+    const result = await axios.put(`/api/orders/${id}/status`)
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

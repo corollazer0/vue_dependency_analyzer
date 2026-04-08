@@ -2,10 +2,10 @@
   <div class="view-settingsView">
     <h1>Settings</h1>
     <div class="view-content">
-    <search-bar />
-    <base-pagination />
-    <sort-select />
-    <base-card />
+    <user-timeline />
+    <user-list />
+    <user-tags />
+    <user-permissions />
     </div>
   </div>
 </template>
@@ -13,24 +13,28 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useCartStore } from '@/stores/cartStore'
-import { useClickOutside } from '@/composables/useClickOutside'
+import { useCouponStore } from '@/stores/couponStore'
+import { useDebounce } from '@/composables/useDebounce'
 import axios from 'axios'
-import SearchBar from '@/components/common/SearchBar.vue'
-import BasePagination from '@/components/common/BasePagination.vue'
-import SortSelect from '@/components/common/SortSelect.vue'
-import BaseCard from '@/components/common/BaseCard.vue'
+import UserTimeline from '@/components/user/UserTimeline.vue'
+import UserList from '@/components/user/UserList.vue'
+import UserTags from '@/components/user/UserTags.vue'
+import UserPermissions from '@/components/user/UserPermissions.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const cartStore = useCartStore()
-  const clickOutside = useClickOutside()
+  const couponStore = useCouponStore()
+  const debounce = useDebounce()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.get('/api/reviews')
+    await axios.post('/api/users')
   } catch (error) {
     console.error('View load error:', error)
   }

@@ -2,6 +2,7 @@ package com.example.service;
 
 import com.example.model.Audit;
 import com.example.repository.AuditRepository;
+import com.example.service.ProductService;
 
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -11,10 +12,12 @@ import java.util.Optional;
 public class AuditService {
 
     private final AuditRepository auditRepository;
+    private final ProductService productService;
 
 
-    public AuditService(AuditRepository auditRepository) {
+    public AuditService(AuditRepository auditRepository, ProductService productService) {
         this.auditRepository = auditRepository;
+        this.productService = productService;
     }
 
     public List<Audit> findAll() {
@@ -32,4 +35,5 @@ public class AuditService {
     public void deleteById(Long id) {
         auditRepository.deleteById(id);
     }
+
 }

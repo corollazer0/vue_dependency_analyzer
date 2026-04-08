@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
+import { useOrderStore } from '@/stores/orderStore'
 import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useWishlistStore } from '@/stores/wishlistStore'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useCart } from '@/composables/useCart'
 import axios from 'axios'
 
 export function useWebSocket() {
+  const orderStore = useOrderStore()
   const analyticsStore = useAnalyticsStore()
-  const wishlistStore = useWishlistStore()
-  const { localStorage } = useLocalStorage()
+  const { cart } = useCart()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useWebSocket() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/users')
-    return response.data
-    const response = await axios.get('/api/categories')
-    return response.data
+    const result = await axios.get(`/api/users/${id}`)
+    return result.data
+    const result1 = await axios.put('/api/settings')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

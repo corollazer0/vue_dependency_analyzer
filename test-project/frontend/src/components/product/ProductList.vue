@@ -1,61 +1,72 @@
 <template>
   <div class="product-productList">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-refund />
-    <order-chart />
-    <product-import />
+    <filter-panel @filter-change="handleFilterChange" @reset="handleReset" />
+    <product-tag />
+    <dashboard-stats />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useUIStore } from '@/stores/uIStore'
-import { useClickOutside } from '@/composables/useClickOutside'
-import { useSearch } from '@/composables/useSearch'
-import { interceptors } from '@/api/interceptors'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useAuth } from '@/composables/useAuth'
+import { useDebounce } from '@/composables/useDebounce'
+import { constants } from '@/utils/constants'
 import axios from 'axios'
-import OrderRefund from '@/components/order/OrderRefund.vue'
-import OrderChart from '@/components/order/OrderChart.vue'
-import ProductImport from '@/components/product/ProductImport.vue'
+import FilterPanel from '@/components/common/FilterPanel.vue'
+import ProductTag from '@/components/product/ProductTag.vue'
+import DashboardStats from '@/components/dashboard/DashboardStats.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' },
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   items: { type: String, default: '' },
   disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['close', 'update'])
 
-  const notificationStore = useNotificationStore()
-  const uIStore = useUIStore()
-  const clickOutside = useClickOutside()
-  const search = useSearch()
-  provide('locale', ref('value'))
+  const analyticsStore = useAnalyticsStore()
+  const reviewStore = useReviewStore()
 
 
-const loading = ref(false)
+  const auth = useAuth()
+  const debounce = useDebounce()
+  provide('eventBus', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/products/${id}`)
-    const response = await axios.get('/api/users')
-    data.value = response.data
+    const response = await axios.get('/api/cart')
+    const response1 = await axios.post('/api/auth/logout')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+  function handleFilterChange() {
+    console.log('filter-change event received')
+  }
+
+  function handleReset() {
+    console.log('reset event received')
+  }
+
 
 onMounted(() => {
   fetchData()

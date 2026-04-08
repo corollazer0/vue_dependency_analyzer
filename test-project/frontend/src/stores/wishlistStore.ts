@@ -14,7 +14,7 @@ export const useWishlistStore = defineStore('wishlist', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.post(`/api/products/${id}/reviews`)
+      const response = await axios.post(`/api/orders/${id}/cancel`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useWishlistStore = defineStore('wishlist', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.post('/api/auth/logout')
+      const response = await axios.get(`/api/users/${id}`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -38,7 +38,7 @@ export const useWishlistStore = defineStore('wishlist', () => {
   async function action2(id?: string) {
     loading.value = true
     try {
-      const response = await axios.delete(`/api/wishlist/${id}`)
+      const response = await axios.post('/api/auth/register')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

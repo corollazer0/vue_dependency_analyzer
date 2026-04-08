@@ -1,61 +1,67 @@
 <template>
   <div class="order-orderItem">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <role-guard />
-    <metric-card />
-    <base-alert />
+    <activity-feed />
+    <order-detail />
+    <product-upload />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('remove')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useCouponStore } from '@/stores/couponStore'
-import { useAuth } from '@/composables/useAuth'
-import { useForm } from '@/composables/useForm'
-import { auth } from '@/api/auth'
+import { useRouter } from 'vue-router'
+import { useOrderStore } from '@/stores/orderStore'
+import { useProductStore } from '@/stores/productStore'
+import { useOrder } from '@/composables/useOrder'
+import { useProduct } from '@/composables/useProduct'
+import { endpoints } from '@/api/endpoints'
 import axios from 'axios'
-import RoleGuard from '@/components/auth/RoleGuard.vue'
-import MetricCard from '@/components/dashboard/MetricCard.vue'
-import BaseAlert from '@/components/common/BaseAlert.vue'
+import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
+import OrderDetail from '@/components/order/OrderDetail.vue'
+import ProductUpload from '@/components/product/ProductUpload.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   title: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change', 'update'])
+const emit = defineEmits(['remove', 'update-quantity'])
 
-  const reviewStore = useReviewStore()
-  const couponStore = useCouponStore()
-  const auth = useAuth()
-  const form = useForm()
+  const orderStore = useOrderStore()
+  const productStore = useProductStore()
+
+  const router = useRouter()
+  const order = useOrder()
+  const product = useProduct()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/products/${id}/reviews`)
-    const response = await axios.get('/api/settings')
-    data.value = response.data
+    const response = await axios.post('/api/auth/logout')
+    const response1 = await axios.get('/api/users')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+  function goToOrder(orderId: number) { router.push(`/orders/${orderId}`) }
 
 onMounted(() => {
   fetchData()

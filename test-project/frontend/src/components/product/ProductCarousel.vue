@@ -1,58 +1,63 @@
 <template>
   <div class="product-productCarousel">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-list />
-    <app-navigation />
+    <dashboard-filter />
+    <order-tracking />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useUIStore } from '@/stores/uIStore'
-import { useForm } from '@/composables/useForm'
-import { useThrottle } from '@/composables/useThrottle'
-import { auth } from '@/api/auth'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useUserStore } from '@/stores/userStore'
+import { usePagination } from '@/composables/usePagination'
+import { useWebSocket } from '@/composables/useWebSocket'
+import { endpoints } from '@/api/endpoints'
 import axios from 'axios'
-import UserList from '@/components/user/UserList.vue'
-import AppNavigation from '@/components/common/AppNavigation.vue'
+import DashboardFilter from '@/components/dashboard/DashboardFilter.vue'
+import OrderTracking from '@/components/order/OrderTracking.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  size: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change', 'submit'])
+const emit = defineEmits(['update', 'change'])
 
-  const notificationStore = useNotificationStore()
-  const uIStore = useUIStore()
-  const form = useForm()
-  const throttle = useThrottle()
+  const settingsStore = useSettingsStore()
+  const userStore = useUserStore()
 
-  const themeValue = inject('theme')
 
-const loading = ref(false)
+  const pagination = usePagination()
+  const webSocket = useWebSocket()
+
+  const localeValue = inject('locale')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/orders/${id}/status`)
-    const response = await axios.get('/api/analytics/traffic')
-    data.value = response.data
+    const response = await axios.get('/api/dashboard/stats')
+    const response1 = await axios.post('/api/wishlist')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

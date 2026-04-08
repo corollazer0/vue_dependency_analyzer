@@ -14,7 +14,7 @@ export const useInventoryStore = defineStore('inventory', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.post('/api/cart/items')
+      const response = await axios.get('/api/notifications')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useInventoryStore = defineStore('inventory', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.put(`/api/inventory/${id}`)
+      const response = await axios.get(`/api/products/${id}`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -38,7 +38,7 @@ export const useInventoryStore = defineStore('inventory', () => {
   async function action2(id?: string) {
     loading.value = true
     try {
-      const response = await axios.delete(`/api/cart/items/${id}`)
+      const response = await axios.put(`/api/orders/${id}/status`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

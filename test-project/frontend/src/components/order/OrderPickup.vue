@@ -1,55 +1,60 @@
 <template>
   <div class="order-orderPickup">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <activity-feed />
+    <product-analytics />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useCartStore } from '@/stores/cartStore'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { useEventBus } from '@/composables/useEventBus'
-import { throttle } from '@/utils/throttle'
+import { useUserStore } from '@/stores/userStore'
+import { useOrderStore } from '@/stores/orderStore'
+import { useWebSocket } from '@/composables/useWebSocket'
+import { useToast } from '@/composables/useToast'
+import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
+import ProductAnalytics from '@/components/product/ProductAnalytics.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
+  title: { type: String, default: '' },
   modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'change'])
+const emit = defineEmits(['update', 'select'])
 
-  const cartStore = useCartStore()
-  const settingsStore = useSettingsStore()
-  const geolocation = useGeolocation()
-  const eventBus = useEventBus()
+  const userStore = useUserStore()
+  const orderStore = useOrderStore()
 
 
+  const webSocket = useWebSocket()
+  const toast = useToast()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/users')
-    const response = await axios.put(`/api/users/${id}`)
-    data.value = response.data
+    const response = await axios.post('/api/orders')
+    const response1 = await axios.post('/api/products')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

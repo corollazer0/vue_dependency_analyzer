@@ -2,8 +2,8 @@
   <div class="view-adminView">
     <h1>Admin</h1>
     <div class="view-content">
-    <order-label />
-    <order-table />
+    <order-history />
+    <order-stats />
     </div>
   </div>
 </template>
@@ -11,22 +11,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useCouponStore } from '@/stores/couponStore'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useSearchStore } from '@/stores/searchStore'
+import { useProduct } from '@/composables/useProduct'
 import axios from 'axios'
-import OrderLabel from '@/components/order/OrderLabel.vue'
-import OrderTable from '@/components/order/OrderTable.vue'
+import OrderHistory from '@/components/order/OrderHistory.vue'
+import OrderStats from '@/components/order/OrderStats.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const couponStore = useCouponStore()
-  const dragDrop = useDragDrop()
+  const searchStore = useSearchStore()
+  const product = useProduct()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.post('/api/products')
+    await axios.get('/api/inventory')
   } catch (error) {
     console.error('View load error:', error)
   }

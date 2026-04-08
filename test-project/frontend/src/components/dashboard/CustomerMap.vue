@@ -1,61 +1,66 @@
 <template>
   <div class="dashboard-customerMap">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <ip-whitelist />
-    <filter-panel />
-    <base-card />
+    <user-form />
+    <search-bar />
+    <otp-input />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
 import { useNotificationStore } from '@/stores/notificationStore'
-import { useUserStore } from '@/stores/userStore'
-import { useAuth } from '@/composables/useAuth'
-import { useDebounce } from '@/composables/useDebounce'
-import { helpers } from '@/utils/helpers'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useFetch } from '@/composables/useFetch'
+import { useCart } from '@/composables/useCart'
+import { storage } from '@/services/storage'
 import axios from 'axios'
-import IpWhitelist from '@/components/auth/IpWhitelist.vue'
-import FilterPanel from '@/components/common/FilterPanel.vue'
-import BaseCard from '@/components/common/BaseCard.vue'
+import UserForm from '@/components/user/UserForm.vue'
+import SearchBar from '@/components/common/SearchBar.vue'
+import OtpInput from '@/components/auth/OtpInput.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
   variant: { type: String, default: '' },
   size: { type: String, default: '' },
-  title: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'submit'])
+const emit = defineEmits(['update', 'select'])
 
   const notificationStore = useNotificationStore()
-  const userStore = useUserStore()
-  const auth = useAuth()
-  const debounce = useDebounce()
+  const reviewStore = useReviewStore()
 
-  const loggerValue = inject('logger')
 
-const loading = ref(false)
+  const fetch = useFetch()
+  const cart = useCart()
+
+  const localeValue = inject('locale')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
-    const response = await axios.post('/api/orders')
-    data.value = response.data
+    const response = await axios.get('/api/analytics/conversions')
+    const response1 = await axios.put(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

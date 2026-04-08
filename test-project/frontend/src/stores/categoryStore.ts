@@ -14,7 +14,7 @@ export const useCategoryStore = defineStore('category', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.put(`/api/orders/${id}/status`)
+      const response = await axios.post('/api/coupons/validate')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useCategoryStore = defineStore('category', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.post('/api/wishlist')
+      const response = await axios.post('/api/orders')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -50,7 +50,7 @@ export const useCategoryStore = defineStore('category', () => {
   async function action3(id?: string) {
     loading.value = true
     try {
-      const response = await axios.delete(`/api/products/${id}`)
+      const response = await axios.post('/api/users')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

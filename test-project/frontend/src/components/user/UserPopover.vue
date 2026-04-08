@@ -1,55 +1,60 @@
 <template>
   <div class="user-userPopover">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <filter-panel />
-    <login-form />
-    <product-wishlist />
+    <base-button />
+    <base-card />
+    <base-pagination />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useDebounce } from '@/composables/useDebounce'
+import { useSearchStore } from '@/stores/searchStore'
+import { usePagination } from '@/composables/usePagination'
 import axios from 'axios'
-import FilterPanel from '@/components/common/FilterPanel.vue'
-import LoginForm from '@/components/auth/LoginForm.vue'
-import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import BaseButton from '@/components/common/BaseButton.vue'
+import BaseCard from '@/components/common/BaseCard.vue'
+import BasePagination from '@/components/common/BasePagination.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
+  items: { type: String, default: '' },
   variant: { type: String, default: '' },
-  loading: { type: String, default: '' },
   disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['change'])
 
-  const orderStore = useOrderStore()
-  const debounce = useDebounce()
-
+  const searchStore = useSearchStore()
 
 
-const loading = ref(false)
+  const pagination = usePagination()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/wishlist/${id}`)
+    const response = await axios.post('/api/users')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

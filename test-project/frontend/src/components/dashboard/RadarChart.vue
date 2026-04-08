@@ -1,49 +1,54 @@
 <template>
   <div class="dashboard-radarChart">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-settings />
+    <dashboard-filter />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useCategoryStore } from '@/stores/categoryStore'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
-import UserSettings from '@/components/user/UserSettings.vue'
+import DashboardFilter from '@/components/dashboard/DashboardFilter.vue'
 
 const props = defineProps({
   disabled: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change'])
+const emit = defineEmits(['select'])
 
-  const categoryStore = useCategoryStore()
-  const dragDrop = useDragDrop()
-
+  const notificationStore = useNotificationStore()
 
 
-const loading = ref(false)
+  const auth = useAuth()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
+    const response = await axios.post('/api/cart/items')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

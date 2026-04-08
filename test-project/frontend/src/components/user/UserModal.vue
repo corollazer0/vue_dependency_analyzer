@@ -1,61 +1,66 @@
 <template>
   <div class="user-userModal">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-table />
-    <order-pickup />
-    <auth-error />
+    <register-form />
+    <export-button />
+    <forgot-password />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSearchStore } from '@/stores/searchStore'
-import { useCartStore } from '@/stores/cartStore'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useProduct } from '@/composables/useProduct'
 import { useFetch } from '@/composables/useFetch'
-import { useOrder } from '@/composables/useOrder'
-import { users } from '@/api/users'
+import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import OrderTable from '@/components/order/OrderTable.vue'
-import OrderPickup from '@/components/order/OrderPickup.vue'
-import AuthError from '@/components/auth/AuthError.vue'
+import RegisterForm from '@/components/auth/RegisterForm.vue'
+import ExportButton from '@/components/dashboard/ExportButton.vue'
+import ForgotPassword from '@/components/auth/ForgotPassword.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
   variant: { type: String, default: '' },
-  items: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'delete'])
+const emit = defineEmits(['change', 'select'])
 
-  const searchStore = useSearchStore()
-  const cartStore = useCartStore()
+  const inventoryStore = useInventoryStore()
+  const notificationStore = useNotificationStore()
+
+
+  const product = useProduct()
   const fetch = useFetch()
-  const order = useOrder()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/notifications')
-    const response = await axios.post('/api/products')
-    data.value = response.data
+    const response = await axios.post('/api/cart/items')
+    const response1 = await axios.get('/api/settings')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

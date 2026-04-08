@@ -1,55 +1,60 @@
 <template>
   <div class="dashboard-trafficChart">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <reset-password />
+    <metric-card />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUserStore } from '@/stores/userStore'
 import { useOrderStore } from '@/stores/orderStore'
-import { useNotification } from '@/composables/useNotification'
-import { useTheme } from '@/composables/useTheme'
-import { deepClone } from '@/utils/deepClone'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useFilter } from '@/composables/useFilter'
+import { useClickOutside } from '@/composables/useClickOutside'
+import { auth } from '@/api/auth'
 import axios from 'axios'
-import ResetPassword from '@/components/auth/ResetPassword.vue'
+import MetricCard from '@/components/dashboard/MetricCard.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  items: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit', 'close'])
+const emit = defineEmits(['update', 'select'])
 
-  const userStore = useUserStore()
   const orderStore = useOrderStore()
-  const notification = useNotification()
-  const theme = useTheme()
+  const reviewStore = useReviewStore()
+
+
+  const filter = useFilter()
+  const clickOutside = useClickOutside()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
-    const response = await axios.get('/api/inventory')
-    data.value = response.data
+    const response = await axios.delete(`/api/users/${props.id}`)
+    const response1 = await axios.put(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

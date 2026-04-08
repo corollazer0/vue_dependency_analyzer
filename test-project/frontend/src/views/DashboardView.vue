@@ -2,8 +2,8 @@
   <div class="view-dashboardView">
     <h1>Dashboard</h1>
     <div class="view-content">
-    <product-review />
-    <product-grid />
+    <order-stats />
+    <order-timeline />
     </div>
   </div>
 </template>
@@ -11,22 +11,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useOrderStore } from '@/stores/orderStore'
-import { useForm } from '@/composables/useForm'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useAsync } from '@/composables/useAsync'
 import axios from 'axios'
-import ProductReview from '@/components/product/ProductReview.vue'
-import ProductGrid from '@/components/product/ProductGrid.vue'
+import OrderStats from '@/components/order/OrderStats.vue'
+import OrderTimeline from '@/components/order/OrderTimeline.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const orderStore = useOrderStore()
-  const form = useForm()
+  const notificationStore = useNotificationStore()
+  const async = useAsync()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.delete(`/api/products/${route.params.id}`)
+    await axios.post('/api/coupons/validate')
   } catch (error) {
     console.error('View load error:', error)
   }

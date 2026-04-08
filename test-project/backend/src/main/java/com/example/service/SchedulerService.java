@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.Scheduler;
 import com.example.repository.SchedulerRepository;
-import com.example.service.SettingsService;
-import com.example.service.OrderService;
+import com.example.service.CategoryService;
+import com.example.service.NotificationService;
+import com.example.service.ReviewService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +14,16 @@ import java.util.Optional;
 public class SchedulerService {
 
     private final SchedulerRepository schedulerRepository;
-    private final SettingsService settingsService;
-    private final OrderService orderService;
+    private final CategoryService categoryService;
+    private final NotificationService notificationService;
+    private final ReviewService reviewService;
 
-    public SchedulerService(SchedulerRepository schedulerRepository, SettingsService settingsService, OrderService orderService) {
+
+    public SchedulerService(SchedulerRepository schedulerRepository, CategoryService categoryService, NotificationService notificationService, ReviewService reviewService) {
         this.schedulerRepository = schedulerRepository;
-        this.settingsService = settingsService;
-        this.orderService = orderService;
+        this.categoryService = categoryService;
+        this.notificationService = notificationService;
+        this.reviewService = reviewService;
     }
 
     public List<Scheduler> findAll() {
@@ -36,4 +41,5 @@ public class SchedulerService {
     public void deleteById(Long id) {
         schedulerRepository.deleteById(id);
     }
+
 }

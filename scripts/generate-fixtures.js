@@ -2,6 +2,7 @@
 /**
  * generate-fixtures.js
  * Generates a realistic Vue 3 + Spring Boot test fixture project for VDA performance testing.
+ * Supports ALL Phase 7 features.
  */
 
 const fs = require('fs');
@@ -179,6 +180,136 @@ const API_ENDPOINTS = [
 
 const INJECTION_KEYS = ['theme', 'locale', 'permissions', 'config', 'eventBus', 'logger'];
 
+// ── MyBatis XML domains (10 domains that have XML mappers) ──
+const MYBATIS_DOMAINS = ['user', 'product', 'order', 'cart', 'category', 'review', 'coupon', 'inventory', 'wishlist', 'payment'];
+
+// ── DTO field definitions per domain (realistic, 5-8 fields) ──
+const DTO_FIELDS = {
+  user: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'username', type: 'String', tsType: 'string' },
+    { name: 'email', type: 'String', tsType: 'string' },
+    { name: 'displayName', type: 'String', tsType: 'string' },
+    { name: 'avatarUrl', type: 'String', tsType: 'string' },
+    { name: 'role', type: 'String', tsType: 'string' },
+    { name: 'isActive', type: 'boolean', tsType: 'boolean' },
+    // intentional mismatch: backend has lastLoginIp, frontend does not
+    { name: 'lastLoginIp', type: 'String', tsType: null },
+  ],
+  product: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'title', type: 'String', tsType: 'string' },
+    { name: 'description', type: 'String', tsType: 'string' },
+    { name: 'price', type: 'java.math.BigDecimal', tsType: 'number' },
+    { name: 'categoryId', type: 'Long', tsType: 'number' },
+    { name: 'imageUrl', type: 'String', tsType: 'string' },
+    { name: 'stockQuantity', type: 'int', tsType: 'number' },
+    { name: 'rating', type: 'double', tsType: 'number' },
+  ],
+  order: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'userId', type: 'Long', tsType: 'number' },
+    { name: 'status', type: 'String', tsType: 'string' },
+    { name: 'totalAmount', type: 'java.math.BigDecimal', tsType: 'number' },
+    { name: 'shippingAddress', type: 'String', tsType: 'string' },
+    { name: 'trackingNumber', type: 'String', tsType: 'string' },
+    { name: 'createdAt', type: 'java.time.LocalDateTime', tsType: 'string' },
+    // intentional mismatch: backend has internalNote, frontend does not
+    { name: 'internalNote', type: 'String', tsType: null },
+  ],
+  cart: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'userId', type: 'Long', tsType: 'number' },
+    { name: 'items', type: 'List<CartItem>', tsType: 'CartItemDto[]' },
+    { name: 'totalPrice', type: 'java.math.BigDecimal', tsType: 'number' },
+    { name: 'itemCount', type: 'int', tsType: 'number' },
+    { name: 'updatedAt', type: 'java.time.LocalDateTime', tsType: 'string' },
+  ],
+  category: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'name', type: 'String', tsType: 'string' },
+    { name: 'slug', type: 'String', tsType: 'string' },
+    { name: 'parentId', type: 'Long', tsType: 'number | null' },
+    { name: 'iconUrl', type: 'String', tsType: 'string' },
+    { name: 'sortOrder', type: 'int', tsType: 'number' },
+  ],
+  review: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'productId', type: 'Long', tsType: 'number' },
+    { name: 'userId', type: 'Long', tsType: 'number' },
+    { name: 'rating', type: 'int', tsType: 'number' },
+    { name: 'comment', type: 'String', tsType: 'string' },
+    { name: 'createdAt', type: 'java.time.LocalDateTime', tsType: 'string' },
+    // intentional mismatch: frontend has helpfulCount, backend does not
+    { name: 'helpfulCount', type: null, tsType: 'number' },
+  ],
+  coupon: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'code', type: 'String', tsType: 'string' },
+    { name: 'discountPercent', type: 'int', tsType: 'number' },
+    { name: 'minOrderAmount', type: 'java.math.BigDecimal', tsType: 'number' },
+    { name: 'expiresAt', type: 'java.time.LocalDateTime', tsType: 'string' },
+    { name: 'isActive', type: 'boolean', tsType: 'boolean' },
+  ],
+  inventory: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'productId', type: 'Long', tsType: 'number' },
+    { name: 'warehouseId', type: 'Long', tsType: 'number' },
+    { name: 'quantity', type: 'int', tsType: 'number' },
+    { name: 'reservedQuantity', type: 'int', tsType: 'number' },
+    { name: 'lastRestockedAt', type: 'java.time.LocalDateTime', tsType: 'string' },
+  ],
+  wishlist: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'userId', type: 'Long', tsType: 'number' },
+    { name: 'productId', type: 'Long', tsType: 'number' },
+    { name: 'addedAt', type: 'java.time.LocalDateTime', tsType: 'string' },
+    { name: 'priority', type: 'int', tsType: 'number' },
+  ],
+  payment: [
+    { name: 'id', type: 'Long', tsType: 'number' },
+    { name: 'orderId', type: 'Long', tsType: 'number' },
+    { name: 'amount', type: 'java.math.BigDecimal', tsType: 'number' },
+    { name: 'method', type: 'String', tsType: 'string' },
+    { name: 'status', type: 'String', tsType: 'string' },
+    { name: 'transactionId', type: 'String', tsType: 'string' },
+    { name: 'paidAt', type: 'java.time.LocalDateTime', tsType: 'string' },
+  ],
+};
+
+// ── Components that emit events and their parents ──
+const EMIT_PAIRS = [
+  { child: 'UserForm', parent: 'UserProfile', domain: 'user', events: ['submit', 'cancel'] },
+  { child: 'ProductForm', parent: 'ProductDetail', domain: 'product', events: ['submit', 'cancel'] },
+  { child: 'OrderItem', parent: 'OrderList', domain: 'order', events: ['remove', 'update-quantity'] },
+  { child: 'LoginForm', parent: 'AuthGuard', domain: 'auth', events: ['login-success', 'forgot-password'] },
+  { child: 'SearchBar', parent: 'AppHeader', domain: 'common', events: ['search', 'clear'] },
+  { child: 'FilterPanel', parent: 'ProductList', domain: 'product', events: ['filter-change', 'reset'] },
+];
+
+// ── Components that use storeToRefs ──
+const STORE_TO_REFS_COMPONENTS = [
+  { component: 'UserProfile', domain: 'user', store: 'useUserStore', storeFile: 'userStore', refs: ['userName', 'isLoggedIn'] },
+  { component: 'ProductCard', domain: 'product', store: 'useProductStore', storeFile: 'productStore', refs: ['items', 'loading'] },
+  { component: 'OrderSummary', domain: 'order', store: 'useOrderStore', storeFile: 'orderStore', refs: ['selectedItem', 'hasError'] },
+  { component: 'DashboardStats', domain: 'dashboard', store: 'useAnalyticsStore', storeFile: 'analyticsStore', refs: ['items', 'count'] },
+  { component: 'AppSidebar', domain: 'common', store: 'useUIStore', storeFile: 'uIStore', refs: ['items', 'loading'] },
+  { component: 'UserSettings', domain: 'user', store: 'useSettingsStore', storeFile: 'settingsStore', refs: ['items', 'selectedItem'] },
+];
+
+// ── Components that use router.push() ──
+const ROUTER_PUSH_COMPONENTS = [
+  { component: 'UserCard', domain: 'user', pushCode: "function goToUser(userId: number) { router.push(`/users/${userId}`) }" },
+  { component: 'ProductCard', domain: 'product', pushCode: "function goToProduct(productId: number) { router.push(`/products/${productId}`) }" },
+  { component: 'OrderItem', domain: 'order', pushCode: "function goToOrder(orderId: number) { router.push(`/orders/${orderId}`) }" },
+  { component: 'AppNavigation', domain: 'common', pushCode: "function goToDashboard() { router.push('/dashboard') }" },
+  { component: 'LoginForm', domain: 'auth', pushCode: "function goToRegister() { router.push('/register') }" },
+  { component: 'DashboardLayout', domain: 'dashboard', pushCode: "function goToSettings() { router.push('/settings') }" },
+];
+
+// ── Services that use @RequiredArgsConstructor ──
+const LOMBOK_SERVICES = ['user', 'product', 'order', 'cart', 'payment'];
+
 // ── All component names (flat list for cross-referencing) ──
 const ALL_COMPONENTS = [];
 for (const domain of DOMAINS) {
@@ -190,11 +321,26 @@ for (const domain of DOMAINS) {
 // ── Generators ──
 
 function generateVueComponent(name, domain, index) {
+  // Check if this component has special emit pairs
+  const emitPair = EMIT_PAIRS.find(p => p.child === name);
+  const isParent = EMIT_PAIRS.find(p => p.parent === name);
+  const storeToRefsInfo = STORE_TO_REFS_COMPONENTS.find(s => s.component === name);
+  const routerPushInfo = ROUTER_PUSH_COMPONENTS.find(r => r.component === name);
+
   // Pick 2-4 imports from other components, stores, composables
   const otherComponents = ALL_COMPONENTS
     .filter(c => c.name !== name)
     .map(c => c.name);
   const childComponents = pickN(otherComponents, 1 + (index % 3));
+
+  // If this is a parent in an emit pair, ensure the child is in childComponents
+  if (isParent) {
+    const childName = isParent.child;
+    if (!childComponents.includes(childName)) {
+      childComponents[0] = childName;
+    }
+  }
+
   const usedStores = pickN(STORE_NAMES, 1 + (index % 2));
   const usedComposables = pickN(COMPOSABLE_NAMES, 1 + (index % 2));
   const usedUtils = pickN(UTIL_MODULES, index % 2);
@@ -204,15 +350,35 @@ function generateVueComponent(name, domain, index) {
   const doInject = index % 5 === 0 && !doProvide;
   const injectionKey = pick(INJECTION_KEYS);
 
-  const props = pickN(['title', 'loading', 'disabled', 'items', 'modelValue', 'size', 'variant'], 2 + (index % 3));
-  const emits = pickN(['update', 'close', 'submit', 'delete', 'select', 'change'], 1 + (index % 2));
+  const props = pickN(['title', 'disabled', 'items', 'modelValue', 'size', 'variant'], 2 + (index % 3));
+  const baseEmits = pickN(['update', 'close', 'delete', 'select', 'change'], 1 + (index % 2));
+  const emits = emitPair ? emitPair.events : baseEmits;
 
   // Build import lines
   const imports = [];
-  imports.push(`import { ref, computed, onMounted${doProvide ? ', provide' : ''}${doInject ? ', inject' : ''} } from 'vue'`);
+  const vueImports = ['ref', 'computed', 'onMounted'];
+  if (doProvide) vueImports.push('provide');
+  if (doInject) vueImports.push('inject');
+  imports.push(`import { ${vueImports.join(', ')} } from 'vue'`);
+
+  // storeToRefs import
+  if (storeToRefsInfo) {
+    imports.push(`import { storeToRefs } from 'pinia'`);
+  }
+
+  // router import for router.push components
+  if (routerPushInfo) {
+    imports.push(`import { useRouter } from 'vue-router'`);
+  }
+
   for (const store of usedStores) {
     imports.push(`import { ${store} } from '@/stores/${camelCase(store.replace('use', '').replace('Store', ''))}Store'`);
   }
+  // Ensure storeToRefs store is imported
+  if (storeToRefsInfo && !usedStores.includes(storeToRefsInfo.store)) {
+    imports.push(`import { ${storeToRefsInfo.store} } from '@/stores/${storeToRefsInfo.storeFile}'`);
+  }
+
   for (const comp of usedComposables) {
     imports.push(`import { ${comp} } from '@/composables/${comp}'`);
   }
@@ -231,6 +397,11 @@ function generateVueComponent(name, domain, index) {
   // Template with child components
   const childTags = childComponents.map(c => {
     const kebab = c.replace(/([A-Z])/g, '-$1').toLowerCase().replace(/^-/, '');
+    // If this is a parent and c is the emit-pair child, add @event handlers
+    if (isParent && c === isParent.child) {
+      const eventHandlers = isParent.events.map(e => `@${e}="handle${capitalize(e.replace(/-./g, m => m[1].toUpperCase()))}"`).join(' ');
+      return `    <${kebab} ${eventHandlers} />`;
+    }
     return `    <${kebab} />`;
   }).join('\n');
 
@@ -242,31 +413,65 @@ function generateVueComponent(name, domain, index) {
     return `  const ${varName} = ${s}()`;
   }).join('\n');
 
+  // storeToRefs setup
+  let storeToRefsSetup = '';
+  if (storeToRefsInfo) {
+    const varName = camelCase(storeToRefsInfo.store.replace('use', ''));
+    storeToRefsSetup = `  const ${varName} = ${storeToRefsInfo.store}()
+  const { ${storeToRefsInfo.refs.join(', ')} } = storeToRefs(${varName})`;
+  }
+
+  // router setup
+  let routerSetup = '';
+  if (routerPushInfo) {
+    routerSetup = `  const router = useRouter()`;
+  }
+
   const composableSetups = usedComposables.map(c => {
     const varName = camelCase(c.replace('use', ''));
     return `  const ${varName} = ${c}()`;
   }).join('\n');
 
-  const apiCallsCode = apiCalls.map(api => {
+  // Fix: use unique variable names per API call instead of duplicate `const response`
+  const apiCallsCode = apiCalls.map((api, apiIdx) => {
     const urlStr = api.path.includes(':')
-      ? `\`${api.path.replace(/:(\w+)/g, '${id}')}\``
+      ? `\`${api.path.replace(/:(\w+)/g, (_, p) => '${props.' + p + '}')}\``
       : `'${api.path}'`;
-    return `    const response = await axios.${api.method}(${urlStr})`;
+    return `    const response${apiIdx > 0 ? apiIdx : ''} = await axios.${api.method}(${urlStr})`;
   }).join('\n');
+
+  const lastResponseVar = apiCalls.length > 1 ? `response${apiCalls.length - 1}` : 'response';
 
   const provideCode = doProvide ? `  provide('${injectionKey}', ref('value'))` : '';
   const injectCode = doInject ? `  const ${injectionKey}Value = inject('${injectionKey}')` : '';
 
+  // Event handler methods for parent components
+  let eventHandlers = '';
+  if (isParent) {
+    eventHandlers = isParent.events.map(e => {
+      const handlerName = `handle${capitalize(e.replace(/-./g, m => m[1].toUpperCase()))}`;
+      return `  function ${handlerName}() {
+    console.log('${e} event received')
+  }`;
+    }).join('\n\n');
+  }
+
+  // router.push function
+  let routerPushCode = '';
+  if (routerPushInfo) {
+    routerPushCode = `  ${routerPushInfo.pushCode}`;
+  }
+
   return `<template>
   <div class="${domain}-${camelCase(name)}">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
 ${childTags}
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('${emits[0]}')">Submit</button>
   </div>
 </template>
 
@@ -280,24 +485,29 @@ ${propsDecl}
 const emit = defineEmits([${emitsDecl}])
 
 ${storeSetups}
+${storeToRefsSetup}
+${routerSetup}
 ${composableSetups}
 ${provideCode}
 ${injectCode}
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
 ${apiCallsCode}
-    data.value = response.data
+    data.value = ${lastResponseVar}.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+${eventHandlers}
+${routerPushCode}
 
 onMounted(() => {
   fetchData()
@@ -343,12 +553,14 @@ function generateComposable(name, index) {
     return `  const { ${varName} } = ${c}()`;
   }).join('\n');
 
-  const apiCallsCode = apiCalls.map(api => {
+  // Fix: use unique variable names per API call
+  const apiCallsCode = apiCalls.map((api, apiIdx) => {
+    const varSuffix = apiIdx > 0 ? apiIdx : '';
     const urlStr = api.path.includes(':')
-      ? `\`${api.path.replace(/:(\w+)/g, '${id}')}\``
+      ? `\`${api.path.replace(/:(\w+)/g, (_, p) => '${' + p + '}')}\``
       : `'${api.path}'`;
-    return `    const response = await axios.${api.method}(${urlStr})
-    return response.data`;
+    return `    const result${varSuffix} = await axios.${api.method}(${urlStr})
+    return result${varSuffix}.data`;
   }).join('\n');
 
   const funcName = capitalize(name.replace('use', ''));
@@ -389,7 +601,7 @@ function generateStore(name, index) {
 
   const apiActions = apiCalls.map((api, i) => {
     const urlStr = api.path.includes(':')
-      ? `\`${api.path.replace(/:(\w+)/g, '${id}')}\``
+      ? `\`${api.path.replace(/:(\w+)/g, (_, p) => '${' + p + '}')}\``
       : `'${api.path}'`;
     const actionName = `action${i}`;
     return `  async function ${actionName}(id?: string) {
@@ -448,7 +660,7 @@ function generateApiModule(name, index) {
   const apiCalls = pickN(API_ENDPOINTS, 3 + (index % 3));
   const funcs = apiCalls.map((api, i) => {
     const urlStr = api.path.includes(':')
-      ? `\`${api.path.replace(/:(\w+)/g, '${id}')}\``
+      ? `\`${api.path.replace(/:(\w+)/g, (_, p) => '${' + p + '}')}\``
       : `'${api.path}'`;
     return `export async function ${name}Action${i}(id?: string, data?: any) {
   const response = await axios.${api.method}(${urlStr}${api.method !== 'get' ? ', data' : ''})
@@ -544,10 +756,13 @@ function generateView(name, index) {
 
   const apiCallCode = apiCalls.map(api => {
     const urlStr = api.path.includes(':')
-      ? `\`${api.path.replace(/:(\w+)/g, '${route.params.id}')}\``
+      ? `\`${api.path.replace(/:(\w+)/g, (_, p) => '${route.params.' + p + '}')}\``
       : `'${api.path}'`;
     return `    await axios.${api.method}(${urlStr})`;
   }).join('\n');
+
+  // Add router.push for navigating between views
+  const viewSlug = name.replace('View', '').toLowerCase();
 
   return `<template>
   <div class="view-${camelCase(name)}">
@@ -568,6 +783,10 @@ ${composableSetup}
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
 ${apiCallCode}
@@ -585,6 +804,78 @@ ${apiCallCode}
 }
 </style>
 `;
+}
+
+// ── Router generator ──
+
+function generateRouter() {
+  const viewImports = VIEW_NAMES.map(v => `import ${v} from '@/views/${v}.vue'`).join('\n');
+
+  const routeMap = {
+    HomeView: '/',
+    LoginView: '/login',
+    RegisterView: '/register',
+    DashboardView: '/dashboard',
+    ProfileView: '/profile',
+    ProductListView: '/products',
+    ProductDetailView: '/products/:id',
+    CartView: '/cart',
+    CheckoutView: '/checkout',
+    OrderListView: '/orders',
+    OrderDetailView: '/orders/:id',
+    SettingsView: '/settings',
+    AdminView: '/admin',
+    NotFoundView: '/:pathMatch(.*)*',
+    ForbiddenView: '/forbidden',
+  };
+
+  const routes = VIEW_NAMES.map(v => {
+    const routePath = routeMap[v] || `/${v.replace('View', '').toLowerCase()}`;
+    return `  { path: '${routePath}', component: ${v} }`;
+  }).join(',\n');
+
+  return `import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+${viewImports}
+
+const routes: RouteRecordRaw[] = [
+${routes}
+]
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes
+})
+
+export default router
+`;
+}
+
+// ── TypeScript types/api.ts generator ──
+
+function generateTypeScriptInterfaces() {
+  const interfaces = [];
+
+  for (const [domain, fields] of Object.entries(DTO_FIELDS)) {
+    const tsFields = fields
+      .filter(f => f.tsType !== null) // skip fields intentionally missing from frontend
+      .map(f => `  ${f.name}: ${f.tsType};`)
+      .join('\n');
+
+    interfaces.push(`export interface ${capitalize(domain)}Dto {
+${tsFields}
+}`);
+  }
+
+  // Add CartItemDto referenced by CartDto
+  interfaces.push(`export interface CartItemDto {
+  id: number;
+  productId: number;
+  productTitle: string;
+  quantity: number;
+  unitPrice: number;
+}`);
+
+  return interfaces.join('\n\n') + '\n';
 }
 
 // ── Java generators ──
@@ -638,7 +929,6 @@ function generateController(domain, index) {
   const serviceName = capitalize(domain) + 'Service';
   const serviceVar = camelCase(serviceName);
   const basePath = `/api/${domain}${domain.endsWith('s') ? '' : 's'}`;
-  // Fix some paths
   const fixedBasePath = {
     auth: '/api/auth',
     cart: '/api/cart',
@@ -703,33 +993,113 @@ function generateService(domain, index) {
   const className = capitalize(domain) + 'Service';
   const repoName = capitalize(domain) + 'Repository';
   const repoVar = camelCase(repoName);
+  const useLombok = LOMBOK_SERVICES.includes(domain);
+
   // Some services depend on other services
   const otherDomains = JAVA_DOMAINS.filter(d => d !== domain);
-  const depServices = pickN(otherDomains, index % 3).map(d => capitalize(d) + 'Service');
+  const depServices = pickN(otherDomains, 1 + (index % 3)).map(d => capitalize(d) + 'Service');
 
   const depFields = depServices.map(s =>
     `    private final ${s} ${camelCase(s)};`
   ).join('\n');
 
-  const constructorParams = [
-    `${repoName} ${repoVar}`,
-    ...depServices.map(s => `${s} ${camelCase(s)}`)
-  ].join(', ');
-
-  const constructorAssignments = [
-    `        this.${repoVar} = ${repoVar};`,
-    ...depServices.map(s => `        this.${camelCase(s)} = ${camelCase(s)};`)
-  ].join('\n');
-
   const depImports = depServices.map(s =>
     `import com.example.service.${s};`
   ).join('\n');
+
+  // For order service, add event publishing
+  const isOrderService = domain === 'order';
+  // For notification service, add event listener
+  const isNotificationService = domain === 'notification';
+
+  let extraImports = '';
+  let extraFields = '';
+  let extraMethods = '';
+
+  if (isOrderService) {
+    extraImports = `import com.example.event.OrderCreatedEvent;
+import org.springframework.context.ApplicationEventPublisher;`;
+    extraFields = `    private final ApplicationEventPublisher eventPublisher;`;
+  }
+
+  if (isNotificationService) {
+    extraImports = `import com.example.event.OrderCreatedEvent;
+import org.springframework.context.event.EventListener;`;
+    extraMethods = `
+    @EventListener
+    public void handleOrderCreated(OrderCreatedEvent event) {
+        // Send notification when order is created
+        System.out.println("Order created: " + event.getOrderId());
+    }`;
+  }
+
+  if (useLombok) {
+    // Use @RequiredArgsConstructor instead of manual constructor
+    return `package com.example.service;
+
+import com.example.model.${capitalize(domain)};
+import com.example.repository.${repoName};
+${depImports}
+${extraImports}
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+import java.util.List;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class ${className} {
+
+    private final ${repoName} ${repoVar};
+${depFields}
+${extraFields}
+
+    public List<${capitalize(domain)}> findAll() {
+        return ${repoVar}.findAll();
+    }
+
+    public Optional<${capitalize(domain)}> findById(Long id) {
+        return ${repoVar}.findById(id);
+    }
+
+    public ${capitalize(domain)} save(${capitalize(domain)} entity) {${isOrderService ? `
+        ${capitalize(domain)} saved = ${repoVar}.save(entity);
+        eventPublisher.publishEvent(new OrderCreatedEvent(this, saved.getId(), saved.getName()));
+        return saved;` : `
+        return ${repoVar}.save(entity);`}
+    }
+
+    public void deleteById(Long id) {
+        ${repoVar}.deleteById(id);
+    }
+${extraMethods}
+}
+`;
+  }
+
+  // Manual constructor version
+  const allParams = [
+    `${repoName} ${repoVar}`,
+    ...depServices.map(s => `${s} ${camelCase(s)}`),
+  ];
+  if (isOrderService) {
+    allParams.push('ApplicationEventPublisher eventPublisher');
+  }
+
+  const allAssignments = [
+    `        this.${repoVar} = ${repoVar};`,
+    ...depServices.map(s => `        this.${camelCase(s)} = ${camelCase(s)};`),
+  ];
+  if (isOrderService) {
+    allAssignments.push('        this.eventPublisher = eventPublisher;');
+  }
 
   return `package com.example.service;
 
 import com.example.model.${capitalize(domain)};
 import com.example.repository.${repoName};
 ${depImports}
+${extraImports}
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -739,9 +1109,10 @@ public class ${className} {
 
     private final ${repoName} ${repoVar};
 ${depFields}
+${extraFields}
 
-    public ${className}(${constructorParams}) {
-${constructorAssignments}
+    public ${className}(${allParams.join(', ')}) {
+${allAssignments.join('\n')}
     }
 
     public List<${capitalize(domain)}> findAll() {
@@ -752,13 +1123,17 @@ ${constructorAssignments}
         return ${repoVar}.findById(id);
     }
 
-    public ${capitalize(domain)} save(${capitalize(domain)} entity) {
-        return ${repoVar}.save(entity);
+    public ${capitalize(domain)} save(${capitalize(domain)} entity) {${isOrderService ? `
+        ${capitalize(domain)} saved = ${repoVar}.save(entity);
+        eventPublisher.publishEvent(new OrderCreatedEvent(this, saved.getId(), saved.getName()));
+        return saved;` : `
+        return ${repoVar}.save(entity);`}
     }
 
     public void deleteById(Long id) {
         ${repoVar}.deleteById(id);
     }
+${extraMethods}
 }
 `;
 }
@@ -832,6 +1207,247 @@ public class ${name}Config {
 `;
 }
 
+// ── @Mapper interface generator ──
+
+function generateMapperInterface(domain) {
+  const className = capitalize(domain) + 'Mapper';
+  const entityName = capitalize(domain);
+
+  return `package com.example.mapper;
+
+import com.example.model.${entityName};
+import org.apache.ibatis.annotations.Mapper;
+import java.util.List;
+
+@Mapper
+public interface ${className} {
+
+    ${entityName} findById(Long id);
+
+    List<${entityName}> findAll();
+
+    void insert(${entityName} ${domain});
+
+    void update(${entityName} ${domain});
+
+    void deleteById(Long id);
+}
+`;
+}
+
+// ── MyBatis XML generator ──
+
+function generateMyBatisXml(domain) {
+  const className = capitalize(domain) + 'Mapper';
+  const entityName = capitalize(domain);
+  const tableName = domain + 's';
+
+  return `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.${className}">
+    <select id="findAll" resultType="com.example.model.${entityName}">
+        SELECT * FROM ${tableName}
+    </select>
+    <select id="findById" resultType="com.example.model.${entityName}">
+        SELECT * FROM ${tableName} WHERE id = #{id}
+    </select>
+    <insert id="insert" parameterType="com.example.model.${entityName}">
+        INSERT INTO ${tableName} (name, created_at) VALUES (#{name}, NOW())
+    </insert>
+    <update id="update">
+        UPDATE ${tableName} SET name = #{name} WHERE id = #{id}
+    </update>
+    <delete id="deleteById">
+        DELETE FROM ${tableName} WHERE id = #{id}
+    </delete>
+</mapper>
+`;
+}
+
+// ── Spring Event classes ──
+
+function generateOrderCreatedEvent() {
+  return `package com.example.event;
+
+import org.springframework.context.ApplicationEvent;
+
+public class OrderCreatedEvent extends ApplicationEvent {
+
+    private final Long orderId;
+    private final String orderName;
+
+    public OrderCreatedEvent(Object source, Long orderId, String orderName) {
+        super(source);
+        this.orderId = orderId;
+        this.orderName = orderName;
+    }
+
+    public Long getOrderId() {
+        return orderId;
+    }
+
+    public String getOrderName() {
+        return orderName;
+    }
+}
+`;
+}
+
+// ── Realistic DTO generator ──
+
+function generateRealisticDto(domain, dtoType) {
+  const className = capitalize(domain) + dtoType;
+  const fields = DTO_FIELDS[domain];
+
+  if (!fields) {
+    // Fallback for domains without detailed DTO_FIELDS
+    return `package com.example.dto;
+
+public class ${className} {
+    private Long id;
+    private String name;
+    private String description;
+    private String status;
+    private java.time.LocalDateTime createdAt;
+
+    public Long getId() { return id; }
+    public void setId(Long id) { this.id = id; }
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    public String getStatus() { return status; }
+    public void setStatus(String status) { this.status = status; }
+}
+`;
+  }
+
+  // Only include fields that have a backend type
+  const javaFields = fields
+    .filter(f => f.type !== null)
+    .map(f => `    private ${f.type} ${f.name};`)
+    .join('\n');
+
+  const gettersSetters = fields
+    .filter(f => f.type !== null)
+    .map(f => {
+      const cap = capitalize(f.name);
+      const boolPrefix = f.type === 'boolean' ? 'is' : 'get';
+      const getterName = f.type === 'boolean' ? f.name : `get${cap}`;
+      return `    public ${f.type} ${getterName}() { return ${f.name}; }
+    public void set${cap}(${f.type} ${f.name}) { this.${f.name} = ${f.name}; }`;
+    })
+    .join('\n');
+
+  return `package com.example.dto;
+
+import java.util.List;
+
+public class ${className} {
+${javaFields}
+
+${gettersSetters}
+}
+`;
+}
+
+// ── Project config file generators ──
+
+function generatePackageJson() {
+  return JSON.stringify({
+    name: "test-project-frontend",
+    version: "0.1.0",
+    private: true,
+    type: "module",
+    scripts: {
+      dev: "vite",
+      build: "vue-tsc && vite build",
+      preview: "vite preview",
+      lint: "eslint . --ext .vue,.js,.jsx,.cjs,.mjs,.ts,.tsx,.cts,.mts"
+    },
+    dependencies: {
+      vue: "^3.4.21",
+      pinia: "^2.1.7",
+      "vue-router": "^4.3.0",
+      axios: "^1.6.7"
+    },
+    devDependencies: {
+      "@vitejs/plugin-vue": "^5.0.4",
+      typescript: "~5.4.0",
+      vite: "^5.2.0",
+      "vue-tsc": "^2.0.6"
+    }
+  }, null, 2) + '\n';
+}
+
+function generateTsConfig() {
+  return JSON.stringify({
+    compilerOptions: {
+      target: "ES2020",
+      useDefineForClassFields: true,
+      module: "ESNext",
+      lib: ["ES2020", "DOM", "DOM.Iterable"],
+      skipLibCheck: true,
+      moduleResolution: "bundler",
+      allowImportingTsExtensions: true,
+      resolveJsonModule: true,
+      isolatedModules: true,
+      noEmit: true,
+      jsx: "preserve",
+      strict: true,
+      noUnusedLocals: false,
+      noUnusedParameters: false,
+      noFallthroughCasesInSwitch: true,
+      paths: {
+        "@/*": ["src/*"]
+      },
+      baseUrl: "."
+    },
+    include: ["src/**/*.ts", "src/**/*.d.ts", "src/**/*.tsx", "src/**/*.vue"],
+    references: [{ path: "./tsconfig.node.json" }]
+  }, null, 2) + '\n';
+}
+
+function generateBuildGradle() {
+  return `plugins {
+    id 'java'
+    id 'org.springframework.boot' version '3.2.4'
+    id 'io.spring.dependency-management' version '1.1.4'
+}
+
+group = 'com.example'
+version = '0.0.1-SNAPSHOT'
+
+java {
+    sourceCompatibility = '17'
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation 'org.springframework.boot:spring-boot-starter-web'
+    implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+    implementation 'org.mybatis.spring.boot:mybatis-spring-boot-starter:3.0.3'
+    compileOnly 'org.projectlombok:lombok'
+    annotationProcessor 'org.projectlombok:lombok'
+    runtimeOnly 'com.h2database:h2'
+    testImplementation 'org.springframework.boot:spring-boot-starter-test'
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}
+`;
+}
+
 // ── Main generation ──
 
 function main() {
@@ -845,11 +1461,19 @@ function main() {
 
   console.log('Generating test fixture project...');
 
+  // ── [1] Project config files ──
+  writeFile(path.join(ROOT, 'frontend', 'package.json'), generatePackageJson());
+  fileCount++;
+  writeFile(path.join(ROOT, 'frontend', 'tsconfig.json'), generateTsConfig());
+  fileCount++;
+  writeFile(path.join(ROOT, 'backend', 'build.gradle'), generateBuildGradle());
+  fileCount++;
+  console.log('  Project configs: 3 files (package.json, tsconfig.json, build.gradle)');
+
   // ── Vue Components (200 across 6 domains) ──
   let compIndex = 0;
   for (const domain of DOMAINS) {
     const names = COMPONENT_NAMES_BY_DOMAIN[domain];
-    // Take enough to sum to ~200
     for (let i = 0; i < names.length; i++) {
       const name = names[i];
       const filePath = path.join(FE, 'components', domain, `${name}.vue`);
@@ -897,10 +1521,20 @@ function main() {
   }
   console.log(`  Views: ${VIEW_NAMES.length} files`);
 
+  // ── [3] Real Vue Router ──
+  writeFile(path.join(FE, 'router', 'index.ts'), generateRouter());
+  fileCount++;
+  console.log('  Router: 1 file (real routes)');
+
+  // ── [7] TypeScript interfaces matching DTOs ──
+  writeFile(path.join(FE, 'types', 'api.ts'), generateTypeScriptInterfaces());
+  fileCount++;
+  console.log('  TypeScript types/api.ts: 1 file');
+
   // ── Extra .ts files (20) spread around ──
   const extraTsFiles = [
-    'types/index', 'types/api', 'types/models', 'types/store',
-    'router/index', 'router/guards', 'router/routes',
+    'types/index', 'types/models', 'types/store',
+    'router/guards', 'router/routes',
     'plugins/axios', 'plugins/pinia', 'plugins/i18n',
     'directives/clickOutside', 'directives/focus', 'directives/tooltip',
     'config/env', 'config/api', 'config/theme',
@@ -936,7 +1570,6 @@ function main() {
     writeFile(filePath, generateService(domain, i));
     fileCount++;
   }
-  // Extra services
   const extraServices = [
     'Email', 'Sms', 'Cache', 'Queue', 'Export',
     'Import', 'Scheduler', 'Audit', 'Validation', 'Encryption',
@@ -965,7 +1598,7 @@ function main() {
   }
   console.log(`  Repositories: ${JAVA_DOMAINS.length} files`);
 
-  // Configs (remaining to reach ~200 total backend)
+  // Configs
   const configs = [
     'Security', 'Web', 'Cors', 'Swagger', 'Cache',
     'Database', 'Redis', 'Kafka', 'S3', 'Jackson',
@@ -976,28 +1609,37 @@ function main() {
     fileCount++;
   }
 
-  // DTO files to pad to ~200 backend files
+  // ── [2] @Mapper interfaces (10, one per MyBatis domain) ──
+  for (const domain of MYBATIS_DOMAINS) {
+    const filePath = path.join(BE, 'mapper', `${capitalize(domain)}Mapper.java`);
+    writeFile(filePath, generateMapperInterface(domain));
+    fileCount++;
+  }
+  console.log(`  Mapper interfaces: ${MYBATIS_DOMAINS.length} files`);
+
+  // ── MyBatis XML files (10) ──
+  for (const domain of MYBATIS_DOMAINS) {
+    const filePath = path.join(ROOT, 'backend', 'src', 'main', 'resources', 'mapper', `${capitalize(domain)}Mapper.xml`);
+    writeFile(filePath, generateMyBatisXml(domain));
+    fileCount++;
+  }
+  console.log(`  MyBatis XMLs: ${MYBATIS_DOMAINS.length} files`);
+
+  // ── [6] Spring Events ──
+  writeFile(path.join(BE, 'event', 'OrderCreatedEvent.java'), generateOrderCreatedEvent());
+  fileCount++;
+  console.log('  Spring Events: 1 event class (OrderService publishes, NotificationService listens)');
+
+  // ── [7] Realistic DTO files ──
   const dtoTypes = ['Request', 'Response', 'Dto', 'Summary', 'Detail'];
-  const dtoCount = 200 - (JAVA_DOMAINS.length * 4 + extraServices.length + configs.length);
+  const dtoCount = 200 - (JAVA_DOMAINS.length * 4 + extraServices.length + configs.length + MYBATIS_DOMAINS.length + 1);
   for (let i = 0; i < Math.max(0, dtoCount); i++) {
     const domainIdx = Math.floor(i / dtoTypes.length) % JAVA_DOMAINS.length;
     const typeIdx = i % dtoTypes.length;
     const domain = JAVA_DOMAINS[domainIdx];
     const dtoType = dtoTypes[typeIdx];
     const filePath = path.join(BE, 'dto', `${capitalize(domain)}${dtoType}.java`);
-    const content = `package com.example.dto;
-
-public class ${capitalize(domain)}${dtoType} {
-    private Long id;
-    private String name;
-
-    public Long getId() { return id; }
-    public void setId(Long id) { this.id = id; }
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-}
-`;
-    writeFile(filePath, content);
+    writeFile(filePath, generateRealisticDto(domain, dtoType));
     fileCount++;
   }
 
@@ -1012,7 +1654,7 @@ public class ${capitalize(domain)}${dtoType} {
       '@': './frontend/src',
     },
     apiBaseUrl: '/api',
-    include: ['**/*.vue', '**/*.ts', '**/*.java'],
+    include: ['**/*.vue', '**/*.ts', '**/*.java', '**/*.xml'],
     exclude: ['node_modules/**', 'dist/**', 'build/**'],
   };
   writeFile(path.join(ROOT, '.vdarc.json'), JSON.stringify(vdarc, null, 2));

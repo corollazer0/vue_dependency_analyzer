@@ -2,9 +2,9 @@
   <div class="view-profileView">
     <h1>Profile</h1>
     <div class="view-content">
-    <auth-error />
-    <security-log />
-    <auth-guard />
+    <user-preferences />
+    <user-profile />
+    <user-list />
     </div>
   </div>
 </template>
@@ -12,19 +12,23 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useProductStore } from '@/stores/productStore'
-import { useClickOutside } from '@/composables/useClickOutside'
+import { useAuthStore } from '@/stores/authStore'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
-import AuthError from '@/components/auth/AuthError.vue'
-import SecurityLog from '@/components/auth/SecurityLog.vue'
-import AuthGuard from '@/components/auth/AuthGuard.vue'
+import UserPreferences from '@/components/user/UserPreferences.vue'
+import UserProfile from '@/components/user/UserProfile.vue'
+import UserList from '@/components/user/UserList.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const productStore = useProductStore()
-  const clickOutside = useClickOutside()
+  const authStore = useAuthStore()
+  const auth = useAuth()
 
 const pageData = ref(null)
+
+function navigateTo(path: string) {
+  router.push(path)
+}
 
 onMounted(async () => {
   try {

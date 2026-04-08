@@ -1,55 +1,66 @@
 <template>
   <div class="order-orderList">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <bar-chart />
-    <base-alert />
+    <order-item @remove="handleRemove" @update-quantity="handleUpdateQuantity" />
     <app-header />
+    <user-pagination />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
+import { useProductStore } from '@/stores/productStore'
 import { useProduct } from '@/composables/useProduct'
 import axios from 'axios'
-import BarChart from '@/components/dashboard/BarChart.vue'
-import BaseAlert from '@/components/common/BaseAlert.vue'
+import OrderItem from '@/components/order/OrderItem.vue'
 import AppHeader from '@/components/common/AppHeader.vue'
+import UserPagination from '@/components/user/UserPagination.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
   title: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['change'])
 
-  const orderStore = useOrderStore()
+  const productStore = useProductStore()
+
+
   const product = useProduct()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post(`/api/products/${id}/reviews`)
+    const response = await axios.get('/api/search')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+  function handleRemove() {
+    console.log('remove event received')
+  }
+
+  function handleUpdateQuantity() {
+    console.log('update-quantity event received')
+  }
+
 
 onMounted(() => {
   fetchData()

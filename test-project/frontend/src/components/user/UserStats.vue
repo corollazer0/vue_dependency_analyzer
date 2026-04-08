@@ -1,55 +1,60 @@
 <template>
   <div class="user-userStats">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <refresh-button />
-    <app-header />
-    <user-avatar />
+    <loading-overlay />
+    <dashboard-widget />
+    <pie-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useCategoryStore } from '@/stores/categoryStore'
-import { useAsync } from '@/composables/useAsync'
+import { useUserStore } from '@/stores/userStore'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
-import RefreshButton from '@/components/dashboard/RefreshButton.vue'
-import AppHeader from '@/components/common/AppHeader.vue'
-import UserAvatar from '@/components/user/UserAvatar.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
+import DashboardWidget from '@/components/dashboard/DashboardWidget.vue'
+import PieChart from '@/components/dashboard/PieChart.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
+  variant: { type: String, default: '' },
   size: { type: String, default: '' },
-  title: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['select'])
 
-  const categoryStore = useCategoryStore()
-  const async = useAsync()
+  const userStore = useUserStore()
+
+
+  const auth = useAuth()
   provide('locale', ref('value'))
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/products/${id}/reviews`)
+    const response = await axios.get('/api/inventory')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

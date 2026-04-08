@@ -1,55 +1,60 @@
 <template>
   <div class="common-fileUpload">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-chart />
+    <app-sidebar />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useProductStore } from '@/stores/productStore'
-import { useAuth } from '@/composables/useAuth'
-import { useLocalStorage } from '@/composables/useLocalStorage'
-import { deepClone } from '@/utils/deepClone'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useFilter } from '@/composables/useFilter'
+import { useKeyboard } from '@/composables/useKeyboard'
+import { products } from '@/api/products'
 import axios from 'axios'
-import OrderChart from '@/components/order/OrderChart.vue'
+import AppSidebar from '@/components/common/AppSidebar.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'delete'])
+const emit = defineEmits(['close', 'select'])
 
-  const orderStore = useOrderStore()
-  const productStore = useProductStore()
-  const auth = useAuth()
-  const localStorage = useLocalStorage()
+  const settingsStore = useSettingsStore()
+  const notificationStore = useNotificationStore()
 
-  const themeValue = inject('theme')
 
-const loading = ref(false)
+  const filter = useFilter()
+  const keyboard = useKeyboard()
+
+  const loggerValue = inject('logger')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/wishlist/${id}`)
-    const response = await axios.delete(`/api/users/${id}`)
-    data.value = response.data
+    const response = await axios.post('/api/wishlist')
+    const response1 = await axios.put(`/api/orders/${props.id}/status`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

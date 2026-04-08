@@ -1,61 +1,66 @@
 <template>
   <div class="order-orderChart">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <spark-line />
-    <base-alert />
-    <base-skeleton />
+    <user-table />
+    <product-gallery />
+    <auth-error />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { usePermission } from '@/composables/usePermission'
-import { useThrottle } from '@/composables/useThrottle'
+import { useUserStore } from '@/stores/userStore'
+import { useSearchStore } from '@/stores/searchStore'
+import { useGeolocation } from '@/composables/useGeolocation'
+import { useToast } from '@/composables/useToast'
 import { storage } from '@/services/storage'
 import axios from 'axios'
-import SparkLine from '@/components/dashboard/SparkLine.vue'
-import BaseAlert from '@/components/common/BaseAlert.vue'
-import BaseSkeleton from '@/components/common/BaseSkeleton.vue'
+import UserTable from '@/components/user/UserTable.vue'
+import ProductGallery from '@/components/product/ProductGallery.vue'
+import AuthError from '@/components/auth/AuthError.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  variant: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  items: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  size: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'change'])
+const emit = defineEmits(['close', 'change'])
 
-  const uIStore = useUIStore()
-  const notificationStore = useNotificationStore()
-  const permission = usePermission()
-  const throttle = useThrottle()
+  const userStore = useUserStore()
+  const searchStore = useSearchStore()
 
 
+  const geolocation = useGeolocation()
+  const toast = useToast()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/cart')
-    const response = await axios.put(`/api/products/${id}`)
-    data.value = response.data
+    const response = await axios.get(`/api/products/${props.id}`)
+    const response1 = await axios.get('/api/products')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

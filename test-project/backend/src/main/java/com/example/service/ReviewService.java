@@ -2,7 +2,9 @@ package com.example.service;
 
 import com.example.model.Review;
 import com.example.repository.ReviewRepository;
-import com.example.service.AdminService;
+import com.example.service.SettingsService;
+import com.example.service.InventoryService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -11,11 +13,14 @@ import java.util.Optional;
 public class ReviewService {
 
     private final ReviewRepository reviewRepository;
-    private final AdminService adminService;
+    private final SettingsService settingsService;
+    private final InventoryService inventoryService;
 
-    public ReviewService(ReviewRepository reviewRepository, AdminService adminService) {
+
+    public ReviewService(ReviewRepository reviewRepository, SettingsService settingsService, InventoryService inventoryService) {
         this.reviewRepository = reviewRepository;
-        this.adminService = adminService;
+        this.settingsService = settingsService;
+        this.inventoryService = inventoryService;
     }
 
     public List<Review> findAll() {
@@ -33,4 +38,5 @@ public class ReviewService {
     public void deleteById(Long id) {
         reviewRepository.deleteById(id);
     }
+
 }

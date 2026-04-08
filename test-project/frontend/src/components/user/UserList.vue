@@ -1,55 +1,60 @@
 <template>
   <div class="user-userList">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <app-breadcrumb />
-    <trend-indicator />
-    <trusted-devices />
+    <app-sidebar />
+    <product-wishlist />
+    <user-search />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useBreakpoint } from '@/composables/useBreakpoint'
+import { useProductStore } from '@/stores/productStore'
+import { useFetch } from '@/composables/useFetch'
 import axios from 'axios'
-import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
-import TrendIndicator from '@/components/dashboard/TrendIndicator.vue'
-import TrustedDevices from '@/components/auth/TrustedDevices.vue'
+import AppSidebar from '@/components/common/AppSidebar.vue'
+import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import UserSearch from '@/components/user/UserSearch.vue'
 
 const props = defineProps({
   items: { type: String, default: '' },
+  variant: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  size: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update'])
 
-  const analyticsStore = useAnalyticsStore()
-  const breakpoint = useBreakpoint()
+  const productStore = useProductStore()
+
+
+  const fetch = useFetch()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/wishlist/${id}`)
+    const response = await axios.delete(`/api/cart/items/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -8,7 +8,8 @@
   "include": [
     "**/*.vue",
     "**/*.ts",
-    "**/*.java"
+    "**/*.java",
+    "**/*.xml"
   ],
   "exclude": [
     "node_modules/**",

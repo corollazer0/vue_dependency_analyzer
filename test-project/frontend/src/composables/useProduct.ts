@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useProductStore } from '@/stores/productStore'
-import { useNotification } from '@/composables/useNotification'
+import { useUserStore } from '@/stores/userStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useWebSocket } from '@/composables/useWebSocket'
 import axios from 'axios'
 
 export function useProduct() {
-  const uIStore = useUIStore()
-  const productStore = useProductStore()
-  const { notification } = useNotification()
+  const userStore = useUserStore()
+  const analyticsStore = useAnalyticsStore()
+  const { webSocket } = useWebSocket()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useProduct() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/notifications')
-    return response.data
-    const response = await axios.put('/api/settings')
-    return response.data
+    const result = await axios.get('/api/analytics/conversions')
+    return result.data
+    const result1 = await axios.get('/api/coupons')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

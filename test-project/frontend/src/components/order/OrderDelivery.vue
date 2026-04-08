@@ -1,52 +1,57 @@
 <template>
   <div class="order-orderDelivery">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-drawer />
-    <order-bulk-action />
+    <radar-chart />
+    <product-comparison />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useProduct } from '@/composables/useProduct'
+import { useUIStore } from '@/stores/uIStore'
+import { useEventBus } from '@/composables/useEventBus'
 import axios from 'axios'
-import UserDrawer from '@/components/user/UserDrawer.vue'
-import OrderBulkAction from '@/components/order/OrderBulkAction.vue'
+import RadarChart from '@/components/dashboard/RadarChart.vue'
+import ProductComparison from '@/components/product/ProductComparison.vue'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' },
-  items: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  size: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['change'])
 
-  const authStore = useAuthStore()
-  const product = useProduct()
+  const uIStore = useUIStore()
 
-  const themeValue = inject('theme')
 
-const loading = ref(false)
+  const eventBus = useEventBus()
+
+  const configValue = inject('config')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/users/${id}`)
+    const response = await axios.get(`/api/products/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

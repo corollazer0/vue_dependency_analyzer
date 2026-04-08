@@ -1,61 +1,66 @@
 <template>
   <div class="user-userExport">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-review />
-    <user-search />
-    <user-modal />
+    <product-wishlist />
+    <product-form />
+    <heat-map />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useWishlistStore } from '@/stores/wishlistStore'
-import { useUserStore } from '@/stores/userStore'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { useAsync } from '@/composables/useAsync'
-import { analytics } from '@/services/analytics'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useMediaQuery } from '@/composables/useMediaQuery'
+import { useProduct } from '@/composables/useProduct'
+import { client } from '@/api/client'
 import axios from 'axios'
-import ProductReview from '@/components/product/ProductReview.vue'
-import UserSearch from '@/components/user/UserSearch.vue'
-import UserModal from '@/components/user/UserModal.vue'
+import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import ProductForm from '@/components/product/ProductForm.vue'
+import HeatMap from '@/components/dashboard/HeatMap.vue'
 
 const props = defineProps({
   variant: { type: String, default: '' },
-  disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' }
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'submit'])
+const emit = defineEmits(['delete', 'select'])
 
-  const wishlistStore = useWishlistStore()
-  const userStore = useUserStore()
-  const geolocation = useGeolocation()
-  const async = useAsync()
+  const reviewStore = useReviewStore()
+  const notificationStore = useNotificationStore()
 
 
+  const mediaQuery = useMediaQuery()
+  const product = useProduct()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post(`/api/orders/${id}/cancel`)
-    const response = await axios.put('/api/settings')
-    data.value = response.data
+    const response = await axios.delete(`/api/products/${props.id}`)
+    const response1 = await axios.put(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

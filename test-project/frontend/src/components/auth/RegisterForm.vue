@@ -1,61 +1,66 @@
 <template>
   <div class="auth-registerForm">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-delivery />
-    <order-detail />
-    <user-profile />
+    <user-deletion />
+    <radar-chart />
+    <social-login />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useUserStore } from '@/stores/userStore'
-import { useToast } from '@/composables/useToast'
-import { useValidation } from '@/composables/useValidation'
-import { helpers } from '@/utils/helpers'
+import { useProductStore } from '@/stores/productStore'
+import { useCartStore } from '@/stores/cartStore'
+import { useDragDrop } from '@/composables/useDragDrop'
+import { useOrder } from '@/composables/useOrder'
+import { interceptors } from '@/api/interceptors'
 import axios from 'axios'
-import OrderDelivery from '@/components/order/OrderDelivery.vue'
-import OrderDetail from '@/components/order/OrderDetail.vue'
-import UserProfile from '@/components/user/UserProfile.vue'
+import UserDeletion from '@/components/user/UserDeletion.vue'
+import RadarChart from '@/components/dashboard/RadarChart.vue'
+import SocialLogin from '@/components/auth/SocialLogin.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  items: { type: String, default: '' },
-  title: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'close'])
+const emit = defineEmits(['close', 'select'])
 
-  const orderStore = useOrderStore()
-  const userStore = useUserStore()
-  const toast = useToast()
-  const validation = useValidation()
+  const productStore = useProductStore()
+  const cartStore = useCartStore()
 
 
+  const dragDrop = useDragDrop()
+  const order = useOrder()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/users/${id}`)
-    const response = await axios.put(`/api/users/${id}`)
-    data.value = response.data
+    const response = await axios.get('/api/products')
+    const response1 = await axios.put(`/api/orders/${props.id}/status`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,58 +1,63 @@
 <template>
   <div class="user-userSort">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-input />
-    <product-grid />
+    <two-factor-setup />
+    <base-tooltip />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useProductStore } from '@/stores/productStore'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useFilter } from '@/composables/useFilter'
-import { useSearch } from '@/composables/useSearch'
-import { throttle } from '@/utils/throttle'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useUserStore } from '@/stores/userStore'
+import { useWebSocket } from '@/composables/useWebSocket'
+import { useAsync } from '@/composables/useAsync'
+import { validators } from '@/utils/validators'
 import axios from 'axios'
-import BaseInput from '@/components/common/BaseInput.vue'
-import ProductGrid from '@/components/product/ProductGrid.vue'
+import TwoFactorSetup from '@/components/auth/TwoFactorSetup.vue'
+import BaseTooltip from '@/components/common/BaseTooltip.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change', 'update'])
+const emit = defineEmits(['update', 'close'])
 
-  const productStore = useProductStore()
-  const inventoryStore = useInventoryStore()
-  const filter = useFilter()
-  const search = useSearch()
+  const notificationStore = useNotificationStore()
+  const userStore = useUserStore()
 
-  const themeValue = inject('theme')
 
-const loading = ref(false)
+  const webSocket = useWebSocket()
+  const async = useAsync()
+
+  const configValue = inject('config')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/upload')
-    const response = await axios.put(`/api/users/${id}`)
-    data.value = response.data
+    const response = await axios.get('/api/orders')
+    const response1 = await axios.get('/api/inventory')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

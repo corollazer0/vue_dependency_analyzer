@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { useUIStore } from '@/stores/uIStore'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useNotification } from '@/composables/useNotification'
 import axios from 'axios'
 
 export function usePagination() {
+  const notificationStore = useNotificationStore()
   const settingsStore = useSettingsStore()
-  const uIStore = useUIStore()
-  const { dragDrop } = useDragDrop()
+  const { notification } = useNotification()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function usePagination() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/products')
-    return response.data
-    const response = await axios.post(`/api/products/${id}/reviews`)
-    return response.data
+    const result = await axios.get('/api/products')
+    return result.data
+    const result1 = await axios.get('/api/users')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

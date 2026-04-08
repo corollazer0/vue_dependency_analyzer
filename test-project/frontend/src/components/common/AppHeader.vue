@@ -1,61 +1,72 @@
 <template>
   <div class="common-appHeader">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-avatar />
-    <product-wishlist />
-    <user-drawer />
+    <search-bar @search="handleSearch" @clear="handleClear" />
+    <product-discount />
+    <token-refresh />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useAuth } from '@/composables/useAuth'
-import { useDarkMode } from '@/composables/useDarkMode'
-import { constants } from '@/utils/constants'
+import { useCartStore } from '@/stores/cartStore'
+import { useProductStore } from '@/stores/productStore'
+import { useCart } from '@/composables/useCart'
+import { useAsync } from '@/composables/useAsync'
+import { validators } from '@/utils/validators'
 import axios from 'axios'
-import BaseAvatar from '@/components/common/BaseAvatar.vue'
-import ProductWishlist from '@/components/product/ProductWishlist.vue'
-import UserDrawer from '@/components/user/UserDrawer.vue'
+import SearchBar from '@/components/common/SearchBar.vue'
+import ProductDiscount from '@/components/product/ProductDiscount.vue'
+import TokenRefresh from '@/components/auth/TokenRefresh.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
-  items: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['select', 'delete'])
 
-  const uIStore = useUIStore()
-  const settingsStore = useSettingsStore()
-  const auth = useAuth()
-  const darkMode = useDarkMode()
+  const cartStore = useCartStore()
+  const productStore = useProductStore()
 
 
+  const cart = useCart()
+  const async = useAsync()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
-    const response = await axios.get(`/api/orders/${id}`)
-    data.value = response.data
+    const response = await axios.delete(`/api/users/${props.id}`)
+    const response1 = await axios.put(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+  function handleSearch() {
+    console.log('search event received')
+  }
+
+  function handleClear() {
+    console.log('clear event received')
+  }
+
 
 onMounted(() => {
   fetchData()

@@ -1,61 +1,66 @@
 <template>
   <div class="user-userBadge">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <ldap-login />
-    <customer-map />
-    <auth-history />
+    <base-chip />
+    <base-dropdown />
+    <app-footer />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useCategoryStore } from '@/stores/categoryStore'
 import { useUserStore } from '@/stores/userStore'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { useForm } from '@/composables/useForm'
-import { helpers } from '@/utils/helpers'
+import { useSearchStore } from '@/stores/searchStore'
+import { useSearch } from '@/composables/useSearch'
+import { useValidation } from '@/composables/useValidation'
+import { validators } from '@/utils/validators'
 import axios from 'axios'
-import LdapLogin from '@/components/auth/LdapLogin.vue'
-import CustomerMap from '@/components/dashboard/CustomerMap.vue'
-import AuthHistory from '@/components/auth/AuthHistory.vue'
+import BaseChip from '@/components/common/BaseChip.vue'
+import BaseDropdown from '@/components/common/BaseDropdown.vue'
+import AppFooter from '@/components/common/AppFooter.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
   modelValue: { type: String, default: '' },
-  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  variant: { type: String, default: '' },
   size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'delete'])
+const emit = defineEmits(['update', 'select'])
 
-  const categoryStore = useCategoryStore()
   const userStore = useUserStore()
-  const geolocation = useGeolocation()
-  const form = useForm()
+  const searchStore = useSearchStore()
 
-  const localeValue = inject('locale')
 
-const loading = ref(false)
+  const search = useSearch()
+  const validation = useValidation()
+
+  const themeValue = inject('theme')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
-    const response = await axios.get('/api/products')
-    data.value = response.data
+    const response = await axios.post('/api/auth/refresh')
+    const response1 = await axios.post('/api/users')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

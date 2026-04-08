@@ -1,49 +1,54 @@
 <template>
   <div class="order-orderBulkAction">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-comparison />
+    <product-analytics />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useProductStore } from '@/stores/productStore'
-import { useAsync } from '@/composables/useAsync'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
-import ProductComparison from '@/components/product/ProductComparison.vue'
+import ProductAnalytics from '@/components/product/ProductAnalytics.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['change'])
 
-  const productStore = useProductStore()
-  const async = useAsync()
+  const inventoryStore = useInventoryStore()
 
-  const permissionsValue = inject('permissions')
 
-const loading = ref(false)
+  const auth = useAuth()
+
+  const loggerValue = inject('logger')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/wishlist/${id}`)
+    const response = await axios.post('/api/auth/logout')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

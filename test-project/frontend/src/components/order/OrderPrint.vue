@@ -1,58 +1,63 @@
 <template>
   <div class="order-orderPrint">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <auth-error />
-    <ip-whitelist />
+    <product-brand />
+    <order-history />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useCategoryStore } from '@/stores/categoryStore'
-import { useUIStore } from '@/stores/uIStore'
-import { useAuth } from '@/composables/useAuth'
-import { useToast } from '@/composables/useToast'
-import { auth } from '@/api/auth'
+import { useUserStore } from '@/stores/userStore'
+import { useCartStore } from '@/stores/cartStore'
+import { useOrder } from '@/composables/useOrder'
+import { useClickOutside } from '@/composables/useClickOutside'
+import { products } from '@/api/products'
 import axios from 'axios'
-import AuthError from '@/components/auth/AuthError.vue'
-import IpWhitelist from '@/components/auth/IpWhitelist.vue'
+import ProductBrand from '@/components/product/ProductBrand.vue'
+import OrderHistory from '@/components/order/OrderHistory.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
-  title: { type: String, default: '' },
+  items: { type: String, default: '' },
+  disabled: { type: String, default: '' },
   variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'delete'])
+const emit = defineEmits(['delete', 'select'])
 
-  const categoryStore = useCategoryStore()
-  const uIStore = useUIStore()
-  const auth = useAuth()
-  const toast = useToast()
-  provide('permissions', ref('value'))
+  const userStore = useUserStore()
+  const cartStore = useCartStore()
 
 
-const loading = ref(false)
+  const order = useOrder()
+  const clickOutside = useClickOutside()
+  provide('eventBus', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/inventory')
-    const response = await axios.put(`/api/orders/${id}/status`)
-    data.value = response.data
+    const response = await axios.get('/api/search')
+    const response1 = await axios.get('/api/dashboard/stats')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

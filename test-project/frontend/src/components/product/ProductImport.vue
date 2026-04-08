@@ -1,49 +1,54 @@
 <template>
   <div class="product-productImport">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-filter />
+    <date-picker />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useForm } from '@/composables/useForm'
+import { useUserStore } from '@/stores/userStore'
+import { useValidation } from '@/composables/useValidation'
 import axios from 'axios'
-import ProductFilter from '@/components/product/ProductFilter.vue'
+import DatePicker from '@/components/common/DatePicker.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  title: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['select'])
 
-  const inventoryStore = useInventoryStore()
-  const form = useForm()
+  const userStore = useUserStore()
 
-  const localeValue = inject('locale')
 
-const loading = ref(false)
+  const validation = useValidation()
+
+  const loggerValue = inject('logger')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/cart')
+    const response = await axios.delete(`/api/cart/items/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

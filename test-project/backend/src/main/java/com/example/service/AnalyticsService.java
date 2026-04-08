@@ -2,7 +2,9 @@ package com.example.service;
 
 import com.example.model.Analytics;
 import com.example.repository.AnalyticsRepository;
-import com.example.service.SearchService;
+import com.example.service.SettingsService;
+import com.example.service.PaymentService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -11,11 +13,14 @@ import java.util.Optional;
 public class AnalyticsService {
 
     private final AnalyticsRepository analyticsRepository;
-    private final SearchService searchService;
+    private final SettingsService settingsService;
+    private final PaymentService paymentService;
 
-    public AnalyticsService(AnalyticsRepository analyticsRepository, SearchService searchService) {
+
+    public AnalyticsService(AnalyticsRepository analyticsRepository, SettingsService settingsService, PaymentService paymentService) {
         this.analyticsRepository = analyticsRepository;
-        this.searchService = searchService;
+        this.settingsService = settingsService;
+        this.paymentService = paymentService;
     }
 
     public List<Analytics> findAll() {
@@ -33,4 +38,5 @@ public class AnalyticsService {
     public void deleteById(Long id) {
         analyticsRepository.deleteById(id);
     }
+
 }

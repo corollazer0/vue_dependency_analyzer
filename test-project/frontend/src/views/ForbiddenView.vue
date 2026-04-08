@@ -2,10 +2,10 @@
   <div class="view-forbiddenView">
     <h1>Forbidden</h1>
     <div class="view-content">
-    <data-empty />
-    <base-dropdown />
-    <base-badge />
-    <base-spinner />
+    <order-return />
+    <order-detail />
+    <order-confirmation />
+    <order-refund />
     </div>
   </div>
 </template>
@@ -13,24 +13,28 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/userStore'
-import { useValidation } from '@/composables/useValidation'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useAsync } from '@/composables/useAsync'
 import axios from 'axios'
-import DataEmpty from '@/components/common/DataEmpty.vue'
-import BaseDropdown from '@/components/common/BaseDropdown.vue'
-import BaseBadge from '@/components/common/BaseBadge.vue'
-import BaseSpinner from '@/components/common/BaseSpinner.vue'
+import OrderReturn from '@/components/order/OrderReturn.vue'
+import OrderDetail from '@/components/order/OrderDetail.vue'
+import OrderConfirmation from '@/components/order/OrderConfirmation.vue'
+import OrderRefund from '@/components/order/OrderRefund.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const userStore = useUserStore()
-  const validation = useValidation()
+  const notificationStore = useNotificationStore()
+  const async = useAsync()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.get(`/api/products/${route.params.id}`)
+    await axios.post('/api/products')
   } catch (error) {
     console.error('View load error:', error)
   }

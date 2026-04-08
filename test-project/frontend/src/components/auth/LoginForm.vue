@@ -1,52 +1,58 @@
 <template>
   <div class="auth-loginForm">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <captcha-widget />
-    <dashboard-filter />
+    <app-footer />
+    <base-alert />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('login-success')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useProduct } from '@/composables/useProduct'
+import { useRouter } from 'vue-router'
+import { useCouponStore } from '@/stores/couponStore'
+import { useTheme } from '@/composables/useTheme'
 import axios from 'axios'
-import CaptchaWidget from '@/components/auth/CaptchaWidget.vue'
-import DashboardFilter from '@/components/dashboard/DashboardFilter.vue'
+import AppFooter from '@/components/common/AppFooter.vue'
+import BaseAlert from '@/components/common/BaseAlert.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  items: { type: String, default: '' }
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['login-success', 'forgot-password'])
 
-  const notificationStore = useNotificationStore()
-  const product = useProduct()
+  const couponStore = useCouponStore()
+
+  const router = useRouter()
+  const theme = useTheme()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/products/${id}`)
+    const response = await axios.delete(`/api/users/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+  function goToRegister() { router.push('/register') }
 
 onMounted(() => {
   fetchData()

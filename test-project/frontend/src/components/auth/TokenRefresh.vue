@@ -1,55 +1,60 @@
 <template>
   <div class="auth-tokenRefresh">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <captcha-widget />
+    <product-price />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useUserStore } from '@/stores/userStore'
-import { useCouponStore } from '@/stores/couponStore'
-import { useAuth } from '@/composables/useAuth'
-import { useDarkMode } from '@/composables/useDarkMode'
-import { auth } from '@/api/auth'
+import { useAuthStore } from '@/stores/authStore'
+import { useKeyboard } from '@/composables/useKeyboard'
+import { useDragDrop } from '@/composables/useDragDrop'
+import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import CaptchaWidget from '@/components/auth/CaptchaWidget.vue'
+import ProductPrice from '@/components/product/ProductPrice.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'select'])
+const emit = defineEmits(['delete', 'close'])
 
   const userStore = useUserStore()
-  const couponStore = useCouponStore()
-  const auth = useAuth()
-  const darkMode = useDarkMode()
+  const authStore = useAuthStore()
+
+
+  const keyboard = useKeyboard()
+  const dragDrop = useDragDrop()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/coupons')
-    const response = await axios.get('/api/cart')
-    data.value = response.data
+    const response = await axios.get('/api/analytics/conversions')
+    const response1 = await axios.get(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

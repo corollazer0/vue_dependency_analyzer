@@ -1,61 +1,66 @@
 <template>
   <div class="product-productBadge">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <auth-callback />
-    <reset-password />
-    <forgot-password />
+    <ldap-login />
+    <order-feedback />
+    <user-badge />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useUserStore } from '@/stores/userStore'
-import { useClickOutside } from '@/composables/useClickOutside'
-import { useProduct } from '@/composables/useProduct'
-import { debounce } from '@/utils/debounce'
+import { useSearchStore } from '@/stores/searchStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useToast } from '@/composables/useToast'
+import { useCart } from '@/composables/useCart'
+import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import AuthCallback from '@/components/auth/AuthCallback.vue'
-import ResetPassword from '@/components/auth/ResetPassword.vue'
-import ForgotPassword from '@/components/auth/ForgotPassword.vue'
+import LdapLogin from '@/components/auth/LdapLogin.vue'
+import OrderFeedback from '@/components/order/OrderFeedback.vue'
+import UserBadge from '@/components/user/UserBadge.vue'
 
 const props = defineProps({
+  modelValue: { type: String, default: '' },
   title: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  items: { type: String, default: '' }
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'delete'])
+const emit = defineEmits(['delete', 'update'])
 
-  const settingsStore = useSettingsStore()
-  const userStore = useUserStore()
-  const clickOutside = useClickOutside()
-  const product = useProduct()
+  const searchStore = useSearchStore()
+  const analyticsStore = useAnalyticsStore()
 
 
+  const toast = useToast()
+  const cart = useCart()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/wishlist')
-    const response = await axios.get('/api/orders')
-    data.value = response.data
+    const response = await axios.post('/api/products')
+    const response1 = await axios.get(`/api/orders/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

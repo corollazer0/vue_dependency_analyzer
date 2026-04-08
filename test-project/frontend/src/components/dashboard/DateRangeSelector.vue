@@ -1,58 +1,63 @@
 <template>
   <div class="dashboard-dateRangeSelector">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <app-footer />
-    <product-wishlist />
+    <dashboard-table />
+    <user-sort />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useCartStore } from '@/stores/cartStore'
-import { useBreakpoint } from '@/composables/useBreakpoint'
-import { useEventBus } from '@/composables/useEventBus'
-import { i18n } from '@/services/i18n'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useFetch } from '@/composables/useFetch'
+import { useSearch } from '@/composables/useSearch'
+import { throttle } from '@/utils/throttle'
 import axios from 'axios'
-import AppFooter from '@/components/common/AppFooter.vue'
-import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import DashboardTable from '@/components/dashboard/DashboardTable.vue'
+import UserSort from '@/components/user/UserSort.vue'
 
 const props = defineProps({
+  title: { type: String, default: '' },
   variant: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  size: { type: String, default: '' }
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit', 'close'])
+const emit = defineEmits(['update', 'select'])
 
-  const inventoryStore = useInventoryStore()
-  const cartStore = useCartStore()
-  const breakpoint = useBreakpoint()
-  const eventBus = useEventBus()
+  const settingsStore = useSettingsStore()
+  const authStore = useAuthStore()
 
 
+  const fetch = useFetch()
+  const search = useSearch()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
-    const response = await axios.get('/api/dashboard/stats')
-    data.value = response.data
+    const response = await axios.get('/api/categories')
+    const response1 = await axios.put(`/api/orders/${props.id}/status`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,49 +1,54 @@
 <template>
   <div class="user-userImport">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-return />
+    <order-payment />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useWishlistStore } from '@/stores/wishlistStore'
-import { useAuth } from '@/composables/useAuth'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useClickOutside } from '@/composables/useClickOutside'
 import axios from 'axios'
-import OrderReturn from '@/components/order/OrderReturn.vue'
+import OrderPayment from '@/components/order/OrderPayment.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['select'])
 
-  const wishlistStore = useWishlistStore()
-  const auth = useAuth()
-
+  const reviewStore = useReviewStore()
 
 
-const loading = ref(false)
+  const clickOutside = useClickOutside()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/notifications/${id}/read`)
+    const response = await axios.get('/api/users')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

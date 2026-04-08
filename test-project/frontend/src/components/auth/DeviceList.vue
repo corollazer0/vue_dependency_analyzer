@@ -1,61 +1,66 @@
 <template>
   <div class="auth-deviceList">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <captcha-widget />
-    <app-footer />
-    <api-key-manager />
+    <product-variant />
+    <product-brand />
+    <user-modal />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useProductStore } from '@/stores/productStore'
-import { useCart } from '@/composables/useCart'
+import { useCategoryStore } from '@/stores/categoryStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useFilter } from '@/composables/useFilter'
 import { usePermission } from '@/composables/usePermission'
-import { helpers } from '@/utils/helpers'
+import { constants } from '@/utils/constants'
 import axios from 'axios'
-import CaptchaWidget from '@/components/auth/CaptchaWidget.vue'
-import AppFooter from '@/components/common/AppFooter.vue'
-import ApiKeyManager from '@/components/auth/ApiKeyManager.vue'
+import ProductVariant from '@/components/product/ProductVariant.vue'
+import ProductBrand from '@/components/product/ProductBrand.vue'
+import UserModal from '@/components/user/UserModal.vue'
 
 const props = defineProps({
+  variant: { type: String, default: '' },
+  title: { type: String, default: '' },
   size: { type: String, default: '' },
-  disabled: { type: String, default: '' },
-  items: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['close', 'update'])
 
-  const reviewStore = useReviewStore()
-  const productStore = useProductStore()
-  const cart = useCart()
+  const categoryStore = useCategoryStore()
+  const authStore = useAuthStore()
+
+
+  const filter = useFilter()
   const permission = usePermission()
-  provide('logger', ref('value'))
+  provide('permissions', ref('value'))
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/cart/items')
-    const response = await axios.put(`/api/products/${id}`)
-    data.value = response.data
+    const response = await axios.get('/api/reviews')
+    const response1 = await axios.get('/api/users')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,55 +1,60 @@
 <template>
   <div class="common-datePicker">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-import />
-    <product-analytics />
-    <order-export />
+    <line-chart />
+    <user-roles />
+    <order-notification />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useClipboard } from '@/composables/useClipboard'
+import { useCartStore } from '@/stores/cartStore'
+import { usePermission } from '@/composables/usePermission'
 import axios from 'axios'
-import ProductImport from '@/components/product/ProductImport.vue'
-import ProductAnalytics from '@/components/product/ProductAnalytics.vue'
-import OrderExport from '@/components/order/OrderExport.vue'
+import LineChart from '@/components/dashboard/LineChart.vue'
+import UserRoles from '@/components/user/UserRoles.vue'
+import OrderNotification from '@/components/order/OrderNotification.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   variant: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  size: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update'])
 
-  const uIStore = useUIStore()
-  const clipboard = useClipboard()
+  const cartStore = useCartStore()
+
+
+  const permission = usePermission()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/cart/items')
+    const response = await axios.post('/api/auth/refresh')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

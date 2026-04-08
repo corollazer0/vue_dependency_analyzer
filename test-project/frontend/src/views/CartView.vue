@@ -2,9 +2,9 @@
   <div class="view-cartView">
     <h1>Cart</h1>
     <div class="view-content">
-    <dashboard-stats />
-    <recent-orders />
-    <trend-indicator />
+    <permission-gate />
+    <social-login />
+    <biometric-auth />
     </div>
   </div>
 </template>
@@ -12,23 +12,27 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useSearchStore } from '@/stores/searchStore'
-import { useCart } from '@/composables/useCart'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useDragDrop } from '@/composables/useDragDrop'
 import axios from 'axios'
-import DashboardStats from '@/components/dashboard/DashboardStats.vue'
-import RecentOrders from '@/components/dashboard/RecentOrders.vue'
-import TrendIndicator from '@/components/dashboard/TrendIndicator.vue'
+import PermissionGate from '@/components/auth/PermissionGate.vue'
+import SocialLogin from '@/components/auth/SocialLogin.vue'
+import BiometricAuth from '@/components/auth/BiometricAuth.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const searchStore = useSearchStore()
-  const cart = useCart()
+  const notificationStore = useNotificationStore()
+  const dragDrop = useDragDrop()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.delete(`/api/cart/items/${route.params.id}`)
+    await axios.get('/api/reviews')
   } catch (error) {
     console.error('View load error:', error)
   }

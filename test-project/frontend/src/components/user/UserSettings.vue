@@ -1,52 +1,59 @@
 <template>
   <div class="user-userSettings">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-item />
-    <auth-error />
+    <product-table />
+    <order-tracking />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useKeyboard } from '@/composables/useKeyboard'
+import { storeToRefs } from 'pinia'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import axios from 'axios'
-import OrderItem from '@/components/order/OrderItem.vue'
-import AuthError from '@/components/auth/AuthError.vue'
+import ProductTable from '@/components/product/ProductTable.vue'
+import OrderTracking from '@/components/order/OrderTracking.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  size: { type: String, default: '' },
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['delete'])
 
-  const authStore = useAuthStore()
-  const keyboard = useKeyboard()
+  const settingsStore = useSettingsStore()
+  const settingsStore = useSettingsStore()
+  const { items, selectedItem } = storeToRefs(settingsStore)
+
+  const infiniteScroll = useInfiniteScroll()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/orders/${id}/status`)
+    const response = await axios.put('/api/settings')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

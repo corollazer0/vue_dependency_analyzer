@@ -1,55 +1,60 @@
 <template>
   <div class="auth-apiKeyManager">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-delivery />
+    <user-profile />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useProductStore } from '@/stores/productStore'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useCouponStore } from '@/stores/couponStore'
 import { useWebSocket } from '@/composables/useWebSocket'
-import { useValidation } from '@/composables/useValidation'
-import { formatDate } from '@/utils/formatDate'
+import { useFilter } from '@/composables/useFilter'
+import { i18n } from '@/services/i18n'
 import axios from 'axios'
-import OrderDelivery from '@/components/order/OrderDelivery.vue'
+import UserProfile from '@/components/user/UserProfile.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  items: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['close', 'update'])
 
-  const productStore = useProductStore()
-  const analyticsStore = useAnalyticsStore()
+  const notificationStore = useNotificationStore()
+  const couponStore = useCouponStore()
+
+
   const webSocket = useWebSocket()
-  const validation = useValidation()
+  const filter = useFilter()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/products/${id}`)
-    const response = await axios.get('/api/settings')
-    data.value = response.data
+    const response = await axios.put(`/api/users/${props.id}`)
+    const response1 = await axios.get(`/api/products/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

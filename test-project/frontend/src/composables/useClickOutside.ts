@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useCouponStore } from '@/stores/couponStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
 import { useCategoryStore } from '@/stores/categoryStore'
-import { useDebounce } from '@/composables/useDebounce'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
 
 export function useClickOutside() {
-  const couponStore = useCouponStore()
+  const analyticsStore = useAnalyticsStore()
   const categoryStore = useCategoryStore()
-  const { debounce } = useDebounce()
+  const { auth } = useAuth()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useClickOutside() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/auth/refresh')
-    return response.data
-    const response = await axios.delete(`/api/users/${id}`)
-    return response.data
+    const result = await axios.get(`/api/orders/${id}`)
+    return result.data
+    const result1 = await axios.get('/api/products')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

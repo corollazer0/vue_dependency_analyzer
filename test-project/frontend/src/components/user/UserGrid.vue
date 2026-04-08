@@ -1,52 +1,57 @@
 <template>
   <div class="user-userGrid">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <ip-whitelist />
-    <user-avatar />
+    <activity-feed />
+    <base-chip />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useSearch } from '@/composables/useSearch'
+import { useUIStore } from '@/stores/uIStore'
+import { useValidation } from '@/composables/useValidation'
 import axios from 'axios'
-import IpWhitelist from '@/components/auth/IpWhitelist.vue'
-import UserAvatar from '@/components/user/UserAvatar.vue'
+import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
+import BaseChip from '@/components/common/BaseChip.vue'
 
 const props = defineProps({
+  items: { type: String, default: '' },
   variant: { type: String, default: '' },
-  size: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['update'])
 
-  const analyticsStore = useAnalyticsStore()
-  const search = useSearch()
-  provide('logger', ref('value'))
+  const uIStore = useUIStore()
 
 
-const loading = ref(false)
+  const validation = useValidation()
+  provide('config', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/orders')
+    const response = await axios.put(`/api/orders/${props.id}/status`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

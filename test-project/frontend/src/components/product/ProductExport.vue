@@ -1,58 +1,63 @@
 <template>
   <div class="product-productExport">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <register-form />
-    <data-grid />
+    <logout-confirm />
+    <app-header />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { useUserStore } from '@/stores/userStore'
-import { useToast } from '@/composables/useToast'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useOrderStore } from '@/stores/orderStore'
+import { useForm } from '@/composables/useForm'
+import { useClickOutside } from '@/composables/useClickOutside'
 import { client } from '@/api/client'
 import axios from 'axios'
-import RegisterForm from '@/components/auth/RegisterForm.vue'
-import DataGrid from '@/components/dashboard/DataGrid.vue'
+import LogoutConfirm from '@/components/auth/LogoutConfirm.vue'
+import AppHeader from '@/components/common/AppHeader.vue'
 
 const props = defineProps({
   disabled: { type: String, default: '' },
-  size: { type: String, default: '' },
+  title: { type: String, default: '' },
   variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit', 'close'])
+const emit = defineEmits(['select', 'update'])
 
   const settingsStore = useSettingsStore()
-  const userStore = useUserStore()
-  const toast = useToast()
-  const dragDrop = useDragDrop()
+  const orderStore = useOrderStore()
+
+
+  const form = useForm()
+  const clickOutside = useClickOutside()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
-    const response = await axios.post('/api/orders')
-    data.value = response.data
+    const response = await axios.post('/api/auth/refresh')
+    const response1 = await axios.delete(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

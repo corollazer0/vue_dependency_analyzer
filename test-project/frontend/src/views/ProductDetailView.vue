@@ -2,8 +2,8 @@
   <div class="view-productDetailView">
     <h1>ProductDetail</h1>
     <div class="view-content">
-    <auth-guard />
-    <permission-gate />
+    <sso-login />
+    <otp-input />
     </div>
   </div>
 </template>
@@ -11,22 +11,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useSearchStore } from '@/stores/searchStore'
-import { useDebounce } from '@/composables/useDebounce'
+import { useAuthStore } from '@/stores/authStore'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
-import AuthGuard from '@/components/auth/AuthGuard.vue'
-import PermissionGate from '@/components/auth/PermissionGate.vue'
+import SsoLogin from '@/components/auth/SsoLogin.vue'
+import OtpInput from '@/components/auth/OtpInput.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const searchStore = useSearchStore()
-  const debounce = useDebounce()
+  const authStore = useAuthStore()
+  const auth = useAuth()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.post('/api/auth/logout')
+    await axios.get('/api/products')
   } catch (error) {
     console.error('View load error:', error)
   }

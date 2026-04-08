@@ -2,7 +2,9 @@ package com.example.service;
 
 import com.example.model.Admin;
 import com.example.repository.AdminRepository;
-import com.example.service.ShippingService;
+import com.example.service.NotificationService;
+import com.example.service.SearchService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -11,11 +13,14 @@ import java.util.Optional;
 public class AdminService {
 
     private final AdminRepository adminRepository;
-    private final ShippingService shippingService;
+    private final NotificationService notificationService;
+    private final SearchService searchService;
 
-    public AdminService(AdminRepository adminRepository, ShippingService shippingService) {
+
+    public AdminService(AdminRepository adminRepository, NotificationService notificationService, SearchService searchService) {
         this.adminRepository = adminRepository;
-        this.shippingService = shippingService;
+        this.notificationService = notificationService;
+        this.searchService = searchService;
     }
 
     public List<Admin> findAll() {
@@ -33,4 +38,5 @@ public class AdminService {
     public void deleteById(Long id) {
         adminRepository.deleteById(id);
     }
+
 }

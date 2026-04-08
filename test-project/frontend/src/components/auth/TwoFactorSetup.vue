@@ -1,55 +1,60 @@
 <template>
   <div class="auth-twoFactorSetup">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <security-log />
-    <product-wishlist />
-    <order-review />
+    <user-profile />
+    <user-avatar />
+    <traffic-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useDebounce } from '@/composables/useDebounce'
 import axios from 'axios'
-import SecurityLog from '@/components/auth/SecurityLog.vue'
-import ProductWishlist from '@/components/product/ProductWishlist.vue'
-import OrderReview from '@/components/order/OrderReview.vue'
+import UserProfile from '@/components/user/UserProfile.vue'
+import UserAvatar from '@/components/user/UserAvatar.vue'
+import TrafficChart from '@/components/dashboard/TrafficChart.vue'
 
 const props = defineProps({
+  size: { type: String, default: '' },
   items: { type: String, default: '' },
-  title: { type: String, default: '' },
   variant: { type: String, default: '' },
-  size: { type: String, default: '' }
+  disabled: { type: String, default: '' }
 })
 
 const emit = defineEmits(['change'])
 
-  const notificationStore = useNotificationStore()
-  const dragDrop = useDragDrop()
+  const inventoryStore = useInventoryStore()
+
+
+  const debounce = useDebounce()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/auth/login')
+    const response = await axios.get('/api/users')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

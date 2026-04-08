@@ -1,61 +1,66 @@
 <template>
   <div class="dashboard-areaChart">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-upload />
-    <product-comparison />
-    <app-sidebar />
+    <base-modal />
+    <user-sort />
+    <user-preferences />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useUserStore } from '@/stores/userStore'
+import { useCategoryStore } from '@/stores/categoryStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useAsync } from '@/composables/useAsync'
 import { useValidation } from '@/composables/useValidation'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { debounce } from '@/utils/debounce'
+import { deepClone } from '@/utils/deepClone'
 import axios from 'axios'
-import ProductUpload from '@/components/product/ProductUpload.vue'
-import ProductComparison from '@/components/product/ProductComparison.vue'
-import AppSidebar from '@/components/common/AppSidebar.vue'
+import BaseModal from '@/components/common/BaseModal.vue'
+import UserSort from '@/components/user/UserSort.vue'
+import UserPreferences from '@/components/user/UserPreferences.vue'
 
 const props = defineProps({
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
   variant: { type: String, default: '' },
-  items: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  title: { type: String, default: '' }
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'delete'])
+const emit = defineEmits(['change', 'select'])
 
-  const orderStore = useOrderStore()
-  const userStore = useUserStore()
+  const categoryStore = useCategoryStore()
+  const analyticsStore = useAnalyticsStore()
+
+
+  const async = useAsync()
   const validation = useValidation()
-  const geolocation = useGeolocation()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/cart/items/${id}`)
-    const response = await axios.get('/api/orders')
-    data.value = response.data
+    const response = await axios.post('/api/auth/register')
+    const response1 = await axios.get('/api/users')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

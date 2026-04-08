@@ -14,8 +14,8 @@ export function useToast() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/auth/logout')
-    return response.data
+    const result = await axios.get(`/api/products/${id}/reviews`)
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

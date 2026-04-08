@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useUser } from '@/composables/useUser'
+import { useOrderStore } from '@/stores/orderStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useFilter } from '@/composables/useFilter'
 import axios from 'axios'
 
 export function useAsync() {
-  const settingsStore = useSettingsStore()
-  const analyticsStore = useAnalyticsStore()
-  const { user } = useUser()
+  const orderStore = useOrderStore()
+  const notificationStore = useNotificationStore()
+  const { filter } = useFilter()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useAsync() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/auth/register')
-    return response.data
-    const response = await axios.put('/api/settings')
-    return response.data
+    const result = await axios.put(`/api/orders/${id}/status`)
+    return result.data
+    const result1 = await axios.put(`/api/users/${id}`)
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

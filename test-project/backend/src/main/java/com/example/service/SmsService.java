@@ -2,6 +2,7 @@ package com.example.service;
 
 import com.example.model.Sms;
 import com.example.repository.SmsRepository;
+import com.example.service.ReviewService;
 
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -11,10 +12,12 @@ import java.util.Optional;
 public class SmsService {
 
     private final SmsRepository smsRepository;
+    private final ReviewService reviewService;
 
 
-    public SmsService(SmsRepository smsRepository) {
+    public SmsService(SmsRepository smsRepository, ReviewService reviewService) {
         this.smsRepository = smsRepository;
+        this.reviewService = reviewService;
     }
 
     public List<Sms> findAll() {
@@ -32,4 +35,5 @@ public class SmsService {
     public void deleteById(Long id) {
         smsRepository.deleteById(id);
     }
+
 }

@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.Email;
 import com.example.repository.EmailRepository;
-import com.example.service.CategoryService;
-import com.example.service.ReviewService;
+import com.example.service.ReportService;
+import com.example.service.AuthService;
+import com.example.service.SearchService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +14,16 @@ import java.util.Optional;
 public class EmailService {
 
     private final EmailRepository emailRepository;
-    private final CategoryService categoryService;
-    private final ReviewService reviewService;
+    private final ReportService reportService;
+    private final AuthService authService;
+    private final SearchService searchService;
 
-    public EmailService(EmailRepository emailRepository, CategoryService categoryService, ReviewService reviewService) {
+
+    public EmailService(EmailRepository emailRepository, ReportService reportService, AuthService authService, SearchService searchService) {
         this.emailRepository = emailRepository;
-        this.categoryService = categoryService;
-        this.reviewService = reviewService;
+        this.reportService = reportService;
+        this.authService = authService;
+        this.searchService = searchService;
     }
 
     public List<Email> findAll() {
@@ -36,4 +41,5 @@ public class EmailService {
     public void deleteById(Long id) {
         emailRepository.deleteById(id);
     }
+
 }

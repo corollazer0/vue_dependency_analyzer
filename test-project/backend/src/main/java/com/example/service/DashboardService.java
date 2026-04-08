@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.Dashboard;
 import com.example.repository.DashboardRepository;
-import com.example.service.ShippingService;
 import com.example.service.PaymentService;
+import com.example.service.ReviewService;
+import com.example.service.SettingsService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +14,16 @@ import java.util.Optional;
 public class DashboardService {
 
     private final DashboardRepository dashboardRepository;
-    private final ShippingService shippingService;
     private final PaymentService paymentService;
+    private final ReviewService reviewService;
+    private final SettingsService settingsService;
 
-    public DashboardService(DashboardRepository dashboardRepository, ShippingService shippingService, PaymentService paymentService) {
+
+    public DashboardService(DashboardRepository dashboardRepository, PaymentService paymentService, ReviewService reviewService, SettingsService settingsService) {
         this.dashboardRepository = dashboardRepository;
-        this.shippingService = shippingService;
         this.paymentService = paymentService;
+        this.reviewService = reviewService;
+        this.settingsService = settingsService;
     }
 
     public List<Dashboard> findAll() {
@@ -36,4 +41,5 @@ public class DashboardService {
     public void deleteById(Long id) {
         dashboardRepository.deleteById(id);
     }
+
 }

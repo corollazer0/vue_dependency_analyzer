@@ -1,55 +1,60 @@
 <template>
   <div class="user-userDropdown">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-pagination />
+    <user-profile />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useOrderStore } from '@/stores/orderStore'
+import { useCategoryStore } from '@/stores/categoryStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useForm } from '@/composables/useForm'
 import { useDebounce } from '@/composables/useDebounce'
-import { useWebSocket } from '@/composables/useWebSocket'
-import { throttle } from '@/utils/throttle'
+import { constants } from '@/utils/constants'
 import axios from 'axios'
-import BasePagination from '@/components/common/BasePagination.vue'
+import UserProfile from '@/components/user/UserProfile.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  title: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['delete', 'update'])
 
-  const inventoryStore = useInventoryStore()
-  const orderStore = useOrderStore()
+  const categoryStore = useCategoryStore()
+  const analyticsStore = useAnalyticsStore()
+
+
+  const form = useForm()
   const debounce = useDebounce()
-  const webSocket = useWebSocket()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/orders/${id}/status`)
-    const response = await axios.post('/api/products')
-    data.value = response.data
+    const response = await axios.post(`/api/products/${props.id}/reviews`)
+    const response1 = await axios.post('/api/upload')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

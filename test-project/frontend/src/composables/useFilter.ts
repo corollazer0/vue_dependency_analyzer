@@ -14,8 +14,8 @@ export function useFilter() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/cart')
-    return response.data
+    const result = await axios.get('/api/products')
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

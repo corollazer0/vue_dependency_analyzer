@@ -2,7 +2,9 @@ package com.example.service;
 
 import com.example.model.Upload;
 import com.example.repository.UploadRepository;
-import com.example.service.UserService;
+import com.example.service.DashboardService;
+import com.example.service.PaymentService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -11,11 +13,14 @@ import java.util.Optional;
 public class UploadService {
 
     private final UploadRepository uploadRepository;
-    private final UserService userService;
+    private final DashboardService dashboardService;
+    private final PaymentService paymentService;
 
-    public UploadService(UploadRepository uploadRepository, UserService userService) {
+
+    public UploadService(UploadRepository uploadRepository, DashboardService dashboardService, PaymentService paymentService) {
         this.uploadRepository = uploadRepository;
-        this.userService = userService;
+        this.dashboardService = dashboardService;
+        this.paymentService = paymentService;
     }
 
     public List<Upload> findAll() {
@@ -33,4 +38,5 @@ public class UploadService {
     public void deleteById(Long id) {
         uploadRepository.deleteById(id);
     }
+
 }

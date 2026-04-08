@@ -1,61 +1,66 @@
 <template>
   <div class="dashboard-kpiCard">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-dispute />
-    <rate-limit-banner />
-    <social-login />
+    <product-comparison />
+    <o-auth-consent />
+    <user-notifications />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSearchStore } from '@/stores/searchStore'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useThrottle } from '@/composables/useThrottle'
-import { useDarkMode } from '@/composables/useDarkMode'
-import { constants } from '@/utils/constants'
+import { useUserStore } from '@/stores/userStore'
+import { useCartStore } from '@/stores/cartStore'
+import { useValidation } from '@/composables/useValidation'
+import { useBreakpoint } from '@/composables/useBreakpoint'
+import { i18n } from '@/services/i18n'
 import axios from 'axios'
-import OrderDispute from '@/components/order/OrderDispute.vue'
-import RateLimitBanner from '@/components/auth/RateLimitBanner.vue'
-import SocialLogin from '@/components/auth/SocialLogin.vue'
+import ProductComparison from '@/components/product/ProductComparison.vue'
+import OAuthConsent from '@/components/auth/OAuthConsent.vue'
+import UserNotifications from '@/components/user/UserNotifications.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
   items: { type: String, default: '' },
-  size: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change', 'close'])
+const emit = defineEmits(['close', 'update'])
 
-  const searchStore = useSearchStore()
-  const notificationStore = useNotificationStore()
-  const throttle = useThrottle()
-  const darkMode = useDarkMode()
+  const userStore = useUserStore()
+  const cartStore = useCartStore()
 
 
+  const validation = useValidation()
+  const breakpoint = useBreakpoint()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
-    const response = await axios.post(`/api/products/${id}/reviews`)
-    data.value = response.data
+    const response = await axios.get('/api/categories')
+    const response1 = await axios.delete(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,52 +1,57 @@
 <template>
   <div class="common-confirmDialog">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <refresh-button />
-    <order-review />
+    <auth-error />
+    <product-search />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { usePagination } from '@/composables/usePagination'
+import { useAuthStore } from '@/stores/authStore'
+import { useForm } from '@/composables/useForm'
 import axios from 'axios'
-import RefreshButton from '@/components/dashboard/RefreshButton.vue'
-import OrderReview from '@/components/order/OrderReview.vue'
+import AuthError from '@/components/auth/AuthError.vue'
+import ProductSearch from '@/components/product/ProductSearch.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
+  title: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  items: { type: String, default: '' }
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['delete'])
 
-  const userStore = useUserStore()
-  const pagination = usePagination()
+  const authStore = useAuthStore()
 
-  const permissionsValue = inject('permissions')
 
-const loading = ref(false)
+  const form = useForm()
+
+  const configValue = inject('config')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post(`/api/orders/${id}/cancel`)
+    const response = await axios.get('/api/analytics/traffic')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

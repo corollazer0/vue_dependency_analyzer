@@ -1,61 +1,66 @@
 <template>
   <div class="product-productBundle">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-sort />
-    <base-accordion />
-    <base-toast />
+    <kpi-card />
+    <product-comparison />
+    <user-sort />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useOrderStore } from '@/stores/orderStore'
+import { useCouponStore } from '@/stores/couponStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useFilter } from '@/composables/useFilter'
 import { useCart } from '@/composables/useCart'
-import { useDebounce } from '@/composables/useDebounce'
-import { helpers } from '@/utils/helpers'
+import { storage } from '@/services/storage'
 import axios from 'axios'
-import ProductSort from '@/components/product/ProductSort.vue'
-import BaseAccordion from '@/components/common/BaseAccordion.vue'
-import BaseToast from '@/components/common/BaseToast.vue'
+import KpiCard from '@/components/dashboard/KpiCard.vue'
+import ProductComparison from '@/components/product/ProductComparison.vue'
+import UserSort from '@/components/user/UserSort.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' },
-  items: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'change'])
+const emit = defineEmits(['close', 'update'])
 
-  const inventoryStore = useInventoryStore()
-  const orderStore = useOrderStore()
+  const couponStore = useCouponStore()
+  const analyticsStore = useAnalyticsStore()
+
+
+  const filter = useFilter()
   const cart = useCart()
-  const debounce = useDebounce()
 
-  const localeValue = inject('locale')
+  const themeValue = inject('theme')
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
-    const response = await axios.get(`/api/orders/${id}`)
-    data.value = response.data
+    const response = await axios.get(`/api/users/${props.id}`)
+    const response1 = await axios.put(`/api/products/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

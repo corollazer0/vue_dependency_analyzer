@@ -2,6 +2,7 @@ package com.example.service;
 
 import com.example.model.Category;
 import com.example.repository.CategoryRepository;
+import com.example.service.ReviewService;
 
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -11,10 +12,12 @@ import java.util.Optional;
 public class CategoryService {
 
     private final CategoryRepository categoryRepository;
+    private final ReviewService reviewService;
 
 
-    public CategoryService(CategoryRepository categoryRepository) {
+    public CategoryService(CategoryRepository categoryRepository, ReviewService reviewService) {
         this.categoryRepository = categoryRepository;
+        this.reviewService = reviewService;
     }
 
     public List<Category> findAll() {
@@ -32,4 +35,5 @@ public class CategoryService {
     public void deleteById(Long id) {
         categoryRepository.deleteById(id);
     }
+
 }

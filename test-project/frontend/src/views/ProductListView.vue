@@ -2,10 +2,10 @@
   <div class="view-productListView">
     <h1>ProductList</h1>
     <div class="view-content">
-    <user-groups />
-    <user-avatar />
-    <user-profile />
-    <user-grid />
+    <user-deletion />
+    <user-form />
+    <user-table />
+    <user-tooltip />
     </div>
   </div>
 </template>
@@ -13,24 +13,28 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useUserStore } from '@/stores/userStore'
-import { useClipboard } from '@/composables/useClipboard'
+import { useCartStore } from '@/stores/cartStore'
+import { useWebSocket } from '@/composables/useWebSocket'
 import axios from 'axios'
-import UserGroups from '@/components/user/UserGroups.vue'
-import UserAvatar from '@/components/user/UserAvatar.vue'
-import UserProfile from '@/components/user/UserProfile.vue'
-import UserGrid from '@/components/user/UserGrid.vue'
+import UserDeletion from '@/components/user/UserDeletion.vue'
+import UserForm from '@/components/user/UserForm.vue'
+import UserTable from '@/components/user/UserTable.vue'
+import UserTooltip from '@/components/user/UserTooltip.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const userStore = useUserStore()
-  const clipboard = useClipboard()
+  const cartStore = useCartStore()
+  const webSocket = useWebSocket()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.post('/api/orders')
+    await axios.get('/api/coupons')
   } catch (error) {
     console.error('View load error:', error)
   }

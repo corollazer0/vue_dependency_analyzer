@@ -1,61 +1,66 @@
 <template>
   <div class="dashboard-dashboardTable">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <o-auth-consent />
-    <order-export />
-    <user-avatar />
+    <token-refresh />
+    <file-upload />
+    <line-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useAuthStore } from '@/stores/authStore'
-import { useProduct } from '@/composables/useProduct'
-import { useAuth } from '@/composables/useAuth'
-import { endpoints } from '@/api/endpoints'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useCouponStore } from '@/stores/couponStore'
+import { usePermission } from '@/composables/usePermission'
+import { usePagination } from '@/composables/usePagination'
+import { client } from '@/api/client'
 import axios from 'axios'
-import OAuthConsent from '@/components/auth/OAuthConsent.vue'
-import OrderExport from '@/components/order/OrderExport.vue'
-import UserAvatar from '@/components/user/UserAvatar.vue'
+import TokenRefresh from '@/components/auth/TokenRefresh.vue'
+import FileUpload from '@/components/common/FileUpload.vue'
+import LineChart from '@/components/dashboard/LineChart.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   title: { type: String, default: '' },
-  size: { type: String, default: '' },
-  items: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'change'])
+const emit = defineEmits(['update', 'close'])
 
-  const userStore = useUserStore()
-  const authStore = useAuthStore()
-  const product = useProduct()
-  const auth = useAuth()
+  const analyticsStore = useAnalyticsStore()
+  const couponStore = useCouponStore()
 
 
+  const permission = usePermission()
+  const pagination = usePagination()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/dashboard/stats')
     const response = await axios.get('/api/users')
-    data.value = response.data
+    const response1 = await axios.get(`/api/orders/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

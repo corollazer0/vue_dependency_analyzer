@@ -1,61 +1,66 @@
 <template>
   <div class="common-baseAccordion">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <ldap-login />
-    <kpi-card />
-    <date-range-selector />
+    <base-spinner />
+    <auth-error />
+    <base-badge />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useCouponStore } from '@/stores/couponStore'
-import { useAuthStore } from '@/stores/authStore'
-import { useFetch } from '@/composables/useFetch'
-import { useCart } from '@/composables/useCart'
-import { formatDate } from '@/utils/formatDate'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useCategoryStore } from '@/stores/categoryStore'
+import { useValidation } from '@/composables/useValidation'
+import { useOrder } from '@/composables/useOrder'
+import { client } from '@/api/client'
 import axios from 'axios'
-import LdapLogin from '@/components/auth/LdapLogin.vue'
-import KpiCard from '@/components/dashboard/KpiCard.vue'
-import DateRangeSelector from '@/components/dashboard/DateRangeSelector.vue'
+import BaseSpinner from '@/components/common/BaseSpinner.vue'
+import AuthError from '@/components/auth/AuthError.vue'
+import BaseBadge from '@/components/common/BaseBadge.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
   title: { type: String, default: '' },
-  loading: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['select', 'update'])
 
-  const couponStore = useCouponStore()
-  const authStore = useAuthStore()
-  const fetch = useFetch()
-  const cart = useCart()
+  const settingsStore = useSettingsStore()
+  const categoryStore = useCategoryStore()
 
-  const configValue = inject('config')
 
-const loading = ref(false)
+  const validation = useValidation()
+  const order = useOrder()
+
+  const localeValue = inject('locale')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/cart/items')
-    const response = await axios.put('/api/settings')
-    data.value = response.data
+    const response = await axios.post('/api/auth/login')
+    const response1 = await axios.delete(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

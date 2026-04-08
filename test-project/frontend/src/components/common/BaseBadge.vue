@@ -1,61 +1,66 @@
 <template>
   <div class="common-baseBadge">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
     <product-form />
-    <user-profile />
-    <password-strength />
+    <user-search />
+    <user-settings />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
+import { useReviewStore } from '@/stores/reviewStore'
 import { useUserStore } from '@/stores/userStore'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { useAuth } from '@/composables/useAuth'
-import { deepClone } from '@/utils/deepClone'
+import { usePermission } from '@/composables/usePermission'
+import { useNotification } from '@/composables/useNotification'
+import { auth } from '@/api/auth'
 import axios from 'axios'
 import ProductForm from '@/components/product/ProductForm.vue'
-import UserProfile from '@/components/user/UserProfile.vue'
-import PasswordStrength from '@/components/auth/PasswordStrength.vue'
+import UserSearch from '@/components/user/UserSearch.vue'
+import UserSettings from '@/components/user/UserSettings.vue'
 
 const props = defineProps({
+  items: { type: String, default: '' },
   variant: { type: String, default: '' },
-  size: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  items: { type: String, default: '' }
+  title: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change', 'submit'])
+const emit = defineEmits(['update', 'select'])
 
+  const reviewStore = useReviewStore()
   const userStore = useUserStore()
-  const inventoryStore = useInventoryStore()
-  const geolocation = useGeolocation()
-  const auth = useAuth()
-  provide('eventBus', ref('value'))
 
 
-const loading = ref(false)
+  const permission = usePermission()
+  const notification = useNotification()
+  provide('theme', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/settings')
-    const response = await axios.delete(`/api/users/${id}`)
-    data.value = response.data
+    const response = await axios.put(`/api/products/${props.id}`)
+    const response1 = await axios.post('/api/auth/logout')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,55 +1,60 @@
 <template>
   <div class="user-userTimeline">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <app-header />
-    <base-chip />
-    <sales-chart />
+    <order-notes />
+    <base-dropdown />
+    <conversion-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useKeyboard } from '@/composables/useKeyboard'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useWebSocket } from '@/composables/useWebSocket'
 import axios from 'axios'
-import AppHeader from '@/components/common/AppHeader.vue'
-import BaseChip from '@/components/common/BaseChip.vue'
-import SalesChart from '@/components/dashboard/SalesChart.vue'
+import OrderNotes from '@/components/order/OrderNotes.vue'
+import BaseDropdown from '@/components/common/BaseDropdown.vue'
+import ConversionChart from '@/components/dashboard/ConversionChart.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  size: { type: String, default: '' },
   title: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['update'])
 
-  const userStore = useUserStore()
-  const keyboard = useKeyboard()
+  const settingsStore = useSettingsStore()
 
-  const eventBusValue = inject('eventBus')
 
-const loading = ref(false)
+  const webSocket = useWebSocket()
+
+  const localeValue = inject('locale')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/dashboard/revenue')
+    const response = await axios.post(`/api/products/${props.id}/reviews`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

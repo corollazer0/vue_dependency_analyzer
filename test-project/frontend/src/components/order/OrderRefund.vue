@@ -1,55 +1,60 @@
 <template>
   <div class="order-orderRefund">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-pagination />
+    <mini-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useWishlistStore } from '@/stores/wishlistStore'
-import { useDragDrop } from '@/composables/useDragDrop'
-import { useTheme } from '@/composables/useTheme'
-import { users } from '@/api/users'
+import { useUIStore } from '@/stores/uIStore'
+import { useAuthStore } from '@/stores/authStore'
+import { useValidation } from '@/composables/useValidation'
+import { useGeolocation } from '@/composables/useGeolocation'
+import { formatCurrency } from '@/utils/formatCurrency'
 import axios from 'axios'
-import BasePagination from '@/components/common/BasePagination.vue'
+import MiniChart from '@/components/dashboard/MiniChart.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
 const emit = defineEmits(['delete', 'close'])
 
-  const notificationStore = useNotificationStore()
-  const wishlistStore = useWishlistStore()
-  const dragDrop = useDragDrop()
-  const theme = useTheme()
+  const uIStore = useUIStore()
+  const authStore = useAuthStore()
 
-  const configValue = inject('config')
 
-const loading = ref(false)
+  const validation = useValidation()
+  const geolocation = useGeolocation()
+
+  const loggerValue = inject('logger')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/notifications/${id}/read`)
-    const response = await axios.post('/api/auth/register')
-    data.value = response.data
+    const response = await axios.put(`/api/orders/${props.id}/status`)
+    const response1 = await axios.get('/api/cart')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

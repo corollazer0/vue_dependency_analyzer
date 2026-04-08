@@ -2,10 +2,10 @@
   <div class="view-registerView">
     <h1>Register</h1>
     <div class="view-content">
-    <user-activity />
-    <user-grid />
+    <user-modal />
+    <user-popover />
     <user-preferences />
-    <user-contacts />
+    <user-notifications />
     </div>
   </div>
 </template>
@@ -14,23 +14,27 @@
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUIStore } from '@/stores/uIStore'
-import { useSearch } from '@/composables/useSearch'
+import { usePermission } from '@/composables/usePermission'
 import axios from 'axios'
-import UserActivity from '@/components/user/UserActivity.vue'
-import UserGrid from '@/components/user/UserGrid.vue'
+import UserModal from '@/components/user/UserModal.vue'
+import UserPopover from '@/components/user/UserPopover.vue'
 import UserPreferences from '@/components/user/UserPreferences.vue'
-import UserContacts from '@/components/user/UserContacts.vue'
+import UserNotifications from '@/components/user/UserNotifications.vue'
 
 const route = useRoute()
 const router = useRouter()
   const uIStore = useUIStore()
-  const search = useSearch()
+  const permission = usePermission()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.get('/api/products')
+    await axios.post('/api/orders')
   } catch (error) {
     console.error('View load error:', error)
   }

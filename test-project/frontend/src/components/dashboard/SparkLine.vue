@@ -1,55 +1,60 @@
 <template>
   <div class="dashboard-sparkLine">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <dashboard-filter />
-    <user-merge />
-    <product-wishlist />
+    <product-table />
+    <order-summary />
+    <order-dispute />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useBreakpoint } from '@/composables/useBreakpoint'
+import { useCartStore } from '@/stores/cartStore'
+import { useKeyboard } from '@/composables/useKeyboard'
 import axios from 'axios'
-import DashboardFilter from '@/components/dashboard/DashboardFilter.vue'
-import UserMerge from '@/components/user/UserMerge.vue'
-import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import ProductTable from '@/components/product/ProductTable.vue'
+import OrderSummary from '@/components/order/OrderSummary.vue'
+import OrderDispute from '@/components/order/OrderDispute.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  size: { type: String, default: '' },
-  items: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update'])
 
-  const analyticsStore = useAnalyticsStore()
-  const breakpoint = useBreakpoint()
+  const cartStore = useCartStore()
+
+
+  const keyboard = useKeyboard()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post(`/api/orders/${id}/cancel`)
+    const response = await axios.post('/api/coupons/validate')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

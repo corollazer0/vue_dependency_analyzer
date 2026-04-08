@@ -1,61 +1,66 @@
 <template>
   <div class="user-userTags">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <customer-map />
-    <area-chart />
-    <sales-chart />
+    <product-discount />
+    <order-summary />
+    <order-feedback />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { useTheme } from '@/composables/useTheme'
-import { interceptors } from '@/api/interceptors'
+import { useUserStore } from '@/stores/userStore'
+import { useCartStore } from '@/stores/cartStore'
+import { usePagination } from '@/composables/usePagination'
+import { useNotification } from '@/composables/useNotification'
+import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import CustomerMap from '@/components/dashboard/CustomerMap.vue'
-import AreaChart from '@/components/dashboard/AreaChart.vue'
-import SalesChart from '@/components/dashboard/SalesChart.vue'
+import ProductDiscount from '@/components/product/ProductDiscount.vue'
+import OrderSummary from '@/components/order/OrderSummary.vue'
+import OrderFeedback from '@/components/order/OrderFeedback.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  title: { type: String, default: '' },
-  size: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'submit'])
+const emit = defineEmits(['select', 'delete'])
 
-  const settingsStore = useSettingsStore()
-  const inventoryStore = useInventoryStore()
-  const geolocation = useGeolocation()
-  const theme = useTheme()
+  const userStore = useUserStore()
+  const cartStore = useCartStore()
 
 
+  const pagination = usePagination()
+  const notification = useNotification()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/products/${id}`)
-    const response = await axios.get(`/api/products/${id}`)
-    data.value = response.data
+    const response = await axios.put(`/api/users/${props.id}`)
+    const response1 = await axios.get('/api/wishlist')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

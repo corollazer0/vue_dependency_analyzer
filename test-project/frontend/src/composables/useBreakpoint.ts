@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useCategoryStore } from '@/stores/categoryStore'
-import { useSearchStore } from '@/stores/searchStore'
-import { useCart } from '@/composables/useCart'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useGeolocation } from '@/composables/useGeolocation'
 import axios from 'axios'
 
 export function useBreakpoint() {
-  const categoryStore = useCategoryStore()
-  const searchStore = useSearchStore()
-  const { cart } = useCart()
+  const reviewStore = useReviewStore()
+  const settingsStore = useSettingsStore()
+  const { geolocation } = useGeolocation()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useBreakpoint() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post(`/api/orders/${id}/cancel`)
-    return response.data
-    const response = await axios.get('/api/users')
-    return response.data
+    const result = await axios.put(`/api/users/${id}`)
+    return result.data
+    const result1 = await axios.get('/api/reviews')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

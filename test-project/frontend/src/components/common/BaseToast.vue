@@ -1,49 +1,54 @@
 <template>
   <div class="common-baseToast">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-search />
+    <product-gallery />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useSettingsStore } from '@/stores/settingsStore'
-import { useProduct } from '@/composables/useProduct'
+import { useAsync } from '@/composables/useAsync'
 import axios from 'axios'
-import ProductSearch from '@/components/product/ProductSearch.vue'
+import ProductGallery from '@/components/product/ProductGallery.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
-  title: { type: String, default: '' }
+  title: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change'])
+const emit = defineEmits(['update'])
 
   const settingsStore = useSettingsStore()
-  const product = useProduct()
+
+
+  const async = useAsync()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/upload')
+    const response = await axios.post(`/api/products/${props.id}/reviews`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,49 +1,54 @@
 <template>
   <div class="auth-authHistory">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <auth-error />
+    <user-card />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useFetch } from '@/composables/useFetch'
+import { useProductStore } from '@/stores/productStore'
+import { useForm } from '@/composables/useForm'
 import axios from 'axios'
-import AuthError from '@/components/auth/AuthError.vue'
+import UserCard from '@/components/user/UserCard.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['change'])
 
-  const uIStore = useUIStore()
-  const fetch = useFetch()
+  const productStore = useProductStore()
+
+
+  const form = useForm()
   provide('permissions', ref('value'))
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
+    const response = await axios.get('/api/search')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

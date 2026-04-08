@@ -1,61 +1,66 @@
 <template>
   <div class="dashboard-exportButton">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-avatar />
-    <order-delivery />
-    <base-skeleton />
+    <order-history />
+    <product-tag />
+    <order-summary />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useWishlistStore } from '@/stores/wishlistStore'
+import { useNotificationStore } from '@/stores/notificationStore'
 import { useUserStore } from '@/stores/userStore'
-import { useAuth } from '@/composables/useAuth'
-import { useFilter } from '@/composables/useFilter'
-import { analytics } from '@/services/analytics'
+import { useGeolocation } from '@/composables/useGeolocation'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { helpers } from '@/utils/helpers'
 import axios from 'axios'
-import BaseAvatar from '@/components/common/BaseAvatar.vue'
-import OrderDelivery from '@/components/order/OrderDelivery.vue'
-import BaseSkeleton from '@/components/common/BaseSkeleton.vue'
+import OrderHistory from '@/components/order/OrderHistory.vue'
+import ProductTag from '@/components/product/ProductTag.vue'
+import OrderSummary from '@/components/order/OrderSummary.vue'
 
 const props = defineProps({
+  modelValue: { type: String, default: '' },
   title: { type: String, default: '' },
-  loading: { type: String, default: '' },
   disabled: { type: String, default: '' },
   variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'change'])
+const emit = defineEmits(['delete', 'update'])
 
-  const wishlistStore = useWishlistStore()
+  const notificationStore = useNotificationStore()
   const userStore = useUserStore()
-  const auth = useAuth()
-  const filter = useFilter()
+
+
+  const geolocation = useGeolocation()
+  const infiniteScroll = useInfiniteScroll()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/cart/items/${id}`)
-    const response = await axios.get('/api/analytics/conversions')
-    data.value = response.data
+    const response = await axios.get('/api/reviews')
+    const response1 = await axios.get(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

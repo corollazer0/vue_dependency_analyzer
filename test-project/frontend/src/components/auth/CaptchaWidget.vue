@@ -1,61 +1,66 @@
 <template>
   <div class="auth-captchaWidget">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-badge />
-    <order-history />
-    <user-filter />
+    <product-wishlist />
+    <confirm-dialog />
+    <order-stats />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useUserStore } from '@/stores/userStore'
-import { useAuth } from '@/composables/useAuth'
-import { useWebSocket } from '@/composables/useWebSocket'
-import { logger } from '@/services/logger'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useOrder } from '@/composables/useOrder'
+import { useDragDrop } from '@/composables/useDragDrop'
+import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import BaseBadge from '@/components/common/BaseBadge.vue'
-import OrderHistory from '@/components/order/OrderHistory.vue'
-import UserFilter from '@/components/user/UserFilter.vue'
+import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import OrderStats from '@/components/order/OrderStats.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  title: { type: String, default: '' },
   variant: { type: String, default: '' },
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
   size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'change'])
+const emit = defineEmits(['select', 'update'])
 
-  const authStore = useAuthStore()
-  const userStore = useUserStore()
-  const auth = useAuth()
-  const webSocket = useWebSocket()
+  const wishlistStore = useWishlistStore()
+  const analyticsStore = useAnalyticsStore()
 
-  const permissionsValue = inject('permissions')
 
-const loading = ref(false)
+  const order = useOrder()
+  const dragDrop = useDragDrop()
+
+  const configValue = inject('config')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/categories')
-    const response = await axios.get('/api/search')
-    data.value = response.data
+    const response = await axios.delete(`/api/cart/items/${props.id}`)
+    const response1 = await axios.get(`/api/orders/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,55 +1,60 @@
 <template>
   <div class="order-orderCancel">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-comparison />
+    <identity-verify />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useCartStore } from '@/stores/cartStore'
-import { useCouponStore } from '@/stores/couponStore'
-import { useSearch } from '@/composables/useSearch'
-import { usePermission } from '@/composables/usePermission'
-import { formatDate } from '@/utils/formatDate'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useUserStore } from '@/stores/userStore'
+import { useForm } from '@/composables/useForm'
+import { useClickOutside } from '@/composables/useClickOutside'
+import { storage } from '@/services/storage'
 import axios from 'axios'
-import ProductComparison from '@/components/product/ProductComparison.vue'
+import IdentityVerify from '@/components/auth/IdentityVerify.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'update'])
+const emit = defineEmits(['select', 'update'])
 
-  const cartStore = useCartStore()
-  const couponStore = useCouponStore()
-  const search = useSearch()
-  const permission = usePermission()
+  const wishlistStore = useWishlistStore()
+  const userStore = useUserStore()
 
 
+  const form = useForm()
+  const clickOutside = useClickOutside()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/upload')
-    const response = await axios.get('/api/search')
-    data.value = response.data
+    const response = await axios.get('/api/orders')
+    const response1 = await axios.get('/api/categories')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

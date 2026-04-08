@@ -1,55 +1,60 @@
 <template>
   <div class="auth-logoutConfirm">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <sso-login />
-    <user-onboarding />
-    <order-shipping />
+    <order-filter />
+    <token-refresh />
+    <user-card />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useNotification } from '@/composables/useNotification'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import axios from 'axios'
-import SsoLogin from '@/components/auth/SsoLogin.vue'
-import UserOnboarding from '@/components/user/UserOnboarding.vue'
-import OrderShipping from '@/components/order/OrderShipping.vue'
+import OrderFilter from '@/components/order/OrderFilter.vue'
+import TokenRefresh from '@/components/auth/TokenRefresh.vue'
+import UserCard from '@/components/user/UserCard.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
-  variant: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
 const emit = defineEmits(['close'])
 
-  const orderStore = useOrderStore()
-  const notification = useNotification()
+  const analyticsStore = useAnalyticsStore()
+
+
+  const mediaQuery = useMediaQuery()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
+    const response = await axios.get(`/api/products/${props.id}/reviews`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

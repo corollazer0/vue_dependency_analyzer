@@ -1,61 +1,66 @@
 <template>
   <div class="order-orderFeedback">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <line-chart />
-    <order-search />
-    <order-shipping />
+    <ip-whitelist />
+    <app-navigation />
+    <social-login />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
 import { useOrderStore } from '@/stores/orderStore'
-import { useAuth } from '@/composables/useAuth'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { logger } from '@/services/logger'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useKeyboard } from '@/composables/useKeyboard'
+import { useToast } from '@/composables/useToast'
+import { debounce } from '@/utils/debounce'
 import axios from 'axios'
-import LineChart from '@/components/dashboard/LineChart.vue'
-import OrderSearch from '@/components/order/OrderSearch.vue'
-import OrderShipping from '@/components/order/OrderShipping.vue'
+import IpWhitelist from '@/components/auth/IpWhitelist.vue'
+import AppNavigation from '@/components/common/AppNavigation.vue'
+import SocialLogin from '@/components/auth/SocialLogin.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
-  loading: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  size: { type: String, default: '' }
+  items: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'delete'])
+const emit = defineEmits(['delete', 'select'])
 
-  const inventoryStore = useInventoryStore()
   const orderStore = useOrderStore()
-  const auth = useAuth()
-  const geolocation = useGeolocation()
+  const inventoryStore = useInventoryStore()
 
-  const eventBusValue = inject('eventBus')
 
-const loading = ref(false)
+  const keyboard = useKeyboard()
+  const toast = useToast()
+
+  const localeValue = inject('locale')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/auth/register')
-    const response = await axios.get('/api/dashboard/stats')
-    data.value = response.data
+    const response = await axios.get('/api/search')
+    const response1 = await axios.get('/api/coupons')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

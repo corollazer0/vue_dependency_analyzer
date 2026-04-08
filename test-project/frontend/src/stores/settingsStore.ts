@@ -14,7 +14,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get('/api/coupons')
+      const response = await axios.get(`/api/products/${id}`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useSettingsStore = defineStore('settings', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.post('/api/users')
+      const response = await axios.get('/api/inventory')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

@@ -1,55 +1,60 @@
 <template>
   <div class="product-productReview">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-receipt />
+    <auth-history />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useCartStore } from '@/stores/cartStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useOrderStore } from '@/stores/orderStore'
+import { useKeyboard } from '@/composables/useKeyboard'
 import { useSearch } from '@/composables/useSearch'
-import { useDebounce } from '@/composables/useDebounce'
-import { storage } from '@/services/storage'
+import { i18n } from '@/services/i18n'
 import axios from 'axios'
-import OrderReceipt from '@/components/order/OrderReceipt.vue'
+import AuthHistory from '@/components/auth/AuthHistory.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'update'])
+const emit = defineEmits(['select', 'change'])
 
-  const authStore = useAuthStore()
-  const cartStore = useCartStore()
+  const analyticsStore = useAnalyticsStore()
+  const orderStore = useOrderStore()
+
+
+  const keyboard = useKeyboard()
   const search = useSearch()
-  const debounce = useDebounce()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/auth/login')
-    const response = await axios.put(`/api/notifications/${id}/read`)
-    data.value = response.data
+    const response = await axios.get('/api/notifications')
+    const response1 = await axios.put(`/api/notifications/${props.id}/read`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

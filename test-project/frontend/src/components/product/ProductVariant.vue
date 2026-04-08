@@ -1,52 +1,57 @@
 <template>
   <div class="product-productVariant">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-alert />
-    <user-stats />
+    <user-card />
+    <ldap-login />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useDarkMode } from '@/composables/useDarkMode'
+import { useCouponStore } from '@/stores/couponStore'
+import { useDragDrop } from '@/composables/useDragDrop'
 import axios from 'axios'
-import BaseAlert from '@/components/common/BaseAlert.vue'
-import UserStats from '@/components/user/UserStats.vue'
+import UserCard from '@/components/user/UserCard.vue'
+import LdapLogin from '@/components/auth/LdapLogin.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  title: { type: String, default: '' },
+  items: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['update'])
 
-  const inventoryStore = useInventoryStore()
-  const darkMode = useDarkMode()
-
+  const couponStore = useCouponStore()
 
 
-const loading = ref(false)
+  const dragDrop = useDragDrop()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/wishlist/${id}`)
+    const response = await axios.put(`/api/notifications/${props.id}/read`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

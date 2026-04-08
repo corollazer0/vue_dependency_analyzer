@@ -1,58 +1,64 @@
 <template>
   <div class="dashboard-dashboardLayout">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-grid />
-    <ip-whitelist />
+    <dashboard-filter />
+    <metric-card />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useProductStore } from '@/stores/productStore'
+import { useRouter } from 'vue-router'
 import { useSearchStore } from '@/stores/searchStore'
-import { useClipboard } from '@/composables/useClipboard'
-import { useAuth } from '@/composables/useAuth'
-import { client } from '@/api/client'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useNotification } from '@/composables/useNotification'
+import { useSearch } from '@/composables/useSearch'
+import { debounce } from '@/utils/debounce'
 import axios from 'axios'
-import UserGrid from '@/components/user/UserGrid.vue'
-import IpWhitelist from '@/components/auth/IpWhitelist.vue'
+import DashboardFilter from '@/components/dashboard/DashboardFilter.vue'
+import MetricCard from '@/components/dashboard/MetricCard.vue'
 
 const props = defineProps({
   size: { type: String, default: '' },
-  variant: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'select'])
+const emit = defineEmits(['delete', 'close'])
 
-  const productStore = useProductStore()
   const searchStore = useSearchStore()
-  const clipboard = useClipboard()
-  const auth = useAuth()
+  const analyticsStore = useAnalyticsStore()
+
+  const router = useRouter()
+  const notification = useNotification()
+  const search = useSearch()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/categories')
-    const response = await axios.post('/api/products')
-    data.value = response.data
+    const response = await axios.get('/api/orders')
+    const response1 = await axios.get(`/api/products/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+  function goToSettings() { router.push('/settings') }
 
 onMounted(() => {
   fetchData()

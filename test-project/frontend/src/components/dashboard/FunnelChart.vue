@@ -1,58 +1,63 @@
 <template>
   <div class="dashboard-funnelChart">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-preferences />
-    <order-pickup />
+    <file-upload />
+    <product-import />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useWishlistStore } from '@/stores/wishlistStore'
-import { useBreakpoint } from '@/composables/useBreakpoint'
-import { useProduct } from '@/composables/useProduct'
-import { storage } from '@/services/storage'
+import { useCouponStore } from '@/stores/couponStore'
+import { useReviewStore } from '@/stores/reviewStore'
+import { useValidation } from '@/composables/useValidation'
+import { useNotification } from '@/composables/useNotification'
+import { client } from '@/api/client'
 import axios from 'axios'
-import UserPreferences from '@/components/user/UserPreferences.vue'
-import OrderPickup from '@/components/order/OrderPickup.vue'
+import FileUpload from '@/components/common/FileUpload.vue'
+import ProductImport from '@/components/product/ProductImport.vue'
 
 const props = defineProps({
+  title: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' }
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'change'])
+const emit = defineEmits(['close', 'select'])
 
-  const settingsStore = useSettingsStore()
-  const wishlistStore = useWishlistStore()
-  const breakpoint = useBreakpoint()
-  const product = useProduct()
+  const couponStore = useCouponStore()
+  const reviewStore = useReviewStore()
 
 
+  const validation = useValidation()
+  const notification = useNotification()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/products')
-    const response = await axios.get('/api/products')
-    data.value = response.data
+    const response = await axios.post('/api/orders')
+    const response1 = await axios.put(`/api/orders/${props.id}/status`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

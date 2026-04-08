@@ -2,9 +2,9 @@
   <div class="view-notFoundView">
     <h1>NotFound</h1>
     <div class="view-content">
-    <order-print />
-    <order-tracking />
-    <order-payment />
+    <base-badge />
+    <confirm-dialog />
+    <loading-overlay />
     </div>
   </div>
 </template>
@@ -12,23 +12,27 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useCart } from '@/composables/useCart'
+import { useUIStore } from '@/stores/uIStore'
+import { useProduct } from '@/composables/useProduct'
 import axios from 'axios'
-import OrderPrint from '@/components/order/OrderPrint.vue'
-import OrderTracking from '@/components/order/OrderTracking.vue'
-import OrderPayment from '@/components/order/OrderPayment.vue'
+import BaseBadge from '@/components/common/BaseBadge.vue'
+import ConfirmDialog from '@/components/common/ConfirmDialog.vue'
+import LoadingOverlay from '@/components/common/LoadingOverlay.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const settingsStore = useSettingsStore()
-  const cart = useCart()
+  const uIStore = useUIStore()
+  const product = useProduct()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.put(`/api/orders/${route.params.id}/status`)
+    await axios.get('/api/coupons')
   } catch (error) {
     console.error('View load error:', error)
   }

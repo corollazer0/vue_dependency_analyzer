@@ -1,52 +1,57 @@
 <template>
   <div class="order-orderReturn">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-badge />
-    <order-chart />
+    <session-timeout />
+    <order-item />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useDebounce } from '@/composables/useDebounce'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useAuth } from '@/composables/useAuth'
 import axios from 'axios'
-import UserBadge from '@/components/user/UserBadge.vue'
-import OrderChart from '@/components/order/OrderChart.vue'
+import SessionTimeout from '@/components/auth/SessionTimeout.vue'
+import OrderItem from '@/components/order/OrderItem.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   size: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change'])
+const emit = defineEmits(['delete'])
 
-  const uIStore = useUIStore()
-  const debounce = useDebounce()
-
+  const wishlistStore = useWishlistStore()
 
 
-const loading = ref(false)
+  const auth = useAuth()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/products/${id}`)
+    const response = await axios.post(`/api/products/${props.id}/reviews`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

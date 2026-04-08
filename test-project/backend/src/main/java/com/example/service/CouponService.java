@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.Coupon;
 import com.example.repository.CouponRepository;
-import com.example.service.UploadService;
-import com.example.service.AuthService;
+import com.example.service.PaymentService;
+import com.example.service.CartService;
+import com.example.service.OrderService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +14,16 @@ import java.util.Optional;
 public class CouponService {
 
     private final CouponRepository couponRepository;
-    private final UploadService uploadService;
-    private final AuthService authService;
+    private final PaymentService paymentService;
+    private final CartService cartService;
+    private final OrderService orderService;
 
-    public CouponService(CouponRepository couponRepository, UploadService uploadService, AuthService authService) {
+
+    public CouponService(CouponRepository couponRepository, PaymentService paymentService, CartService cartService, OrderService orderService) {
         this.couponRepository = couponRepository;
-        this.uploadService = uploadService;
-        this.authService = authService;
+        this.paymentService = paymentService;
+        this.cartService = cartService;
+        this.orderService = orderService;
     }
 
     public List<Coupon> findAll() {
@@ -36,4 +41,5 @@ public class CouponService {
     public void deleteById(Long id) {
         couponRepository.deleteById(id);
     }
+
 }

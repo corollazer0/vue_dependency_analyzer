@@ -1,55 +1,60 @@
 <template>
   <div class="product-productWishlist">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <dashboard-table />
+    <user-onboarding />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useCouponStore } from '@/stores/couponStore'
-import { useCart } from '@/composables/useCart'
-import { useProduct } from '@/composables/useProduct'
-import { users } from '@/api/users'
+import { useUIStore } from '@/stores/uIStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useClickOutside } from '@/composables/useClickOutside'
+import { useDragDrop } from '@/composables/useDragDrop'
+import { debounce } from '@/utils/debounce'
 import axios from 'axios'
-import DashboardTable from '@/components/dashboard/DashboardTable.vue'
+import UserOnboarding from '@/components/user/UserOnboarding.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  items: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change', 'delete'])
+const emit = defineEmits(['update', 'close'])
 
-  const userStore = useUserStore()
-  const couponStore = useCouponStore()
-  const cart = useCart()
-  const product = useProduct()
+  const uIStore = useUIStore()
+  const settingsStore = useSettingsStore()
 
 
+  const clickOutside = useClickOutside()
+  const dragDrop = useDragDrop()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/settings')
-    const response = await axios.get('/api/inventory')
-    data.value = response.data
+    const response = await axios.post('/api/auth/register')
+    const response1 = await axios.get('/api/coupons')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

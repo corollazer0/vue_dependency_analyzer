@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useCouponStore } from '@/stores/couponStore'
+import { useReviewStore } from '@/stores/reviewStore'
 import axios from 'axios'
 
 export function useDebounce() {
-  const couponStore = useCouponStore()
+  const reviewStore = useReviewStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function useDebounce() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/products')
-    return response.data
+    const result = await axios.get('/api/dashboard/revenue')
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

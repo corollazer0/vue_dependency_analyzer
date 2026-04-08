@@ -1,61 +1,66 @@
 <template>
   <div class="common-baseInput">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <mini-chart />
-    <user-list />
-    <order-print />
+    <product-analytics />
+    <order-tracking />
+    <user-stats />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
+import { useWishlistStore } from '@/stores/wishlistStore'
 import { useInventoryStore } from '@/stores/inventoryStore'
-import { useAuth } from '@/composables/useAuth'
-import { useValidation } from '@/composables/useValidation'
+import { usePagination } from '@/composables/usePagination'
+import { useThrottle } from '@/composables/useThrottle'
 import { helpers } from '@/utils/helpers'
 import axios from 'axios'
-import MiniChart from '@/components/dashboard/MiniChart.vue'
-import UserList from '@/components/user/UserList.vue'
-import OrderPrint from '@/components/order/OrderPrint.vue'
+import ProductAnalytics from '@/components/product/ProductAnalytics.vue'
+import OrderTracking from '@/components/order/OrderTracking.vue'
+import UserStats from '@/components/user/UserStats.vue'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' },
-  size: { type: String, default: '' },
-  variant: { type: String, default: '' },
-  items: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  title: { type: String, default: '' },
+  items: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['delete', 'close'])
 
-  const authStore = useAuthStore()
+  const wishlistStore = useWishlistStore()
   const inventoryStore = useInventoryStore()
-  const auth = useAuth()
-  const validation = useValidation()
+
+
+  const pagination = usePagination()
+  const throttle = useThrottle()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/orders')
-    const response = await axios.put(`/api/orders/${id}/status`)
-    data.value = response.data
+    const response = await axios.put('/api/settings')
+    const response1 = await axios.get('/api/settings')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

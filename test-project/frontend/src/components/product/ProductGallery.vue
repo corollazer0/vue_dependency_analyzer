@@ -1,58 +1,63 @@
 <template>
   <div class="product-productGallery">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <role-guard />
-    <metric-card />
+    <base-input />
+    <user-grid />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useForm } from '@/composables/useForm'
-import { useClickOutside } from '@/composables/useClickOutside'
-import { orders } from '@/api/orders'
+import { useOrderStore } from '@/stores/orderStore'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { usePermission } from '@/composables/usePermission'
+import { useGeolocation } from '@/composables/useGeolocation'
+import { constants } from '@/utils/constants'
 import axios from 'axios'
-import RoleGuard from '@/components/auth/RoleGuard.vue'
-import MetricCard from '@/components/dashboard/MetricCard.vue'
+import BaseInput from '@/components/common/BaseInput.vue'
+import UserGrid from '@/components/user/UserGrid.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit', 'delete'])
+const emit = defineEmits(['select', 'change'])
 
-  const settingsStore = useSettingsStore()
-  const inventoryStore = useInventoryStore()
-  const form = useForm()
-  const clickOutside = useClickOutside()
-  provide('config', ref('value'))
+  const orderStore = useOrderStore()
+  const wishlistStore = useWishlistStore()
 
 
-const loading = ref(false)
+  const permission = usePermission()
+  const geolocation = useGeolocation()
+  provide('permissions', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
-    const response = await axios.get('/api/notifications')
-    data.value = response.data
+    const response = await axios.post('/api/orders')
+    const response1 = await axios.get('/api/products')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

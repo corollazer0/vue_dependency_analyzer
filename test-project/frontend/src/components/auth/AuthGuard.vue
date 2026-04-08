@@ -1,24 +1,24 @@
 <template>
   <div class="auth-authGuard">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <phone-verify />
-    <user-onboarding />
+    <login-form @login-success="handleLoginSuccess" @forgot-password="handleForgotPassword" />
+    <user-activity />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useWishlistStore } from '@/stores/wishlistStore'
-import { useSearch } from '@/composables/useSearch'
+import { useProductStore } from '@/stores/productStore'
+import { useFetch } from '@/composables/useFetch'
 import axios from 'axios'
-import PhoneVerify from '@/components/auth/PhoneVerify.vue'
-import UserOnboarding from '@/components/user/UserOnboarding.vue'
+import LoginForm from '@/components/auth/LoginForm.vue'
+import UserActivity from '@/components/user/UserActivity.vue'
 
 const props = defineProps({
   items: { type: String, default: '' },
@@ -26,27 +26,38 @@ const props = defineProps({
   disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['change'])
 
-  const wishlistStore = useWishlistStore()
-  const search = useSearch()
-
+  const productStore = useProductStore()
 
 
-const loading = ref(false)
+  const fetch = useFetch()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/wishlist')
+    const response = await axios.get('/api/categories')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+  function handleLoginSuccess() {
+    console.log('login-success event received')
+  }
+
+  function handleForgotPassword() {
+    console.log('forgot-password event received')
+  }
+
 
 onMounted(() => {
   fetchData()

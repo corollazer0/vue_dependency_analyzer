@@ -2,6 +2,7 @@ package com.example.service;
 
 import com.example.model.Export;
 import com.example.repository.ExportRepository;
+import com.example.service.UserService;
 
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -11,10 +12,12 @@ import java.util.Optional;
 public class ExportService {
 
     private final ExportRepository exportRepository;
+    private final UserService userService;
 
 
-    public ExportService(ExportRepository exportRepository) {
+    public ExportService(ExportRepository exportRepository, UserService userService) {
         this.exportRepository = exportRepository;
+        this.userService = userService;
     }
 
     public List<Export> findAll() {
@@ -32,4 +35,5 @@ public class ExportService {
     public void deleteById(Long id) {
         exportRepository.deleteById(id);
     }
+
 }

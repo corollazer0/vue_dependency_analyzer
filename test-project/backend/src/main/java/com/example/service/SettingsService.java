@@ -2,6 +2,7 @@ package com.example.service;
 
 import com.example.model.Settings;
 import com.example.repository.SettingsRepository;
+import com.example.service.CartService;
 
 import org.springframework.stereotype.Service;
 import java.util.List;
@@ -11,10 +12,12 @@ import java.util.Optional;
 public class SettingsService {
 
     private final SettingsRepository settingsRepository;
+    private final CartService cartService;
 
 
-    public SettingsService(SettingsRepository settingsRepository) {
+    public SettingsService(SettingsRepository settingsRepository, CartService cartService) {
         this.settingsRepository = settingsRepository;
+        this.cartService = cartService;
     }
 
     public List<Settings> findAll() {
@@ -32,4 +35,5 @@ public class SettingsService {
     public void deleteById(Long id) {
         settingsRepository.deleteById(id);
     }
+
 }

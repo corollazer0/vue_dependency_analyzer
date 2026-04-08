@@ -14,7 +14,7 @@ export const useOrderStore = defineStore('order', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get(`/api/products/${id}/reviews`)
+      const response = await axios.post('/api/coupons/validate')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useOrderStore = defineStore('order', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get('/api/orders')
+      const response = await axios.get('/api/dashboard/stats')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

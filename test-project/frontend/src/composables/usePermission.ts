@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
+import { useWishlistStore } from '@/stores/wishlistStore'
 import axios from 'axios'
 
 export function usePermission() {
-  const inventoryStore = useInventoryStore()
+  const wishlistStore = useWishlistStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function usePermission() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.delete(`/api/products/${id}`)
-    return response.data
+    const result = await axios.delete(`/api/users/${id}`)
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

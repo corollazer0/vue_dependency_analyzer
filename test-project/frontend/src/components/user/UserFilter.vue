@@ -1,49 +1,54 @@
 <template>
   <div class="user-userFilter">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <security-log />
+    <base-table />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useEventBus } from '@/composables/useEventBus'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useValidation } from '@/composables/useValidation'
 import axios from 'axios'
-import SecurityLog from '@/components/auth/SecurityLog.vue'
+import BaseTable from '@/components/common/BaseTable.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  size: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['delete'])
 
-  const analyticsStore = useAnalyticsStore()
-  const eventBus = useEventBus()
-
+  const wishlistStore = useWishlistStore()
 
 
-const loading = ref(false)
+  const validation = useValidation()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/products/${id}`)
+    const response = await axios.post('/api/auth/login')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

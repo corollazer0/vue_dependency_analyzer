@@ -1,58 +1,63 @@
 <template>
   <div class="dashboard-trendIndicator">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <device-list />
-    <user-drawer />
+    <identity-verify />
+    <user-filter />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useCouponStore } from '@/stores/couponStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useToast } from '@/composables/useToast'
 import { useAsync } from '@/composables/useAsync'
-import { useValidation } from '@/composables/useValidation'
-import { endpoints } from '@/api/endpoints'
+import { auth } from '@/api/auth'
 import axios from 'axios'
-import DeviceList from '@/components/auth/DeviceList.vue'
-import UserDrawer from '@/components/user/UserDrawer.vue'
+import IdentityVerify from '@/components/auth/IdentityVerify.vue'
+import UserFilter from '@/components/user/UserFilter.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  title: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  size: { type: String, default: '' },
+  items: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change', 'select'])
+const emit = defineEmits(['delete', 'close'])
 
-  const uIStore = useUIStore()
-  const couponStore = useCouponStore()
+  const notificationStore = useNotificationStore()
+  const settingsStore = useSettingsStore()
+
+
+  const toast = useToast()
   const async = useAsync()
-  const validation = useValidation()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/settings')
-    const response = await axios.get('/api/search')
-    data.value = response.data
+    const response = await axios.post('/api/auth/register')
+    const response1 = await axios.delete(`/api/users/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

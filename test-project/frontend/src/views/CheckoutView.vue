@@ -2,10 +2,10 @@
   <div class="view-checkoutView">
     <h1>Checkout</h1>
     <div class="view-content">
-    <user-list />
-    <user-form />
-    <user-drawer />
-    <user-roles />
+    <device-list />
+    <two-factor-verify />
+    <login-form />
+    <auth-history />
     </div>
   </div>
 </template>
@@ -13,24 +13,28 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useClickOutside } from '@/composables/useClickOutside'
+import { useOrderStore } from '@/stores/orderStore'
+import { useCart } from '@/composables/useCart'
 import axios from 'axios'
-import UserList from '@/components/user/UserList.vue'
-import UserForm from '@/components/user/UserForm.vue'
-import UserDrawer from '@/components/user/UserDrawer.vue'
-import UserRoles from '@/components/user/UserRoles.vue'
+import DeviceList from '@/components/auth/DeviceList.vue'
+import TwoFactorVerify from '@/components/auth/TwoFactorVerify.vue'
+import LoginForm from '@/components/auth/LoginForm.vue'
+import AuthHistory from '@/components/auth/AuthHistory.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const settingsStore = useSettingsStore()
-  const clickOutside = useClickOutside()
+  const orderStore = useOrderStore()
+  const cart = useCart()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.delete(`/api/users/${route.params.id}`)
+    await axios.post('/api/wishlist')
   } catch (error) {
     console.error('View load error:', error)
   }

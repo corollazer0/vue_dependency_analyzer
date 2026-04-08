@@ -1,58 +1,63 @@
 <template>
   <div class="auth-sessionTimeout">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-stats />
-    <token-refresh />
+    <user-filter />
+    <user-activity />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useAuthStore } from '@/stores/authStore'
-import { useAuth } from '@/composables/useAuth'
-import { useDebounce } from '@/composables/useDebounce'
-import { logger } from '@/services/logger'
+import { useCartStore } from '@/stores/cartStore'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useSearch } from '@/composables/useSearch'
+import { useGeolocation } from '@/composables/useGeolocation'
+import { endpoints } from '@/api/endpoints'
 import axios from 'axios'
-import OrderStats from '@/components/order/OrderStats.vue'
-import TokenRefresh from '@/components/auth/TokenRefresh.vue'
+import UserFilter from '@/components/user/UserFilter.vue'
+import UserActivity from '@/components/user/UserActivity.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  items: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit', 'delete'])
+const emit = defineEmits(['update', 'close'])
 
-  const uIStore = useUIStore()
-  const authStore = useAuthStore()
-  const auth = useAuth()
-  const debounce = useDebounce()
+  const cartStore = useCartStore()
+  const wishlistStore = useWishlistStore()
 
-  const loggerValue = inject('logger')
 
-const loading = ref(false)
+  const search = useSearch()
+  const geolocation = useGeolocation()
+
+  const localeValue = inject('locale')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/inventory')
-    const response = await axios.post('/api/products')
-    data.value = response.data
+    const response = await axios.get('/api/orders')
+    const response1 = await axios.get('/api/search')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

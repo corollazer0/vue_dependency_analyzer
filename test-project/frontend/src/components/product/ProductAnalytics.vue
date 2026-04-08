@@ -1,55 +1,60 @@
 <template>
   <div class="product-productAnalytics">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-notes />
+    <user-table />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useAuthStore } from '@/stores/authStore'
-import { useClipboard } from '@/composables/useClipboard'
-import { useCart } from '@/composables/useCart'
-import { formatDate } from '@/utils/formatDate'
+import { useUserStore } from '@/stores/userStore'
+import { useCartStore } from '@/stores/cartStore'
+import { useUser } from '@/composables/useUser'
+import { useProduct } from '@/composables/useProduct'
+import { helpers } from '@/utils/helpers'
 import axios from 'axios'
-import OrderNotes from '@/components/order/OrderNotes.vue'
+import UserTable from '@/components/user/UserTable.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  title: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'delete'])
+const emit = defineEmits(['change', 'update'])
 
-  const reviewStore = useReviewStore()
-  const authStore = useAuthStore()
-  const clipboard = useClipboard()
-  const cart = useCart()
-  provide('locale', ref('value'))
+  const userStore = useUserStore()
+  const cartStore = useCartStore()
 
 
-const loading = ref(false)
+  const user = useUser()
+  const product = useProduct()
+  provide('eventBus', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/users/${id}`)
-    const response = await axios.post('/api/users')
-    data.value = response.data
+    const response = await axios.get(`/api/orders/${props.id}`)
+    const response1 = await axios.post('/api/auth/login')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

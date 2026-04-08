@@ -2,8 +2,8 @@
   <div class="view-homeView">
     <h1>Home</h1>
     <div class="view-content">
-    <dashboard-widget />
-    <metric-card />
+    <base-tooltip />
+    <search-bar />
     </div>
   </div>
 </template>
@@ -11,22 +11,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useSearch } from '@/composables/useSearch'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useCart } from '@/composables/useCart'
 import axios from 'axios'
-import DashboardWidget from '@/components/dashboard/DashboardWidget.vue'
-import MetricCard from '@/components/dashboard/MetricCard.vue'
+import BaseTooltip from '@/components/common/BaseTooltip.vue'
+import SearchBar from '@/components/common/SearchBar.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const notificationStore = useNotificationStore()
-  const search = useSearch()
+  const wishlistStore = useWishlistStore()
+  const cart = useCart()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.get(`/api/orders/${route.params.id}`)
+    await axios.delete(`/api/wishlist/${route.params.id}`)
   } catch (error) {
     console.error('View load error:', error)
   }

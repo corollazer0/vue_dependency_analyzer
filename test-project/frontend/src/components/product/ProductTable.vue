@@ -1,55 +1,60 @@
 <template>
   <div class="product-productTable">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-badge />
+    <base-alert />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useOrderStore } from '@/stores/orderStore'
-import { usePermission } from '@/composables/usePermission'
-import { useSearch } from '@/composables/useSearch'
-import { interceptors } from '@/api/interceptors'
+import { useCartStore } from '@/stores/cartStore'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useValidation } from '@/composables/useValidation'
+import { useDarkMode } from '@/composables/useDarkMode'
+import { deepClone } from '@/utils/deepClone'
 import axios from 'axios'
-import ProductBadge from '@/components/product/ProductBadge.vue'
+import BaseAlert from '@/components/common/BaseAlert.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'update'])
+const emit = defineEmits(['delete', 'change'])
 
-  const userStore = useUserStore()
-  const orderStore = useOrderStore()
-  const permission = usePermission()
-  const search = useSearch()
+  const cartStore = useCartStore()
+  const inventoryStore = useInventoryStore()
 
 
+  const validation = useValidation()
+  const darkMode = useDarkMode()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/notifications')
-    const response = await axios.post('/api/wishlist')
-    data.value = response.data
+    const response = await axios.get(`/api/orders/${props.id}`)
+    const response1 = await axios.get(`/api/products/${props.id}/reviews`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

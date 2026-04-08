@@ -2,21 +2,22 @@ package com.example.service;
 
 import com.example.model.Product;
 import com.example.repository.ProductRepository;
-import com.example.service.NotificationService;
+import com.example.service.UserService;
+import com.example.service.DashboardService;
+
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class ProductService {
 
     private final ProductRepository productRepository;
-    private final NotificationService notificationService;
+    private final UserService userService;
+    private final DashboardService dashboardService;
 
-    public ProductService(ProductRepository productRepository, NotificationService notificationService) {
-        this.productRepository = productRepository;
-        this.notificationService = notificationService;
-    }
 
     public List<Product> findAll() {
         return productRepository.findAll();
@@ -33,4 +34,5 @@ public class ProductService {
     public void deleteById(Long id) {
         productRepository.deleteById(id);
     }
+
 }

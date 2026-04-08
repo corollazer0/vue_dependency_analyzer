@@ -1,58 +1,63 @@
 <template>
   <div class="order-orderPayment">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-import />
-    <logout-confirm />
+    <two-factor-setup />
+    <product-grid />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useCart } from '@/composables/useCart'
-import { useSearch } from '@/composables/useSearch'
-import { formatDate } from '@/utils/formatDate'
+import { useOrderStore } from '@/stores/orderStore'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useFetch } from '@/composables/useFetch'
+import { useThrottle } from '@/composables/useThrottle'
+import { throttle } from '@/utils/throttle'
 import axios from 'axios'
-import ProductImport from '@/components/product/ProductImport.vue'
-import LogoutConfirm from '@/components/auth/LogoutConfirm.vue'
+import TwoFactorSetup from '@/components/auth/TwoFactorSetup.vue'
+import ProductGrid from '@/components/product/ProductGrid.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  size: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  title: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'delete'])
+const emit = defineEmits(['update', 'select'])
 
-  const uIStore = useUIStore()
-  const notificationStore = useNotificationStore()
-  const cart = useCart()
-  const search = useSearch()
+  const orderStore = useOrderStore()
+  const inventoryStore = useInventoryStore()
 
 
+  const fetch = useFetch()
+  const throttle = useThrottle()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/products/${id}`)
-    const response = await axios.post(`/api/products/${id}/reviews`)
-    data.value = response.data
+    const response = await axios.delete(`/api/wishlist/${props.id}`)
+    const response1 = await axios.post('/api/products')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

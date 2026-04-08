@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useCartStore } from '@/stores/cartStore'
-import { useDragDrop } from '@/composables/useDragDrop'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useOrder } from '@/composables/useOrder'
 import axios from 'axios'
 
 export function useGeolocation() {
-  const userStore = useUserStore()
-  const cartStore = useCartStore()
-  const { dragDrop } = useDragDrop()
+  const wishlistStore = useWishlistStore()
+  const settingsStore = useSettingsStore()
+  const { order } = useOrder()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useGeolocation() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/dashboard/stats')
-    return response.data
-    const response = await axios.delete(`/api/users/${id}`)
-    return response.data
+    const result = await axios.post('/api/orders')
+    return result.data
+    const result1 = await axios.put(`/api/orders/${id}/status`)
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

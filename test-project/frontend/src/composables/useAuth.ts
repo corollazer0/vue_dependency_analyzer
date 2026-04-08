@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
+import { useUserStore } from '@/stores/userStore'
 import axios from 'axios'
 
 export function useAuth() {
-  const authStore = useAuthStore()
+  const userStore = useUserStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function useAuth() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/auth/logout')
-    return response.data
+    const result = await axios.get(`/api/products/${id}/reviews`)
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

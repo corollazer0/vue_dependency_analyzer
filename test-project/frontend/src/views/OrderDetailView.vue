@@ -2,9 +2,9 @@
   <div class="view-orderDetailView">
     <h1>OrderDetail</h1>
     <div class="view-content">
-    <base-pagination />
-    <base-input />
-    <file-upload />
+    <captcha-widget />
+    <otp-input />
+    <ldap-login />
     </div>
   </div>
 </template>
@@ -12,23 +12,27 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useAuthStore } from '@/stores/authStore'
-import { useOrder } from '@/composables/useOrder'
+import { useUIStore } from '@/stores/uIStore'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import axios from 'axios'
-import BasePagination from '@/components/common/BasePagination.vue'
-import BaseInput from '@/components/common/BaseInput.vue'
-import FileUpload from '@/components/common/FileUpload.vue'
+import CaptchaWidget from '@/components/auth/CaptchaWidget.vue'
+import OtpInput from '@/components/auth/OtpInput.vue'
+import LdapLogin from '@/components/auth/LdapLogin.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const authStore = useAuthStore()
-  const order = useOrder()
+  const uIStore = useUIStore()
+  const mediaQuery = useMediaQuery()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.get('/api/analytics/traffic')
+    await axios.get(`/api/users/${route.params.id}`)
   } catch (error) {
     console.error('View load error:', error)
   }

@@ -2,8 +2,8 @@
   <div class="view-orderListView">
     <h1>OrderList</h1>
     <div class="view-content">
-    <order-filter />
-    <order-history />
+    <forgot-password />
+    <phone-verify />
     </div>
   </div>
 </template>
@@ -11,22 +11,26 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { useCategoryStore } from '@/stores/categoryStore'
-import { useKeyboard } from '@/composables/useKeyboard'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useSearch } from '@/composables/useSearch'
 import axios from 'axios'
-import OrderFilter from '@/components/order/OrderFilter.vue'
-import OrderHistory from '@/components/order/OrderHistory.vue'
+import ForgotPassword from '@/components/auth/ForgotPassword.vue'
+import PhoneVerify from '@/components/auth/PhoneVerify.vue'
 
 const route = useRoute()
 const router = useRouter()
-  const categoryStore = useCategoryStore()
-  const keyboard = useKeyboard()
+  const wishlistStore = useWishlistStore()
+  const search = useSearch()
 
 const pageData = ref(null)
 
+function navigateTo(path: string) {
+  router.push(path)
+}
+
 onMounted(async () => {
   try {
-    await axios.get('/api/orders')
+    await axios.put(`/api/users/${route.params.id}`)
   } catch (error) {
     console.error('View load error:', error)
   }

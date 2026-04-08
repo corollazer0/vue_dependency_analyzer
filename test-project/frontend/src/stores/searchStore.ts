@@ -14,7 +14,7 @@ export const useSearchStore = defineStore('search', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get(`/api/products/${id}`)
+      const response = await axios.get('/api/reviews')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useSearchStore = defineStore('search', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.delete(`/api/cart/items/${id}`)
+      const response = await axios.get('/api/users')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

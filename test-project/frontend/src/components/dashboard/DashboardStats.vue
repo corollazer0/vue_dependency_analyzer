@@ -1,52 +1,60 @@
 <template>
   <div class="dashboard-dashboardStats">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-tooltip />
-    <date-range-selector />
+    <recent-orders />
+    <role-guard />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useCategoryStore } from '@/stores/categoryStore'
-import { useAuth } from '@/composables/useAuth'
+import { storeToRefs } from 'pinia'
+import { useUserStore } from '@/stores/userStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useProduct } from '@/composables/useProduct'
 import axios from 'axios'
-import UserTooltip from '@/components/user/UserTooltip.vue'
-import DateRangeSelector from '@/components/dashboard/DateRangeSelector.vue'
+import RecentOrders from '@/components/dashboard/RecentOrders.vue'
+import RoleGuard from '@/components/auth/RoleGuard.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
   variant: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
 const emit = defineEmits(['update'])
 
-  const categoryStore = useCategoryStore()
-  const auth = useAuth()
+  const userStore = useUserStore()
+  const analyticsStore = useAnalyticsStore()
+  const { items, count } = storeToRefs(analyticsStore)
+
+  const product = useProduct()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/orders/${id}`)
+    const response = await axios.post('/api/auth/logout')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

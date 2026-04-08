@@ -1,55 +1,60 @@
 <template>
   <div class="product-productGrid">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-accordion />
-    <order-review />
-    <order-return />
+    <product-upload />
+    <base-table />
+    <pie-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useProduct } from '@/composables/useProduct'
+import { useOrderStore } from '@/stores/orderStore'
+import { useDarkMode } from '@/composables/useDarkMode'
 import axios from 'axios'
-import BaseAccordion from '@/components/common/BaseAccordion.vue'
-import OrderReview from '@/components/order/OrderReview.vue'
-import OrderReturn from '@/components/order/OrderReturn.vue'
+import ProductUpload from '@/components/product/ProductUpload.vue'
+import BaseTable from '@/components/common/BaseTable.vue'
+import PieChart from '@/components/dashboard/PieChart.vue'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' },
-  items: { type: String, default: '' },
+  title: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['delete'])
 
-  const analyticsStore = useAnalyticsStore()
-  const product = useProduct()
-  provide('permissions', ref('value'))
+  const orderStore = useOrderStore()
 
 
-const loading = ref(false)
+  const darkMode = useDarkMode()
+  provide('theme', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/users')
+    const response = await axios.get('/api/categories')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

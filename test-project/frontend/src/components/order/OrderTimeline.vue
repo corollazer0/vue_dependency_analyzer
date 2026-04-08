@@ -1,61 +1,66 @@
 <template>
   <div class="order-orderTimeline">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <password-strength />
-    <security-log />
-    <app-breadcrumb />
+    <user-stats />
+    <ldap-login />
+    <user-preferences />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useWishlistStore } from '@/stores/wishlistStore'
-import { useMediaQuery } from '@/composables/useMediaQuery'
-import { useFetch } from '@/composables/useFetch'
-import { helpers } from '@/utils/helpers'
+import { useAuthStore } from '@/stores/authStore'
+import { useCouponStore } from '@/stores/couponStore'
+import { useCart } from '@/composables/useCart'
+import { useWebSocket } from '@/composables/useWebSocket'
+import { i18n } from '@/services/i18n'
 import axios from 'axios'
-import PasswordStrength from '@/components/auth/PasswordStrength.vue'
-import SecurityLog from '@/components/auth/SecurityLog.vue'
-import AppBreadcrumb from '@/components/common/AppBreadcrumb.vue'
+import UserStats from '@/components/user/UserStats.vue'
+import LdapLogin from '@/components/auth/LdapLogin.vue'
+import UserPreferences from '@/components/user/UserPreferences.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
   variant: { type: String, default: '' },
-  size: { type: String, default: '' },
+  items: { type: String, default: '' },
   disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['change', 'close'])
 
-  const notificationStore = useNotificationStore()
-  const wishlistStore = useWishlistStore()
-  const mediaQuery = useMediaQuery()
-  const fetch = useFetch()
+  const authStore = useAuthStore()
+  const couponStore = useCouponStore()
 
 
+  const cart = useCart()
+  const webSocket = useWebSocket()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/orders/${id}`)
-    const response = await axios.put('/api/settings')
-    data.value = response.data
+    const response = await axios.get(`/api/orders/${props.id}`)
+    const response1 = await axios.post('/api/products')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

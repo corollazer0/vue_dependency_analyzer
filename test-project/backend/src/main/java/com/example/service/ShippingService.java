@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.Shipping;
 import com.example.repository.ShippingRepository;
+import com.example.service.CouponService;
 import com.example.service.AdminService;
-import com.example.service.ReviewService;
+import com.example.service.SettingsService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +14,16 @@ import java.util.Optional;
 public class ShippingService {
 
     private final ShippingRepository shippingRepository;
+    private final CouponService couponService;
     private final AdminService adminService;
-    private final ReviewService reviewService;
+    private final SettingsService settingsService;
 
-    public ShippingService(ShippingRepository shippingRepository, AdminService adminService, ReviewService reviewService) {
+
+    public ShippingService(ShippingRepository shippingRepository, CouponService couponService, AdminService adminService, SettingsService settingsService) {
         this.shippingRepository = shippingRepository;
+        this.couponService = couponService;
         this.adminService = adminService;
-        this.reviewService = reviewService;
+        this.settingsService = settingsService;
     }
 
     public List<Shipping> findAll() {
@@ -36,4 +41,5 @@ public class ShippingService {
     public void deleteById(Long id) {
         shippingRepository.deleteById(id);
     }
+
 }

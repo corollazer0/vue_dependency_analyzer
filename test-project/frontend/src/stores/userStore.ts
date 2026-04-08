@@ -14,7 +14,7 @@ export const useUserStore = defineStore('user', () => {
   async function action0(id?: string) {
     loading.value = true
     try {
-      const response = await axios.get(`/api/products/${id}/reviews`)
+      const response = await axios.put(`/api/users/${id}`)
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message
@@ -26,7 +26,7 @@ export const useUserStore = defineStore('user', () => {
   async function action1(id?: string) {
     loading.value = true
     try {
-      const response = await axios.put(`/api/products/${id}`)
+      const response = await axios.post('/api/users')
       items.value = response.data
     } catch (e) {
       error.value = (e as Error).message

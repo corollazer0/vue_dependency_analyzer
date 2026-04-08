@@ -1,49 +1,54 @@
 <template>
   <div class="dashboard-metricCard">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-dispute />
+    <product-search />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useSearchStore } from '@/stores/searchStore'
-import { useClickOutside } from '@/composables/useClickOutside'
+import { useProductStore } from '@/stores/productStore'
+import { useSearch } from '@/composables/useSearch'
 import axios from 'axios'
-import OrderDispute from '@/components/order/OrderDispute.vue'
+import ProductSearch from '@/components/product/ProductSearch.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
-  size: { type: String, default: '' }
+  items: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['update'])
 
-  const searchStore = useSearchStore()
-  const clickOutside = useClickOutside()
+  const productStore = useProductStore()
 
-  const permissionsValue = inject('permissions')
 
-const loading = ref(false)
+  const search = useSearch()
+
+  const configValue = inject('config')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/analytics/traffic')
+    const response = await axios.post('/api/wishlist')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

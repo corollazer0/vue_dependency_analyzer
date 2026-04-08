@@ -1,49 +1,54 @@
 <template>
   <div class="dashboard-dashboardFilter">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <icon-wrapper />
+    <traffic-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useCouponStore } from '@/stores/couponStore'
-import { useAuth } from '@/composables/useAuth'
+import { useUIStore } from '@/stores/uIStore'
+import { useUser } from '@/composables/useUser'
 import axios from 'axios'
-import IconWrapper from '@/components/common/IconWrapper.vue'
+import TrafficChart from '@/components/dashboard/TrafficChart.vue'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' },
-  size: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['close'])
 
-  const couponStore = useCouponStore()
-  const auth = useAuth()
-
+  const uIStore = useUIStore()
 
 
-const loading = ref(false)
+  const user = useUser()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/products/${id}`)
+    const response = await axios.get(`/api/products/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

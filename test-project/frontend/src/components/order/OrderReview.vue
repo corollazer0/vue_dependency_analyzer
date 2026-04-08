@@ -1,52 +1,57 @@
 <template>
   <div class="order-orderReview">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-tooltip />
-    <sso-login />
+    <app-sidebar />
+    <user-permissions />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useAuth } from '@/composables/useAuth'
+import { useUserStore } from '@/stores/userStore'
+import { useAsync } from '@/composables/useAsync'
 import axios from 'axios'
-import UserTooltip from '@/components/user/UserTooltip.vue'
-import SsoLogin from '@/components/auth/SsoLogin.vue'
+import AppSidebar from '@/components/common/AppSidebar.vue'
+import UserPermissions from '@/components/user/UserPermissions.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  disabled: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  size: { type: String, default: '' },
+  variant: { type: String, default: '' },
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['delete'])
 
-  const settingsStore = useSettingsStore()
-  const auth = useAuth()
-
+  const userStore = useUserStore()
 
 
-const loading = ref(false)
+  const async = useAsync()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/orders/${id}`)
+    const response = await axios.post('/api/upload')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

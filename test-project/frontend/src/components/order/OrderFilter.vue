@@ -1,58 +1,63 @@
 <template>
   <div class="order-orderFilter">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-button />
-    <user-timeline />
+    <product-bundle />
+    <metric-card />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useCartStore } from '@/stores/cartStore'
-import { useUserStore } from '@/stores/userStore'
-import { useValidation } from '@/composables/useValidation'
-import { usePagination } from '@/composables/usePagination'
-import { eventBus } from '@/services/eventBus'
+import { useProductStore } from '@/stores/productStore'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useOrder } from '@/composables/useOrder'
+import { useAuth } from '@/composables/useAuth'
+import { storage } from '@/services/storage'
 import axios from 'axios'
-import BaseButton from '@/components/common/BaseButton.vue'
-import UserTimeline from '@/components/user/UserTimeline.vue'
+import ProductBundle from '@/components/product/ProductBundle.vue'
+import MetricCard from '@/components/dashboard/MetricCard.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' },
-  items: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  title: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'close'])
+const emit = defineEmits(['close', 'delete'])
 
-  const cartStore = useCartStore()
-  const userStore = useUserStore()
-  const validation = useValidation()
-  const pagination = usePagination()
+  const productStore = useProductStore()
+  const analyticsStore = useAnalyticsStore()
+
+
+  const order = useOrder()
+  const auth = useAuth()
 
   const themeValue = inject('theme')
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
-    const response = await axios.put('/api/settings')
-    data.value = response.data
+    const response = await axios.post('/api/auth/logout')
+    const response1 = await axios.put(`/api/orders/${props.id}/status`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

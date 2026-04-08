@@ -1,49 +1,54 @@
 <template>
   <div class="dashboard-refreshButton">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-roles />
+    <user-form />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useToast } from '@/composables/useToast'
+import { useProductStore } from '@/stores/productStore'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
 import axios from 'axios'
-import UserRoles from '@/components/user/UserRoles.vue'
+import UserForm from '@/components/user/UserForm.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  size: { type: String, default: '' }
+  title: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['update'])
 
-  const orderStore = useOrderStore()
-  const toast = useToast()
-
+  const productStore = useProductStore()
 
 
-const loading = ref(false)
+  const infiniteScroll = useInfiniteScroll()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/products/${id}`)
+    const response = await axios.get(`/api/products/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

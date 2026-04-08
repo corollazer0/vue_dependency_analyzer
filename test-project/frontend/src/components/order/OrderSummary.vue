@@ -1,52 +1,60 @@
 <template>
   <div class="order-orderSummary">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <app-footer />
-    <base-spinner />
+    <user-list />
+    <order-print />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useDarkMode } from '@/composables/useDarkMode'
+import { storeToRefs } from 'pinia'
+import { useUserStore } from '@/stores/userStore'
+import { useOrderStore } from '@/stores/orderStore'
+import { usePagination } from '@/composables/usePagination'
 import axios from 'axios'
-import AppFooter from '@/components/common/AppFooter.vue'
-import BaseSpinner from '@/components/common/BaseSpinner.vue'
+import UserList from '@/components/user/UserList.vue'
+import OrderPrint from '@/components/order/OrderPrint.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['select'])
 
-  const notificationStore = useNotificationStore()
-  const darkMode = useDarkMode()
-  provide('locale', ref('value'))
+  const userStore = useUserStore()
+  const orderStore = useOrderStore()
+  const { selectedItem, hasError } = storeToRefs(orderStore)
+
+  const pagination = usePagination()
+  provide('logger', ref('value'))
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/cart/items')
+    const response = await axios.put(`/api/notifications/${props.id}/read`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

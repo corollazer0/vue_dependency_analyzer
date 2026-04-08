@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
+import { useUserStore } from '@/stores/userStore'
 import axios from 'axios'
 
 export function useMediaQuery() {
-  const orderStore = useOrderStore()
+  const userStore = useUserStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function useMediaQuery() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/auth/refresh')
-    return response.data
+    const result = await axios.get(`/api/orders/${id}`)
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

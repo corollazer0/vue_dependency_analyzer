@@ -2,7 +2,9 @@ package com.example.service;
 
 import com.example.model.Cache;
 import com.example.repository.CacheRepository;
-import com.example.service.PaymentService;
+import com.example.service.ReportService;
+import com.example.service.CategoryService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -11,11 +13,14 @@ import java.util.Optional;
 public class CacheService {
 
     private final CacheRepository cacheRepository;
-    private final PaymentService paymentService;
+    private final ReportService reportService;
+    private final CategoryService categoryService;
 
-    public CacheService(CacheRepository cacheRepository, PaymentService paymentService) {
+
+    public CacheService(CacheRepository cacheRepository, ReportService reportService, CategoryService categoryService) {
         this.cacheRepository = cacheRepository;
-        this.paymentService = paymentService;
+        this.reportService = reportService;
+        this.categoryService = categoryService;
     }
 
     public List<Cache> findAll() {
@@ -33,4 +38,5 @@ public class CacheService {
     public void deleteById(Long id) {
         cacheRepository.deleteById(id);
     }
+
 }

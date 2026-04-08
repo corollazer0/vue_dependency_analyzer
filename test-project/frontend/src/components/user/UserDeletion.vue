@@ -1,52 +1,57 @@
 <template>
   <div class="user-userDeletion">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <auth-guard />
-    <order-confirmation />
+    <product-badge />
+    <app-sidebar />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useBreakpoint } from '@/composables/useBreakpoint'
+import { useCouponStore } from '@/stores/couponStore'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import axios from 'axios'
-import AuthGuard from '@/components/auth/AuthGuard.vue'
-import OrderConfirmation from '@/components/order/OrderConfirmation.vue'
+import ProductBadge from '@/components/product/ProductBadge.vue'
+import AppSidebar from '@/components/common/AppSidebar.vue'
 
 const props = defineProps({
-  size: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['change'])
+const emit = defineEmits(['update'])
 
-  const analyticsStore = useAnalyticsStore()
-  const breakpoint = useBreakpoint()
-
+  const couponStore = useCouponStore()
 
 
-const loading = ref(false)
+  const mediaQuery = useMediaQuery()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
     const response = await axios.put('/api/settings')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

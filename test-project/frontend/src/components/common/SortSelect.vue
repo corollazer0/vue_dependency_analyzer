@@ -1,58 +1,63 @@
 <template>
   <div class="common-sortSelect">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-select />
-    <email-verify />
+    <date-range-selector />
+    <product-detail />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
 import { useCouponStore } from '@/stores/couponStore'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useClickOutside } from '@/composables/useClickOutside'
-import { useValidation } from '@/composables/useValidation'
-import { products } from '@/api/products'
+import { useUserStore } from '@/stores/userStore'
+import { useFilter } from '@/composables/useFilter'
+import { useNotification } from '@/composables/useNotification'
+import { storage } from '@/services/storage'
 import axios from 'axios'
-import BaseSelect from '@/components/common/BaseSelect.vue'
-import EmailVerify from '@/components/auth/EmailVerify.vue'
+import DateRangeSelector from '@/components/dashboard/DateRangeSelector.vue'
+import ProductDetail from '@/components/product/ProductDetail.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
+  variant: { type: String, default: '' },
   size: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'submit'])
+const emit = defineEmits(['select', 'delete'])
 
   const couponStore = useCouponStore()
-  const notificationStore = useNotificationStore()
-  const clickOutside = useClickOutside()
-  const validation = useValidation()
-  provide('config', ref('value'))
+  const userStore = useUserStore()
 
 
-const loading = ref(false)
+  const filter = useFilter()
+  const notification = useNotification()
+  provide('theme', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/coupons/validate')
-    const response = await axios.post('/api/orders')
-    data.value = response.data
+    const response = await axios.post('/api/wishlist')
+    const response1 = await axios.get(`/api/products/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

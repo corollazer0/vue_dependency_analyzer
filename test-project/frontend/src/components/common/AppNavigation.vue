@@ -1,55 +1,61 @@
 <template>
   <div class="common-appNavigation">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-sort />
+    <biometric-auth />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useOrderStore } from '@/stores/orderStore'
-import { useThrottle } from '@/composables/useThrottle'
+import { useRouter } from 'vue-router'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useCartStore } from '@/stores/cartStore'
 import { useDebounce } from '@/composables/useDebounce'
-import { endpoints } from '@/api/endpoints'
+import { useLocalStorage } from '@/composables/useLocalStorage'
+import { analytics } from '@/services/analytics'
 import axios from 'axios'
-import ProductSort from '@/components/product/ProductSort.vue'
+import BiometricAuth from '@/components/auth/BiometricAuth.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  title: { type: String, default: '' }
+  size: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'delete'])
+const emit = defineEmits(['delete', 'close'])
 
-  const reviewStore = useReviewStore()
-  const orderStore = useOrderStore()
-  const throttle = useThrottle()
+  const inventoryStore = useInventoryStore()
+  const cartStore = useCartStore()
+
+  const router = useRouter()
   const debounce = useDebounce()
+  const localStorage = useLocalStorage()
   provide('eventBus', ref('value'))
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
     const response = await axios.get('/api/search')
-    const response = await axios.get('/api/wishlist')
-    data.value = response.data
+    const response1 = await axios.put(`/api/inventory/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+  function goToDashboard() { router.push('/dashboard') }
 
 onMounted(() => {
   fetchData()

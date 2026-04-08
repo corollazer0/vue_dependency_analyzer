@@ -1,52 +1,57 @@
 <template>
   <div class="common-baseAvatar">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-timeline />
-    <user-preferences />
+    <user-form />
+    <customer-map />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useUIStore } from '@/stores/uIStore'
-import { useDarkMode } from '@/composables/useDarkMode'
+import { useTheme } from '@/composables/useTheme'
 import axios from 'axios'
-import UserTimeline from '@/components/user/UserTimeline.vue'
-import UserPreferences from '@/components/user/UserPreferences.vue'
+import UserForm from '@/components/user/UserForm.vue'
+import CustomerMap from '@/components/dashboard/CustomerMap.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  size: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['change'])
 
   const uIStore = useUIStore()
-  const darkMode = useDarkMode()
+
+
+  const theme = useTheme()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/products')
+    const response = await axios.get('/api/cart')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

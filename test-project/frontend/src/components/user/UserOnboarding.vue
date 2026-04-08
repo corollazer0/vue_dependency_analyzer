@@ -1,55 +1,60 @@
 <template>
   <div class="user-userOnboarding">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-wishlist />
+    <ldap-login />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useProductStore } from '@/stores/productStore'
-import { useAuth } from '@/composables/useAuth'
-import { useThrottle } from '@/composables/useThrottle'
-import { products } from '@/api/products'
+import { useCategoryStore } from '@/stores/categoryStore'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useInfiniteScroll } from '@/composables/useInfiniteScroll'
+import { useMediaQuery } from '@/composables/useMediaQuery'
+import { helpers } from '@/utils/helpers'
 import axios from 'axios'
-import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import LdapLogin from '@/components/auth/LdapLogin.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  items: { type: String, default: '' }
+  title: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update', 'close'])
+const emit = defineEmits(['delete', 'close'])
 
-  const orderStore = useOrderStore()
-  const productStore = useProductStore()
-  const auth = useAuth()
-  const throttle = useThrottle()
+  const categoryStore = useCategoryStore()
+  const settingsStore = useSettingsStore()
 
-  const eventBusValue = inject('eventBus')
 
-const loading = ref(false)
+  const infiniteScroll = useInfiniteScroll()
+  const mediaQuery = useMediaQuery()
+
+  const permissionsValue = inject('permissions')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/orders')
-    const response = await axios.get('/api/settings')
-    data.value = response.data
+    const response = await axios.get('/api/dashboard/revenue')
+    const response1 = await axios.post('/api/orders')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

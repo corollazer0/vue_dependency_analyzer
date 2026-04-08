@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.Encryption;
 import com.example.repository.EncryptionRepository;
-import com.example.service.DashboardService;
-import com.example.service.AuthService;
+import com.example.service.CartService;
+import com.example.service.PaymentService;
+import com.example.service.OrderService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +14,16 @@ import java.util.Optional;
 public class EncryptionService {
 
     private final EncryptionRepository encryptionRepository;
-    private final DashboardService dashboardService;
-    private final AuthService authService;
+    private final CartService cartService;
+    private final PaymentService paymentService;
+    private final OrderService orderService;
 
-    public EncryptionService(EncryptionRepository encryptionRepository, DashboardService dashboardService, AuthService authService) {
+
+    public EncryptionService(EncryptionRepository encryptionRepository, CartService cartService, PaymentService paymentService, OrderService orderService) {
         this.encryptionRepository = encryptionRepository;
-        this.dashboardService = dashboardService;
-        this.authService = authService;
+        this.cartService = cartService;
+        this.paymentService = paymentService;
+        this.orderService = orderService;
     }
 
     public List<Encryption> findAll() {
@@ -36,4 +41,5 @@ public class EncryptionService {
     public void deleteById(Long id) {
         encryptionRepository.deleteById(id);
     }
+
 }

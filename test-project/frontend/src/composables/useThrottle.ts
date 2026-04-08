@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useProductStore } from '@/stores/productStore'
-import { useNotification } from '@/composables/useNotification'
+import { useOrderStore } from '@/stores/orderStore'
+import { useUIStore } from '@/stores/uIStore'
+import { usePermission } from '@/composables/usePermission'
 import axios from 'axios'
 
 export function useThrottle() {
-  const settingsStore = useSettingsStore()
-  const productStore = useProductStore()
-  const { notification } = useNotification()
+  const orderStore = useOrderStore()
+  const uIStore = useUIStore()
+  const { permission } = usePermission()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useThrottle() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get(`/api/orders/${id}`)
-    return response.data
-    const response = await axios.get(`/api/products/${id}`)
-    return response.data
+    const result = await axios.put(`/api/orders/${id}/status`)
+    return result.data
+    const result1 = await axios.get(`/api/products/${id}`)
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

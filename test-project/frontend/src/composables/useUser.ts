@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
 import { useUserStore } from '@/stores/userStore'
-import { useSearchStore } from '@/stores/searchStore'
-import { useClickOutside } from '@/composables/useClickOutside'
+import { useOrderStore } from '@/stores/orderStore'
+import { useKeyboard } from '@/composables/useKeyboard'
 import axios from 'axios'
 
 export function useUser() {
   const userStore = useUserStore()
-  const searchStore = useSearchStore()
-  const { clickOutside } = useClickOutside()
+  const orderStore = useOrderStore()
+  const { keyboard } = useKeyboard()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useUser() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/users')
-    return response.data
-    const response = await axios.put(`/api/products/${id}`)
-    return response.data
+    const result = await axios.post('/api/auth/refresh')
+    return result.data
+    const result1 = await axios.get('/api/users')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

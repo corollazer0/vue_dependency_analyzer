@@ -1,55 +1,60 @@
 <template>
   <div class="auth-rateLimitBanner">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-grid />
+    <traffic-chart />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useSearchStore } from '@/stores/searchStore'
-import { usePagination } from '@/composables/usePagination'
-import { useWebSocket } from '@/composables/useWebSocket'
-import { formatDate } from '@/utils/formatDate'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useOrderStore } from '@/stores/orderStore'
+import { useNotification } from '@/composables/useNotification'
+import { useOrder } from '@/composables/useOrder'
+import { throttle } from '@/utils/throttle'
 import axios from 'axios'
-import ProductGrid from '@/components/product/ProductGrid.vue'
+import TrafficChart from '@/components/dashboard/TrafficChart.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'close'])
+const emit = defineEmits(['select', 'delete'])
 
-  const userStore = useUserStore()
-  const searchStore = useSearchStore()
-  const pagination = usePagination()
-  const webSocket = useWebSocket()
+  const notificationStore = useNotificationStore()
+  const orderStore = useOrderStore()
+
+
+  const notification = useNotification()
+  const order = useOrder()
 
   const themeValue = inject('theme')
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/inventory/${id}`)
-    const response = await axios.get('/api/analytics/traffic')
-    data.value = response.data
+    const response = await axios.put(`/api/users/${props.id}`)
+    const response1 = await axios.get(`/api/products/${props.id}`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
+import { useUserStore } from '@/stores/userStore'
 import axios from 'axios'
 
 export function useFetch() {
-  const uIStore = useUIStore()
+  const userStore = useUserStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function useFetch() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/auth/login')
-    return response.data
+    const result = await axios.put(`/api/notifications/${id}/read`)
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

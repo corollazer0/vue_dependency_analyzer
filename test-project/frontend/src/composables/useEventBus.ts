@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useCart } from '@/composables/useCart'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useThrottle } from '@/composables/useThrottle'
 import axios from 'axios'
 
 export function useEventBus() {
-  const userStore = useUserStore()
-  const reviewStore = useReviewStore()
-  const { cart } = useCart()
+  const settingsStore = useSettingsStore()
+  const inventoryStore = useInventoryStore()
+  const { throttle } = useThrottle()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useEventBus() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.put(`/api/products/${id}`)
-    return response.data
-    const response = await axios.post(`/api/orders/${id}/cancel`)
-    return response.data
+    const result = await axios.delete(`/api/wishlist/${id}`)
+    return result.data
+    const result1 = await axios.get('/api/reviews')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

@@ -1,55 +1,60 @@
 <template>
   <div class="common-baseTooltip">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <app-navigation />
-    <dashboard-stats />
-    <captcha-widget />
+    <order-delivery />
+    <product-wishlist />
+    <user-search />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useAsync } from '@/composables/useAsync'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useWebSocket } from '@/composables/useWebSocket'
 import axios from 'axios'
-import AppNavigation from '@/components/common/AppNavigation.vue'
-import DashboardStats from '@/components/dashboard/DashboardStats.vue'
-import CaptchaWidget from '@/components/auth/CaptchaWidget.vue'
+import OrderDelivery from '@/components/order/OrderDelivery.vue'
+import ProductWishlist from '@/components/product/ProductWishlist.vue'
+import UserSearch from '@/components/user/UserSearch.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
   variant: { type: String, default: '' },
-  loading: { type: String, default: '' },
+  disabled: { type: String, default: '' },
   modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['select'])
 
-  const settingsStore = useSettingsStore()
-  const async = useAsync()
-
+  const inventoryStore = useInventoryStore()
 
 
-const loading = ref(false)
+  const webSocket = useWebSocket()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/wishlist')
+    const response = await axios.get('/api/users')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

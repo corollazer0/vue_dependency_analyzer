@@ -1,52 +1,57 @@
 <template>
   <div class="common-baseCard">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <date-picker />
-    <user-notifications />
+    <product-gallery />
+    <product-search />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useFetch } from '@/composables/useFetch'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useCart } from '@/composables/useCart'
 import axios from 'axios'
-import DatePicker from '@/components/common/DatePicker.vue'
-import UserNotifications from '@/components/user/UserNotifications.vue'
+import ProductGallery from '@/components/product/ProductGallery.vue'
+import ProductSearch from '@/components/product/ProductSearch.vue'
 
 const props = defineProps({
+  title: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' }
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete'])
+const emit = defineEmits(['update'])
 
-  const notificationStore = useNotificationStore()
-  const fetch = useFetch()
-  provide('permissions', ref('value'))
+  const wishlistStore = useWishlistStore()
 
 
-const loading = ref(false)
+  const cart = useCart()
+  provide('logger', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
+    const response = await axios.post('/api/coupons/validate')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

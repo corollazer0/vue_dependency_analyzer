@@ -1,55 +1,60 @@
 <template>
   <div class="dashboard-pieChart">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <activity-feed />
-    <data-error />
-    <sort-select />
+    <register-form />
+    <auth-guard />
+    <two-factor-setup />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useProductStore } from '@/stores/productStore'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useSearch } from '@/composables/useSearch'
 import axios from 'axios'
-import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
-import DataError from '@/components/common/DataError.vue'
-import SortSelect from '@/components/common/SortSelect.vue'
+import RegisterForm from '@/components/auth/RegisterForm.vue'
+import AuthGuard from '@/components/auth/AuthGuard.vue'
+import TwoFactorSetup from '@/components/auth/TwoFactorSetup.vue'
 
 const props = defineProps({
-  modelValue: { type: String, default: '' },
-  variant: { type: String, default: '' },
+  disabled: { type: String, default: '' },
   size: { type: String, default: '' },
+  variant: { type: String, default: '' },
   items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['delete'])
 
-  const productStore = useProductStore()
-  const localStorage = useLocalStorage()
-
+  const wishlistStore = useWishlistStore()
 
 
-const loading = ref(false)
+  const search = useSearch()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/cart')
+    const response = await axios.put(`/api/users/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

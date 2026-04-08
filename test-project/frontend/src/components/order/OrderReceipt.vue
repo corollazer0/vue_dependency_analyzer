@@ -1,55 +1,60 @@
 <template>
   <div class="order-orderReceipt">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-input />
-    <date-range-selector />
-    <mini-chart />
+    <base-popover />
+    <user-table />
+    <order-export />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useSettingsStore } from '@/stores/settingsStore'
-import { useAuth } from '@/composables/useAuth'
+import { useAuthStore } from '@/stores/authStore'
+import { useFetch } from '@/composables/useFetch'
 import axios from 'axios'
-import BaseInput from '@/components/common/BaseInput.vue'
-import DateRangeSelector from '@/components/dashboard/DateRangeSelector.vue'
-import MiniChart from '@/components/dashboard/MiniChart.vue'
+import BasePopover from '@/components/common/BasePopover.vue'
+import UserTable from '@/components/user/UserTable.vue'
+import OrderExport from '@/components/order/OrderExport.vue'
 
 const props = defineProps({
+  disabled: { type: String, default: '' },
   title: { type: String, default: '' },
-  size: { type: String, default: '' },
-  modelValue: { type: String, default: '' },
-  items: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close'])
+const emit = defineEmits(['delete'])
 
-  const settingsStore = useSettingsStore()
-  const auth = useAuth()
-  provide('locale', ref('value'))
+  const authStore = useAuthStore()
 
 
-const loading = ref(false)
+  const fetch = useFetch()
+  provide('eventBus', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/users/${id}`)
+    const response = await axios.get(`/api/orders/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

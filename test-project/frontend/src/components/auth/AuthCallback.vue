@@ -1,58 +1,63 @@
 <template>
   <div class="auth-authCallback">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <product-quick-view />
-    <user-bio />
+    <sort-select />
+    <order-print />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useProductStore } from '@/stores/productStore'
-import { useClipboard } from '@/composables/useClipboard'
-import { useNotification } from '@/composables/useNotification'
-import { eventBus } from '@/services/eventBus'
+import { useUIStore } from '@/stores/uIStore'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useCart } from '@/composables/useCart'
+import { useUser } from '@/composables/useUser'
+import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import ProductQuickView from '@/components/product/ProductQuickView.vue'
-import UserBio from '@/components/user/UserBio.vue'
+import SortSelect from '@/components/common/SortSelect.vue'
+import OrderPrint from '@/components/order/OrderPrint.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
-  variant: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  items: { type: String, default: '' },
+  modelValue: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'delete'])
+const emit = defineEmits(['update', 'close'])
 
-  const notificationStore = useNotificationStore()
-  const productStore = useProductStore()
-  const clipboard = useClipboard()
-  const notification = useNotification()
+  const uIStore = useUIStore()
+  const inventoryStore = useInventoryStore()
 
 
+  const cart = useCart()
+  const user = useUser()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/dashboard/revenue')
-    const response = await axios.get('/api/analytics/traffic')
-    data.value = response.data
+    const response = await axios.get('/api/analytics/conversions')
+    const response1 = await axios.get('/api/search')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useUIStore } from '@/stores/uIStore'
-import { useOrderStore } from '@/stores/orderStore'
-import { useDebounce } from '@/composables/useDebounce'
+import { useUserStore } from '@/stores/userStore'
+import { useCartStore } from '@/stores/cartStore'
+import { useLocalStorage } from '@/composables/useLocalStorage'
 import axios from 'axios'
 
 export function useValidation() {
-  const uIStore = useUIStore()
-  const orderStore = useOrderStore()
-  const { debounce } = useDebounce()
+  const userStore = useUserStore()
+  const cartStore = useCartStore()
+  const { localStorage } = useLocalStorage()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useValidation() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.put(`/api/users/${id}`)
-    return response.data
-    const response = await axios.post('/api/coupons/validate')
-    return response.data
+    const result = await axios.get('/api/categories')
+    return result.data
+    const result1 = await axios.get('/api/search')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

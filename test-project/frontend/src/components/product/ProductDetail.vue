@@ -1,49 +1,60 @@
 <template>
   <div class="product-productDetail">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-preferences />
+    <product-form @submit="handleSubmit" @cancel="handleCancel" />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('delete')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useProductStore } from '@/stores/productStore'
-import { useGeolocation } from '@/composables/useGeolocation'
+import { useUIStore } from '@/stores/uIStore'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import axios from 'axios'
-import UserPreferences from '@/components/user/UserPreferences.vue'
+import ProductForm from '@/components/product/ProductForm.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  title: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
 const emit = defineEmits(['delete'])
 
-  const productStore = useProductStore()
-  const geolocation = useGeolocation()
+  const uIStore = useUIStore()
+
+
+  const mediaQuery = useMediaQuery()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/inventory/${id}`)
+    const response = await axios.post('/api/orders')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+  function handleSubmit() {
+    console.log('submit event received')
+  }
+
+  function handleCancel() {
+    console.log('cancel event received')
+  }
+
 
 onMounted(() => {
   fetchData()

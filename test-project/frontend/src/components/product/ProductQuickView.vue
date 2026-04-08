@@ -1,52 +1,57 @@
 <template>
   <div class="product-productQuickView">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-popover />
-    <user-list />
+    <base-alert />
+    <user-onboarding />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
-import { useUser } from '@/composables/useUser'
+import { useSettingsStore } from '@/stores/settingsStore'
+import { useFilter } from '@/composables/useFilter'
 import axios from 'axios'
-import UserPopover from '@/components/user/UserPopover.vue'
-import UserList from '@/components/user/UserList.vue'
+import BaseAlert from '@/components/common/BaseAlert.vue'
+import UserOnboarding from '@/components/user/UserOnboarding.vue'
 
 const props = defineProps({
-  disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
 const emit = defineEmits(['change'])
 
-  const orderStore = useOrderStore()
-  const user = useUser()
+  const settingsStore = useSettingsStore()
+
+
+  const filter = useFilter()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/settings')
+    const response = await axios.get(`/api/users/${props.id}`)
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

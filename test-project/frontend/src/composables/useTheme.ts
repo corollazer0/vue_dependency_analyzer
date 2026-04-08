@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useOrderStore } from '@/stores/orderStore'
+import { useProductStore } from '@/stores/productStore'
 import axios from 'axios'
 
 export function useTheme() {
-  const orderStore = useOrderStore()
+  const productStore = useProductStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function useTheme() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.post('/api/auth/login')
-    return response.data
+    const result = await axios.get('/api/dashboard/revenue')
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

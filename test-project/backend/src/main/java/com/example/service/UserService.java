@@ -2,20 +2,20 @@ package com.example.service;
 
 import com.example.model.User;
 import com.example.repository.UserRepository;
+import com.example.service.DashboardService;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
 
 @Service
+@RequiredArgsConstructor
 public class UserService {
 
     private final UserRepository userRepository;
+    private final DashboardService dashboardService;
 
-
-    public UserService(UserRepository userRepository) {
-        this.userRepository = userRepository;
-    }
 
     public List<User> findAll() {
         return userRepository.findAll();
@@ -32,4 +32,5 @@ public class UserService {
     public void deleteById(Long id) {
         userRepository.deleteById(id);
     }
+
 }

@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useTheme } from '@/composables/useTheme'
+import { useUIStore } from '@/stores/uIStore'
+import { useCartStore } from '@/stores/cartStore'
+import { useProduct } from '@/composables/useProduct'
 import axios from 'axios'
 
 export function useDragDrop() {
-  const userStore = useUserStore()
-  const inventoryStore = useInventoryStore()
-  const { theme } = useTheme()
+  const uIStore = useUIStore()
+  const cartStore = useCartStore()
+  const { product } = useProduct()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useDragDrop() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.delete(`/api/wishlist/${id}`)
-    return response.data
-    const response = await axios.delete(`/api/users/${id}`)
-    return response.data
+    const result = await axios.post('/api/orders')
+    return result.data
+    const result1 = await axios.get('/api/orders')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

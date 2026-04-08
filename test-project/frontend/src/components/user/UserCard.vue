@@ -1,55 +1,61 @@
 <template>
   <div class="user-userCard">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-tooltip />
+    <date-range-selector />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useSearchStore } from '@/stores/searchStore'
-import { useAnalyticsStore } from '@/stores/analyticsStore'
-import { useProduct } from '@/composables/useProduct'
-import { useToast } from '@/composables/useToast'
-import { storage } from '@/services/storage'
+import { useRouter } from 'vue-router'
+import { useUserStore } from '@/stores/userStore'
+import { useCouponStore } from '@/stores/couponStore'
+import { useCart } from '@/composables/useCart'
+import { useKeyboard } from '@/composables/useKeyboard'
+import { interceptors } from '@/api/interceptors'
 import axios from 'axios'
-import UserTooltip from '@/components/user/UserTooltip.vue'
+import DateRangeSelector from '@/components/dashboard/DateRangeSelector.vue'
 
 const props = defineProps({
-  items: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  title: { type: String, default: '' },
+  variant: { type: String, default: '' }
 })
 
 const emit = defineEmits(['select', 'delete'])
 
-  const searchStore = useSearchStore()
-  const analyticsStore = useAnalyticsStore()
-  const product = useProduct()
-  const toast = useToast()
+  const userStore = useUserStore()
+  const couponStore = useCouponStore()
+
+  const router = useRouter()
+  const cart = useCart()
+  const keyboard = useKeyboard()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/dashboard/stats')
-    const response = await axios.put(`/api/inventory/${id}`)
-    data.value = response.data
+    const response = await axios.get('/api/notifications')
+    const response1 = await axios.put('/api/settings')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+  function goToUser(userId: number) { router.push(`/users/${userId}`) }
 
 onMounted(() => {
   fetchData()

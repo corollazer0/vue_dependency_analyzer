@@ -1,55 +1,60 @@
 <template>
   <div class="auth-twoFactorVerify">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-cancel />
+    <auth-history />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useNotificationStore } from '@/stores/notificationStore'
-import { useUserStore } from '@/stores/userStore'
-import { useBreakpoint } from '@/composables/useBreakpoint'
-import { useClickOutside } from '@/composables/useClickOutside'
+import { useUIStore } from '@/stores/uIStore'
+import { useCategoryStore } from '@/stores/categoryStore'
+import { useForm } from '@/composables/useForm'
+import { useCart } from '@/composables/useCart'
 import { formatDate } from '@/utils/formatDate'
 import axios from 'axios'
-import OrderCancel from '@/components/order/OrderCancel.vue'
+import AuthHistory from '@/components/auth/AuthHistory.vue'
 
 const props = defineProps({
-  title: { type: String, default: '' },
-  modelValue: { type: String, default: '' }
+  modelValue: { type: String, default: '' },
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['delete', 'submit'])
+const emit = defineEmits(['update', 'close'])
 
-  const notificationStore = useNotificationStore()
-  const userStore = useUserStore()
-  const breakpoint = useBreakpoint()
-  const clickOutside = useClickOutside()
-  provide('locale', ref('value'))
+  const uIStore = useUIStore()
+  const categoryStore = useCategoryStore()
 
 
-const loading = ref(false)
+  const form = useForm()
+  const cart = useCart()
+  provide('permissions', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
-    const response = await axios.get(`/api/users/${id}`)
-    data.value = response.data
+    const response = await axios.post('/api/cart/items')
+    const response1 = await axios.get('/api/settings')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

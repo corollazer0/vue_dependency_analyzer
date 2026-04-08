@@ -1,55 +1,60 @@
 <template>
   <div class="common-baseDrawer">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <radar-chart />
-    <auth-guard />
-    <forgot-password />
+    <product-tag />
+    <product-grid />
+    <order-bulk-action />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useProductStore } from '@/stores/productStore'
-import { usePermission } from '@/composables/usePermission'
+import { useOrderStore } from '@/stores/orderStore'
+import { usePagination } from '@/composables/usePagination'
 import axios from 'axios'
-import RadarChart from '@/components/dashboard/RadarChart.vue'
-import AuthGuard from '@/components/auth/AuthGuard.vue'
-import ForgotPassword from '@/components/auth/ForgotPassword.vue'
+import ProductTag from '@/components/product/ProductTag.vue'
+import ProductGrid from '@/components/product/ProductGrid.vue'
+import OrderBulkAction from '@/components/order/OrderBulkAction.vue'
 
 const props = defineProps({
+  disabled: { type: String, default: '' },
   title: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  size: { type: String, default: '' },
-  disabled: { type: String, default: '' }
+  variant: { type: String, default: '' },
+  items: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['change'])
 
-  const productStore = useProductStore()
-  const permission = usePermission()
+  const orderStore = useOrderStore()
 
-  const loggerValue = inject('logger')
 
-const loading = ref(false)
+  const pagination = usePagination()
+
+  const permissionsValue = inject('permissions')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post('/api/cart/items')
+    const response = await axios.post('/api/orders')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

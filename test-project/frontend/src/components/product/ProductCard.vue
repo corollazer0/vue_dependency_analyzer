@@ -1,52 +1,61 @@
 <template>
   <div class="product-productCard">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <user-contacts />
-    <user-tooltip />
+    <o-auth-consent />
+    <order-tracking />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('update')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useCartStore } from '@/stores/cartStore'
-import { useUser } from '@/composables/useUser'
+import { storeToRefs } from 'pinia'
+import { useRouter } from 'vue-router'
+import { useUIStore } from '@/stores/uIStore'
+import { useProductStore } from '@/stores/productStore'
+import { useMediaQuery } from '@/composables/useMediaQuery'
 import axios from 'axios'
-import UserContacts from '@/components/user/UserContacts.vue'
-import UserTooltip from '@/components/user/UserTooltip.vue'
+import OAuthConsent from '@/components/auth/OAuthConsent.vue'
+import OrderTracking from '@/components/order/OrderTracking.vue'
 
 const props = defineProps({
   title: { type: String, default: '' },
   items: { type: String, default: '' },
-  size: { type: String, default: '' }
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select'])
+const emit = defineEmits(['update'])
 
-  const cartStore = useCartStore()
-  const user = useUser()
+  const uIStore = useUIStore()
+  const productStore = useProductStore()
+  const { items, loading } = storeToRefs(productStore)
+  const router = useRouter()
+  const mediaQuery = useMediaQuery()
 
 
 
-const loading = ref(false)
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get(`/api/orders/${id}`)
+    const response = await axios.get('/api/search')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+  function goToProduct(productId: number) { router.push(`/products/${productId}`) }
 
 onMounted(() => {
   fetchData()

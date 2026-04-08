@@ -1,52 +1,57 @@
 <template>
   <div class="dashboard-lineChart">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <base-badge />
-    <user-table />
+    <user-profile />
+    <auth-callback />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('close')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useUserStore } from '@/stores/userStore'
-import { useAuth } from '@/composables/useAuth'
+import { useAnalyticsStore } from '@/stores/analyticsStore'
+import { useDarkMode } from '@/composables/useDarkMode'
 import axios from 'axios'
-import BaseBadge from '@/components/common/BaseBadge.vue'
-import UserTable from '@/components/user/UserTable.vue'
+import UserProfile from '@/components/user/UserProfile.vue'
+import AuthCallback from '@/components/auth/AuthCallback.vue'
 
 const props = defineProps({
+  modelValue: { type: String, default: '' },
   items: { type: String, default: '' },
-  title: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  title: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['close'])
 
-  const userStore = useUserStore()
-  const auth = useAuth()
+  const analyticsStore = useAnalyticsStore()
 
-  const eventBusValue = inject('eventBus')
 
-const loading = ref(false)
+  const darkMode = useDarkMode()
+
+  const configValue = inject('config')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/users')
+    const response = await axios.get('/api/categories')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

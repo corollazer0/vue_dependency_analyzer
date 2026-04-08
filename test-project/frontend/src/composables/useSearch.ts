@@ -1,13 +1,13 @@
 import { ref, computed, watch } from 'vue'
-import { useReviewStore } from '@/stores/reviewStore'
-import { useProductStore } from '@/stores/productStore'
-import { useNotification } from '@/composables/useNotification'
+import { useUserStore } from '@/stores/userStore'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useThrottle } from '@/composables/useThrottle'
 import axios from 'axios'
 
 export function useSearch() {
-  const reviewStore = useReviewStore()
-  const productStore = useProductStore()
-  const { notification } = useNotification()
+  const userStore = useUserStore()
+  const inventoryStore = useInventoryStore()
+  const { throttle } = useThrottle()
 
   const data = ref(null)
   const loading = ref(false)
@@ -17,10 +17,10 @@ export function useSearch() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.get('/api/settings')
-    return response.data
-    const response = await axios.get('/api/analytics/traffic')
-    return response.data
+    const result = await axios.post('/api/coupons/validate')
+    return result.data
+    const result1 = await axios.post('/api/users')
+    return result1.data
     } catch (e) {
       error.value = e as Error
       return null

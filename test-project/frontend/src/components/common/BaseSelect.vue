@@ -1,49 +1,54 @@
 <template>
   <div class="common-baseSelect">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <api-key-manager />
+    <order-invoice />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
-import { useFilter } from '@/composables/useFilter'
+import { useCouponStore } from '@/stores/couponStore'
+import { useLocalStorage } from '@/composables/useLocalStorage'
 import axios from 'axios'
-import ApiKeyManager from '@/components/auth/ApiKeyManager.vue'
+import OrderInvoice from '@/components/order/OrderInvoice.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
-  size: { type: String, default: '' }
+  title: { type: String, default: '' },
+  disabled: { type: String, default: '' }
 })
 
-const emit = defineEmits(['update'])
+const emit = defineEmits(['change'])
 
-  const inventoryStore = useInventoryStore()
-  const filter = useFilter()
-
+  const couponStore = useCouponStore()
 
 
-const loading = ref(false)
+  const localStorage = useLocalStorage()
+
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.post(`/api/products/${id}/reviews`)
+    const response = await axios.get('/api/users')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

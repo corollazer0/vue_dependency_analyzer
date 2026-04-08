@@ -1,61 +1,66 @@
 <template>
   <div class="common-basePagination">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <session-timeout />
-    <traffic-chart />
-    <trend-indicator />
+    <radar-chart />
+    <order-payment />
+    <product-review />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useCartStore } from '@/stores/cartStore'
-import { usePermission } from '@/composables/usePermission'
-import { useGeolocation } from '@/composables/useGeolocation'
-import { endpoints } from '@/api/endpoints'
+import { useUserStore } from '@/stores/userStore'
+import { useWishlistStore } from '@/stores/wishlistStore'
+import { useDragDrop } from '@/composables/useDragDrop'
+import { useThrottle } from '@/composables/useThrottle'
+import { helpers } from '@/utils/helpers'
 import axios from 'axios'
-import SessionTimeout from '@/components/auth/SessionTimeout.vue'
-import TrafficChart from '@/components/dashboard/TrafficChart.vue'
-import TrendIndicator from '@/components/dashboard/TrendIndicator.vue'
+import RadarChart from '@/components/dashboard/RadarChart.vue'
+import OrderPayment from '@/components/order/OrderPayment.vue'
+import ProductReview from '@/components/product/ProductReview.vue'
 
 const props = defineProps({
-  variant: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
+  title: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  size: { type: String, default: '' },
-  loading: { type: String, default: '' }
+  variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['select', 'delete'])
+const emit = defineEmits(['select', 'update'])
 
-  const authStore = useAuthStore()
-  const cartStore = useCartStore()
-  const permission = usePermission()
-  const geolocation = useGeolocation()
+  const userStore = useUserStore()
+  const wishlistStore = useWishlistStore()
 
 
+  const dragDrop = useDragDrop()
+  const throttle = useThrottle()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/users/${id}`)
-    const response = await axios.post(`/api/orders/${id}/cancel`)
-    data.value = response.data
+    const response = await axios.post('/api/wishlist')
+    const response1 = await axios.post('/api/orders')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

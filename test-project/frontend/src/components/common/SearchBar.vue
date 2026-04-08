@@ -1,61 +1,66 @@
 <template>
   <div class="common-searchBar">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <order-notification />
-    <activity-feed />
-    <product-brand />
+    <auth-callback />
+    <user-badge />
+    <rate-limit-banner />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('search')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useAuthStore } from '@/stores/authStore'
-import { useCategoryStore } from '@/stores/categoryStore'
-import { useAuth } from '@/composables/useAuth'
-import { useUser } from '@/composables/useUser'
-import { formatDate } from '@/utils/formatDate'
+import { useInventoryStore } from '@/stores/inventoryStore'
+import { useNotificationStore } from '@/stores/notificationStore'
+import { useFilter } from '@/composables/useFilter'
+import { useAsync } from '@/composables/useAsync'
+import { interceptors } from '@/api/interceptors'
 import axios from 'axios'
-import OrderNotification from '@/components/order/OrderNotification.vue'
-import ActivityFeed from '@/components/dashboard/ActivityFeed.vue'
-import ProductBrand from '@/components/product/ProductBrand.vue'
+import AuthCallback from '@/components/auth/AuthCallback.vue'
+import UserBadge from '@/components/user/UserBadge.vue'
+import RateLimitBanner from '@/components/auth/RateLimitBanner.vue'
 
 const props = defineProps({
   items: { type: String, default: '' },
+  modelValue: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  size: { type: String, default: '' },
   variant: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'update'])
+const emit = defineEmits(['search', 'clear'])
 
-  const authStore = useAuthStore()
-  const categoryStore = useCategoryStore()
-  const auth = useAuth()
-  const user = useUser()
+  const inventoryStore = useInventoryStore()
+  const notificationStore = useNotificationStore()
 
 
+  const filter = useFilter()
+  const async = useAsync()
 
-const loading = ref(false)
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.put(`/api/notifications/${id}/read`)
-    const response = await axios.get('/api/notifications')
-    data.value = response.data
+    const response = await axios.get(`/api/products/${props.id}`)
+    const response1 = await axios.post('/api/auth/refresh')
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

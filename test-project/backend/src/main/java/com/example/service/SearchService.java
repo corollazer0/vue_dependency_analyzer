@@ -2,8 +2,10 @@ package com.example.service;
 
 import com.example.model.Search;
 import com.example.repository.SearchRepository;
-import com.example.service.ProductService;
-import com.example.service.OrderService;
+import com.example.service.UserService;
+import com.example.service.InventoryService;
+import com.example.service.NotificationService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -12,13 +14,16 @@ import java.util.Optional;
 public class SearchService {
 
     private final SearchRepository searchRepository;
-    private final ProductService productService;
-    private final OrderService orderService;
+    private final UserService userService;
+    private final InventoryService inventoryService;
+    private final NotificationService notificationService;
 
-    public SearchService(SearchRepository searchRepository, ProductService productService, OrderService orderService) {
+
+    public SearchService(SearchRepository searchRepository, UserService userService, InventoryService inventoryService, NotificationService notificationService) {
         this.searchRepository = searchRepository;
-        this.productService = productService;
-        this.orderService = orderService;
+        this.userService = userService;
+        this.inventoryService = inventoryService;
+        this.notificationService = notificationService;
     }
 
     public List<Search> findAll() {
@@ -36,4 +41,5 @@ public class SearchService {
     public void deleteById(Long id) {
         searchRepository.deleteById(id);
     }
+
 }

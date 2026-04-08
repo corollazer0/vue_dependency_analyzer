@@ -1,55 +1,60 @@
 <template>
   <div class="product-productBrand">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <top-products />
+    <user-onboarding />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('select')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, inject } from 'vue'
-import { useInventoryStore } from '@/stores/inventoryStore'
 import { useUIStore } from '@/stores/uIStore'
-import { useAuth } from '@/composables/useAuth'
-import { useSearch } from '@/composables/useSearch'
-import { endpoints } from '@/api/endpoints'
+import { useUserStore } from '@/stores/userStore'
+import { useDarkMode } from '@/composables/useDarkMode'
+import { usePermission } from '@/composables/usePermission'
+import { auth } from '@/api/auth'
 import axios from 'axios'
-import TopProducts from '@/components/dashboard/TopProducts.vue'
+import UserOnboarding from '@/components/user/UserOnboarding.vue'
 
 const props = defineProps({
-  loading: { type: String, default: '' },
+  title: { type: String, default: '' },
   size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['close', 'select'])
+const emit = defineEmits(['select', 'delete'])
 
-  const inventoryStore = useInventoryStore()
   const uIStore = useUIStore()
-  const auth = useAuth()
-  const search = useSearch()
+  const userStore = useUserStore()
 
-  const configValue = inject('config')
 
-const loading = ref(false)
+  const darkMode = useDarkMode()
+  const permission = usePermission()
+
+  const permissionsValue = inject('permissions')
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.delete(`/api/wishlist/${id}`)
-    const response = await axios.get('/api/reviews')
-    data.value = response.data
+    const response = await axios.post('/api/auth/login')
+    const response1 = await axios.get(`/api/products/${props.id}/reviews`)
+    data.value = response1.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

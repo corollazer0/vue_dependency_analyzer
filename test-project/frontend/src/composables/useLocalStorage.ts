@@ -1,9 +1,9 @@
 import { ref, computed, watch } from 'vue'
-import { useUserStore } from '@/stores/userStore'
+import { useAuthStore } from '@/stores/authStore'
 import axios from 'axios'
 
 export function useLocalStorage() {
-  const userStore = useUserStore()
+  const authStore = useAuthStore()
 
 
   const data = ref(null)
@@ -14,8 +14,8 @@ export function useLocalStorage() {
     loading.value = true
     error.value = null
     try {
-    const response = await axios.put(`/api/orders/${id}/status`)
-    return response.data
+    const result = await axios.get('/api/notifications')
+    return result.data
     } catch (e) {
       error.value = e as Error
       return null

@@ -1,55 +1,60 @@
 <template>
   <div class="dashboard-activityFeed">
     <h2>{{ title }}</h2>
-    <div v-if="loading" class="loading">
+    <div v-if="isLoading" class="loading">
       <span>Loading...</span>
     </div>
     <div v-else class="content">
-    <security-log />
-    <product-image />
-    <dashboard-table />
+    <metric-card />
+    <base-tabs />
+    <two-factor-verify />
     </div>
-    <button @click="$emit('submit')">Submit</button>
+    <button @click="emit('change')">Submit</button>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted, provide } from 'vue'
-import { useProductStore } from '@/stores/productStore'
-import { useLocalStorage } from '@/composables/useLocalStorage'
+import { useUserStore } from '@/stores/userStore'
+import { useSearch } from '@/composables/useSearch'
 import axios from 'axios'
-import SecurityLog from '@/components/auth/SecurityLog.vue'
-import ProductImage from '@/components/product/ProductImage.vue'
-import DashboardTable from '@/components/dashboard/DashboardTable.vue'
+import MetricCard from '@/components/dashboard/MetricCard.vue'
+import BaseTabs from '@/components/common/BaseTabs.vue'
+import TwoFactorVerify from '@/components/auth/TwoFactorVerify.vue'
 
 const props = defineProps({
   items: { type: String, default: '' },
+  title: { type: String, default: '' },
   disabled: { type: String, default: '' },
-  loading: { type: String, default: '' },
-  variant: { type: String, default: '' }
+  size: { type: String, default: '' }
 })
 
-const emit = defineEmits(['submit'])
+const emit = defineEmits(['change'])
 
-  const productStore = useProductStore()
-  const localStorage = useLocalStorage()
-  provide('eventBus', ref('value'))
+  const userStore = useUserStore()
 
 
-const loading = ref(false)
+  const search = useSearch()
+  provide('config', ref('value'))
+
+
+const isLoading = ref(false)
 const data = ref(null)
 
 async function fetchData() {
-  loading.value = true
+  isLoading.value = true
   try {
-    const response = await axios.get('/api/orders')
+    const response = await axios.get('/api/analytics/conversions')
     data.value = response.data
   } catch (error) {
     console.error('Failed to fetch data:', error)
   } finally {
-    loading.value = false
+    isLoading.value = false
   }
 }
+
+
+
 
 onMounted(() => {
   fetchData()

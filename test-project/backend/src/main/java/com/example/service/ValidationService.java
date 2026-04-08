@@ -2,7 +2,9 @@ package com.example.service;
 
 import com.example.model.Validation;
 import com.example.repository.ValidationRepository;
-import com.example.service.AuthService;
+import com.example.service.NotificationService;
+import com.example.service.WishlistService;
+
 import org.springframework.stereotype.Service;
 import java.util.List;
 import java.util.Optional;
@@ -11,11 +13,14 @@ import java.util.Optional;
 public class ValidationService {
 
     private final ValidationRepository validationRepository;
-    private final AuthService authService;
+    private final NotificationService notificationService;
+    private final WishlistService wishlistService;
 
-    public ValidationService(ValidationRepository validationRepository, AuthService authService) {
+
+    public ValidationService(ValidationRepository validationRepository, NotificationService notificationService, WishlistService wishlistService) {
         this.validationRepository = validationRepository;
-        this.authService = authService;
+        this.notificationService = notificationService;
+        this.wishlistService = wishlistService;
     }
 
     public List<Validation> findAll() {
@@ -33,4 +38,5 @@ public class ValidationService {
     public void deleteById(Long id) {
         validationRepository.deleteById(id);
     }
+
 }
