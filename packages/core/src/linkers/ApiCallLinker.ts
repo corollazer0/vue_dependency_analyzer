@@ -33,8 +33,9 @@ export class ApiCallLinker {
         // Match HTTP method
         if (callMethod.toUpperCase() !== endpointMethod.toUpperCase()) continue;
 
-        // Match URL path
-        if (this.pathsMatch(normalizedCallUrl, endpointPath)) {
+        // Match URL path — normalize both sides the same way
+        const normalizedEndpointPath = this.normalizeUrl(endpointPath);
+        if (this.pathsMatch(normalizedCallUrl, normalizedEndpointPath)) {
           const edge: GraphEdge = {
             id: `${callSite.id}:api-call:${endpoint.id}`,
             source: callSite.id,

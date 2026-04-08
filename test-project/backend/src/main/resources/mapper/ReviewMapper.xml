@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.ReviewMapper">
+    <select id="findAll" resultType="com.example.model.Review">
+        SELECT * FROM reviews
+    </select>
+    <select id="findById" resultType="com.example.model.Review">
+        SELECT * FROM reviews WHERE id = #{id}
+    </select>
+    <insert id="insert" parameterType="com.example.model.Review">
+        INSERT INTO reviews (name, created_at) VALUES (#{name}, NOW())
+    </insert>
+    <update id="update">
+        UPDATE reviews SET name = #{name} WHERE id = #{id}
+    </update>
+    <delete id="deleteById">
+        DELETE FROM reviews WHERE id = #{id}
+    </delete>
+</mapper>

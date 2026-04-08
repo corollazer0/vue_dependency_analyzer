@@ -153,6 +153,10 @@ export class AnalysisEngine {
     }
     if (this.config.springBootRoot) {
       patterns.push(join(this.config.springBootRoot, '**/*.{java,kt}'));
+      // Also scan for MyBatis XML — may be in resources/ sibling to java/
+      const springParent = resolve(this.config.springBootRoot, '..');
+      patterns.push(join(springParent, '**/*.xml'));
+      patterns.push(join(this.config.springBootRoot, '**/*.xml'));
     }
     if (patterns.length === 0) {
       patterns.push(join(this.config.projectRoot, '**/*.{vue,ts,js,java,kt}'));

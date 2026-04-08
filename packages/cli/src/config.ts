@@ -80,6 +80,10 @@ export async function runAnalysis(
   if (config.springBootRoot) {
     patterns.push(join(config.springBootRoot, '**/*.java'));
     patterns.push(join(config.springBootRoot, '**/*.kt'));
+    // MyBatis XML — may be in resources/ sibling to java/
+    const springParent = resolve(config.springBootRoot, '..');
+    patterns.push(join(springParent, '**/*.xml'));
+    patterns.push(join(config.springBootRoot, '**/*.xml'));
   }
 
   if (!config.vueRoot && !config.springBootRoot) {

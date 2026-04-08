@@ -260,9 +260,12 @@ function initCytoscape() {
   // Hover
   cy.on('mouseover', 'node', (evt) => {
     const node = evt.target;
+    if (node.data('isExpanded')) return; // Don't hover on compound parents
     node.addClass('hover');
     const neighborhood = node.closedNeighborhood();
-    cy!.elements().not(neighborhood).addClass('faded');
+    // Fade everything except: neighborhood + compound parent nodes (isExpanded)
+    const compoundParents = cy!.nodes('[?isExpanded]');
+    cy!.elements().not(neighborhood).not(compoundParents).addClass('faded');
     neighborhood.edges().addClass('neighbor-highlight');
     const pos = node.renderedPosition();
     tooltip.value = { show: true, x: pos.x, y: pos.y - 20, text: node.data('fullLabel') || node.data('label'), kind: node.data('kind'), degree: node.degree() };
@@ -288,18 +291,42 @@ function initCytoscape() {
       return;
     }
     graphStore.selectNode(data.id);
+    // Persistent highlight for selected node
+    highlightNode(data.id);
   });
 
   // Background click → deselect
   cy.on('tap', (evt) => {
     if (evt.target === cy) {
       graphStore.selectNode(null);
-      cy!.elements().removeClass('faded').removeClass('neighbor-highlight');
-      tooltip.value.show = false;
+      clearHighlights();
     }
   });
 
   cy.on('zoom', () => updateLOD());
+}
+
+function highlightNode(nodeId: string) {
+  if (!cy) return;
+  cy.batch(() => {
+    cy!.elements().removeClass('faded').removeClass('neighbor-highlight').removeClass('highlighted');
+    const node = cy!.$id(nodeId);
+    if (!node.length) return;
+    const neighborhood = node.closedNeighborhood();
+    const compoundParents = cy!.nodes('[?isExpanded]');
+    // Fade non-neighbors, but never compound parents
+    cy!.elements().not(neighborhood).not(compoundParents).addClass('faded');
+    neighborhood.edges().addClass('neighbor-highlight');
+    node.addClass('highlighted');
+  });
+}
+
+function clearHighlights() {
+  if (!cy) return;
+  cy.batch(() => {
+    cy!.elements().removeClass('faded').removeClass('neighbor-highlight').removeClass('highlighted');
+  });
+  tooltip.value.show = false;
 }
 
 function updateLOD() {
