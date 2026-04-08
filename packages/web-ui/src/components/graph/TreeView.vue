@@ -86,8 +86,10 @@ function renderTree() {
   const nodeGroups = g.selectAll('.node').data(root.descendants()).join('g')
     .attr('transform', (d: any) => `translate(${d.y},${d.x})`).style('cursor', 'pointer');
 
-  // Bug #2: single click = select (detail panel), double click = re-root tree
+  // Single click = select (detail panel) without re-rooting tree
+  // Double click = re-root tree on clicked node
   nodeGroups.on('click', (_e: any, d: any) => {
+    internalClick = true; // Prevent watcher from re-rooting
     graphStore.selectNode(d.data.id);
     // Visual highlight
     g.selectAll('circle').attr('stroke', (dd: any) => dd.depth === 0 ? '#fff' : 'none').attr('stroke-width', (dd: any) => dd.depth === 0 ? 2 : 0);
@@ -119,9 +121,12 @@ function renderTree() {
   }
 }
 
-// Set tree root from graph selection (only if no root yet)
+// When a node is selected externally (Search, Graph click), update tree root
+// Internal tree clicks set internalClick flag to prevent unwanted re-root
+let internalClick = false;
 watch(() => graphStore.selectedNodeId, (id) => {
-  if (id && !treeRootId.value) treeRootId.value = id;
+  if (id && !internalClick) treeRootId.value = id;
+  internalClick = false;
 });
 
 // Bug #1: re-render when filters change

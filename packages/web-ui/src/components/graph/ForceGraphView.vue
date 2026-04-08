@@ -268,7 +268,12 @@ function initCytoscape() {
     cy!.elements().not(neighborhood).not(compoundParents).addClass('faded');
     neighborhood.edges().addClass('neighbor-highlight');
     const pos = node.renderedPosition();
-    tooltip.value = { show: true, x: pos.x, y: pos.y - 20, text: node.data('fullLabel') || node.data('label'), kind: node.data('kind'), degree: node.degree() };
+    // Use original graph data for accurate connection count (Cytoscape degree is 0 in cluster mode)
+    const nodeId = node.id();
+    const realDegree = graphStore.graphData
+      ? graphStore.graphData.edges.filter(e => e.source === nodeId || e.target === nodeId).length
+      : node.degree();
+    tooltip.value = { show: true, x: pos.x, y: pos.y - 20, text: node.data('fullLabel') || node.data('label'), kind: node.data('kind'), degree: realDegree };
   });
 
   cy.on('mouseout', 'node', (evt) => {
