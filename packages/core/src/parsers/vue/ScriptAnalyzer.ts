@@ -9,6 +9,7 @@ interface ScriptAnalysisResult {
     props?: string[];
     emits?: string[];
     routerNavigations?: Array<{ method: string; path?: string; name?: string }>;
+    storeToRefsUsage?: Array<{ storeName: string; fields: string[] }>;
   };
 }
 
@@ -23,6 +24,10 @@ export function analyzeScript(
   const nodes: GraphNode[] = [];
   const errors: ParseError[] = [];
   const metadata: ScriptAnalysisResult['metadata'] = {};
+
+  // Track variable assignments: varName -> store composable name
+  // e.g. "userStore" -> "useUserStore"
+  const storeVarMap = new Map<string, string>();
 
   const scriptKind = lang === 'ts' || lang === 'tsx' ? ts.ScriptKind.TS : ts.ScriptKind.JS;
 
@@ -70,6 +75,12 @@ export function analyzeScript(
           metadata: { storeName: callText },
           loc: { filePath, line, column: 0 },
         });
+
+        // Track variable assignment: const userStore = useUserStore()
+        const parent = node.parent;
+        if (parent && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+          storeVarMap.set(parent.name.text, callText);
+        }
       }
       // Composable: useXxx() (but not useXxxStore)
       else if (/^use[A-Z]\w+$/.test(callText) && !/Store$/.test(callText)) {
@@ -147,6 +158,25 @@ export function analyzeScript(
             metadata: { injectionKey: key },
             loc: { filePath, line, column: 0 },
           });
+        }
+      }
+
+      // storeToRefs detection
+      if (callText === 'storeToRefs' && node.arguments.length > 0) {
+        const storeArg = node.arguments[0];
+        const storeVarName = storeArg.getText(sourceFile);
+
+        // Find the parent variable declaration to get destructured names
+        // const { a, b } = storeToRefs(store)
+        const parent = node.parent;
+        if (parent && ts.isVariableDeclaration(parent) && ts.isObjectBindingPattern(parent.name)) {
+          const fields = parent.name.elements.map(el => el.name.getText(sourceFile));
+          const storeName = storeVarMap.get(storeVarName) || storeVarName;
+
+          if (!metadata.storeToRefsUsage) {
+            metadata.storeToRefsUsage = [];
+          }
+          metadata.storeToRefsUsage.push({ storeName, fields });
         }
       }
 

@@ -108,19 +108,55 @@ describe('VueSfcParser', () => {
 
     it('should detect @event listeners on child components', () => {
       const listenEdges = result.edges.filter(e => e.kind === 'listens-event');
-      expect(listenEdges).toHaveLength(2);
+      // ChildComponent: @refresh, @item-selected; BaseButton: @click
+      expect(listenEdges).toHaveLength(3);
       const eventNames = listenEdges.map(e => (e.metadata as any).eventName);
       expect(eventNames).toContain('refresh');
       expect(eventNames).toContain('item-selected');
-      // All should target the unresolved child component
-      for (const edge of listenEdges) {
+      expect(eventNames).toContain('click');
+
+      const childEvents = listenEdges.filter(e => (e.metadata as any).componentName === 'ChildComponent');
+      expect(childEvents).toHaveLength(2);
+      for (const edge of childEvents) {
         expect(edge.target).toBe('component:ChildComponent');
-        expect((edge.metadata as any).componentName).toBe('ChildComponent');
       }
     });
 
     it('should not have parsing errors', () => {
       expect(result.errors).toHaveLength(0);
+    });
+  });
+
+  describe('StoreRefsComponent.vue', () => {
+    const content = readFileSync(resolve(fixturesDir, 'StoreRefsComponent.vue'), 'utf-8');
+    const result = parser.parse('/test/StoreRefsComponent.vue', content, {});
+
+    it('should detect storeToRefs subscribed fields', () => {
+      const componentNode = result.nodes.find(n => n.kind === 'vue-component');
+      expect(componentNode).toBeDefined();
+      const meta = componentNode!.metadata as any;
+      expect(meta.storeToRefsUsage).toBeDefined();
+      expect(meta.storeToRefsUsage).toHaveLength(2);
+
+      const userStoreUsage = meta.storeToRefsUsage.find(
+        (u: any) => u.storeName === 'useUserStore',
+      );
+      expect(userStoreUsage).toBeDefined();
+      expect(userStoreUsage.fields).toEqual(['userName', 'isLoggedIn', 'role']);
+
+      const cartStoreUsage = meta.storeToRefsUsage.find(
+        (u: any) => u.storeName === 'useCartStore',
+      );
+      expect(cartStoreUsage).toBeDefined();
+      expect(cartStoreUsage.fields).toEqual(['items', 'totalPrice']);
+    });
+
+    it('should still detect uses-store edges', () => {
+      const storeEdges = result.edges.filter(e => e.kind === 'uses-store');
+      expect(storeEdges).toHaveLength(2);
+      const storeNames = storeEdges.map(e => (e.metadata as any).storeName);
+      expect(storeNames).toContain('useUserStore');
+      expect(storeNames).toContain('useCartStore');
     });
   });
 });

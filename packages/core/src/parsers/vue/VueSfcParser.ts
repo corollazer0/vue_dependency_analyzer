@@ -59,6 +59,9 @@ export class VueSfcParser implements FileParser {
       if (scriptResult.metadata.emits) {
         (componentNode.metadata as Record<string, unknown>).emits = scriptResult.metadata.emits;
       }
+      if (scriptResult.metadata.storeToRefsUsage) {
+        (componentNode.metadata as Record<string, unknown>).storeToRefsUsage = scriptResult.metadata.storeToRefsUsage;
+      }
     }
 
     // Analyze template
