@@ -343,4 +343,497 @@ explicit alias config in `.vdarc.json`. Verify `@/components/Foo.vue` resolves c
 `vda analyze` → verify nodes from both services appear with correct `serviceId`.                                                               
 </ultraplan>                                                                                                                                   
                                                                                                                                                
+The user approved this plan in the remote session. Give them a brief summary, then start implementing. 
+
+
+<ultraplan>                                                                                                                                    
+# VDA Phase 2: Performance & UX Improvements                                                                                                   
+                                                                                                                                               
+## Context                                                                                                                                     
+                                                                                                                                               
+VDA(Vue Dependency Analyzer)는 현재 Phase 1 설계만 존재하고 코드는 없다 (`docs/first-plan.md` 참조). 이 Phase 2 계획은 Phase 1 구현 완료 후    
+적용할 성능/UX 개선 사항을 정의한다.                                                                                                           
+                                                                                                                                               
+Phase 1이 순차 파싱, 전체 그래프 일괄 전송, deep watcher 등 단순 구현으로 완성된다고 가정할 때, 실제 운영 환경(Vue 3000파일, MSA Spring Boot   
+300-500파일)에서 **분석 10-30분, UI 프리징, 피드백 없음** 등의 문제가 예상된다. 이 계획은 이를 해결한다.                                       
+                                                                                                                                               
+**전제 조건**: Phase 1의 다음 파일/모듈이 존재해야 함:                                                                                         
+- `packages/core/src/parsers/` — Vue, TypeScript, Java 파서                                                                                    
+- `packages/core/src/graph/` — DependencyGraph, types                                                                                          
+- `packages/cli/src/` — CLI 진입점, config                                                                                                     
+- `packages/server/src/` — Fastify API, WebSocket, engine                                                                                      
+- `packages/web-ui/src/` — Vue 3 앱, Cytoscape ForceGraphView, graphStore                                                                      
+                                                                                                                                               
+## Architecture: Before → After                                                                                                                
+                                                                                                                                               
+```                                                                                                                                            
+Phase 1 (현재 설계)                    Phase 2 (개선 후)                                                                                       
+─────────────────────                  ─────────────────────                                                                                   
+                                                                                                                                               
+CLI/Server                             CLI/Server                                                                                              
+    │                                      │                                                                                                   
+    ▼                                      ▼                                                                                                   
+┌──────────────┐                     ┌──────────────────┐                                                                                      
+│ Sequential   │                     │ ParallelParser   │                                                                                      
+│ file-by-file │ ──10-30분──►        │ (worker_threads) │ ──1-3분──►                                                                           
+│ parse loop   │                     │ + ParseCache     │                                                                                      
+└──────────────┘                     └────────┬─────────┘                                                                                      
+    │                                         │ onProgress                                                                                     
+    ▼                                         ▼                                                                                                
+┌──────────────┐                     ┌──────────────────┐                                                                                      
+│ Full graph   │                     │ WebSocket        │                                                                                      
+│ JSON dump    │ ──5-15MB──►         │ progress events  │                                                                                      
+│ (one shot)   │                     │ + clustered API  │ ──<500KB──►                                                                          
+└──────────────┘                     └────────┬─────────┘                                                                                      
+    │                                         │                                                                                                
+    ▼                                         ▼                                                                                                
+┌──────────────┐                     ┌──────────────────┐                                                                                      
+│ Cytoscape    │                     │ Cytoscape        │                                                                                      
+│ render all   │ ──30-60초 freeze──► │ + clustering     │ ──<3초──►                                                                            
+│ 3000 nodes   │                     │ + viewport cull  │                                                                                      
+│ deep watch   │                     │ + shallow refs   │                                                                                      
+└──────────────┘                     └──────────────────┘                                                                                      
+```                                                                                                                                            
+                                                                                                                                               
+## Dependency Graph Between Steps                                                                                                              
+                                                                                                                                               
+```mermaid                                                                                                                                     
+graph TD                                                                                                                                       
+    S1[Step 1: 병렬 파싱 + 캐싱] --> S2[Step 2: 진행률 피드백]                                                                                 
+    S1 --> S3[Step 3: 클러스터링 + 가상화]                                                                                                     
+    S2 --> S6[Step 6: 고급 UX]                                                                                                                 
+    S3 --> S4[Step 4: 반응성 최적화]                                                                                                           
+    S3 --> S6                                                                                                                                  
+    S5[Step 5: tsconfig + MSA + init] -.-> S1                                                                                                  
+                                                                                                                                               
+    style S1 fill:#f66,stroke:#333,color:#fff                                                                                                  
+    style S3 fill:#f66,stroke:#333,color:#fff                                                                                                  
+    style S2 fill:#fa0,stroke:#333,color:#fff                                                                                                  
+    style S5 fill:#69f,stroke:#333                                                                                                             
+```                                                                                                                                            
+                                                                                                                                               
+**빨강** = CRITICAL, **주황** = HIGH, **파랑** = 독립적 (어느 시점에든 가능)                                                                   
+                                                                                                                                               
+---                                                                                                                                            
+                                                                                                                                               
+## Step 1: 병렬 파싱 + 캐싱 엔진 (CRITICAL)                                                                                                    
+                                                                                                                                               
+**목표**: 3000파일 분석을 10-30분 → 1-3분으로 단축. 재분석 시 변경분만 처리.                                                                   
+                                                                                                                                               
+### 새 파일                                                                                                                                    
+                                                                                                                                               
+**`packages/core/src/engine/ParallelParser.ts`**                                                                                               
+```typescript                                                                                                                                  
+// 핵심 인터페이스                                                                                                                             
+interface ParallelParseOptions {                                                                                                               
+  files: string[];                                                                                                                             
+  workerCount?: number;  // default: os.cpus().length - 1, min 1                                                                               
+  cache?: ParseCache;                                                                                                                          
+  onProgress?: (event: ProgressEvent) => void;                                                                                                 
+}                                                                                                                                              
+                                                                                                                                               
+interface ProgressEvent {                                                                                                                      
+  processed: number;                                                                                                                           
+  total: number;                                                                                                                               
+  currentFile: string;                                                                                                                         
+  elapsedMs: number;                                                                                                                           
+  cacheHits: number;                                                                                                                           
+}                                                                                                                                              
+```                                                                                                                                            
+- `worker_threads`로 파일 목록을 청크로 분배                                                                                                   
+- 각 worker는 기존 파서(`VueSfcParser`, `TsFileParser`, `JavaFileParser`)를 import해서 실행                                                    
+- worker ↔ main은 `MessagePort`로 파싱 결과 전송 (구조화된 클론 가능한 plain object)                                                           
+- 진행률: worker가 파일 완료마다 main에 메시지 → main이 `onProgress` 호출                                                                      
+                                                                                                                                               
+**`packages/core/src/engine/ParseCache.ts`**                                                                                                   
+```typescript                                                                                                                                  
+interface CacheEntry {                                                                                                                         
+  contentHash: string;     // SHA-256 of file content                                                                                          
+  parseResult: ParsedFile; // 파서 출력 (nodes, edges, metadata)                                                                               
+  timestamp: number;                                                                                                                           
+}                                                                                                                                              
+```                                                                                                                                            
+- 메모리 Map + `.vda-cache/parse-cache.json`에 직렬화                                                                                          
+- `get(filePath, currentContentHash)` — 해시 일치 시 캐시 반환, 불일치 시 null                                                                 
+- `set(filePath, contentHash, result)` — 캐시 저장                                                                                             
+- `invalidate(filePath)` / `clear()`                                                                                                           
+- 캐시 파일은 `.gitignore`에 추가                                                                                                              
+                                                                                                                                               
+### 변경 파일                                                                                                                                  
+                                                                                                                                               
+**`packages/cli/src/config.ts`** — `runAnalysis()` 함수:                                                                                       
+- 기존 순차 루프를 `ParallelParser.parse(files, { cache, onProgress })` 호출로 교체                                                            
+- CLI에서는 `onProgress`로 터미널 프로그레스 바 출력 (`cli-progress` 또는 간단한 `\r` 업데이트)                                                
+                                                                                                                                               
+**`packages/server/src/engine.ts`** — 서버 측 분석:                                                                                            
+- 동일하게 `ParallelParser` 사용                                                                                                               
+- `onProgress`를 WebSocket 브로드캐스트에 연결 (Step 2에서 구현)                                                                               
+- chokidar watch에서 변경 파일만 `cache.invalidate()` 후 해당 파일만 재파싱                                                                    
+                                                                                                                                               
+### 검증                                                                                                                                       
+- 3000개 더미 `.vue` 파일 생성 스크립트 작성 → 분석 시간 측정                                                                                  
+- 캐시 유무에 따른 분석 시간 비교 (목표: 캐시 히트 시 10x+ 빠름)                                                                               
+- `workerCount=1` vs `os.cpus().length` 비교                                                                                                   
+                                                                                                                                               
+---                                                                                                                                            
+                                                                                                                                               
+## Step 2: 분석 진행률 피드백 (HIGH)                                                                                                           
+                                                                                                                                               
+**목표**: 무한 로딩 제거. 실시간 진행률 + 예상 시간 + 취소 기능.                                                                               
+                                                                                                                                               
+### 변경 파일                                                                                                                                  
+                                                                                                                                               
+**`packages/server/src/engine.ts`**:                                                                                                           
+- `runAnalysis()`의 `onProgress` 콜백에서 WebSocket 브로드캐스트:                                                                              
+  ```json                                                                                                                                      
+  { "type": "analysis:progress", "payload": { "processed": 150, "total": 3000, "currentFile": "src/views/Home.vue", "elapsedMs": 12000,        
+"estimatedRemainingMs": 228000 } }                                                                                                             
+  ```                                                                                                                                          
+- `analysis:start`, `analysis:complete`, `analysis:error` 이벤트 추가                                                                          
+- 취소 메커니즘: `POST /api/analyze/cancel` → AbortController로 worker 종료                                                                    
+                                                                                                                                               
+### 새 파일                                                                                                                                    
+                                                                                                                                               
+**`packages/web-ui/src/components/AnalysisProgress.vue`**:                                                                                     
+- 프로그레스 바 (processed/total 기반 퍼센트)                                                                                                  
+- 현재 파싱 중인 파일명                                                                                                                        
+- 경과 시간 + 예상 남은 시간 (linear extrapolation)                                                                                            
+- 취소 버튼 (→ `POST /api/analyze/cancel`)                                                                                                     
+- 완료 시 자동 dismiss + 그래프 로딩                                                                                                           
+                                                                                                                                               
+### 변경 파일                                                                                                                                  
+                                                                                                                                               
+**`packages/web-ui/src/App.vue`**:                                                                                                             
+- WebSocket `analysis:progress` 리스너 추가                                                                                                    
+- 분석 진행 중이면 `<AnalysisProgress>` 오버레이 표시                                                                                          
+- 첫 연결 시 서버에 분석 상태 조회 (`GET /api/status`)                                                                                         
+                                                                                                                                               
+---                                                                                                                                            
+                                                                                                                                               
+## Step 3: 그래프 클러스터링 + 뷰포트 최적화 (CRITICAL)                                                                                        
+                                                                                                                                               
+**목표**: 3000노드 동시 렌더링 프리징 제거. 초기 로딩 <3초.                                                                                    
+                                                                                                                                               
+### 서버 측                                                                                                                                    
+                                                                                                                                               
+**`packages/server/src/routes/graphRoutes.ts`** 변경:                                                                                          
+- `GET /api/graph` 에 쿼리 파라미터 추가:                                                                                                      
+  - `cluster=true` — 디렉토리 기반 클러스터링 적용                                                                                             
+  - `depth=N` — 클러스터 펼침 깊이 (기본 1)                                                                                                    
+  - `threshold=N` — N개 이상 노드가 있는 디렉토리만 클러스터링 (기본 200)                                                                      
+- `GET /api/graph/cluster/:path/expand` — 특정 디렉토리 클러스터 펼치기                                                                        
+- 클러스터 모드 응답: 집계 노드(디렉토리 → count 포함) + 인터클러스터 엣지만 전송                                                              
+                                                                                                                                               
+**클러스터링 로직** (`packages/core/src/graph/`에 추가):                                                                                       
+- `ClusterBuilder.ts`: 파일 경로의 디렉토리 구조를 이용해 compound node 트리 생성                                                              
+- 임계값 이하의 디렉토리는 클러스터링하지 않고 개별 노드 유지                                                                                  
+                                                                                                                                               
+### 클라이언트 측                                                                                                                              
+                                                                                                                                               
+**`packages/web-ui/src/composables/useGraphClustering.ts`** (새 파일):                                                                         
+- 서버에서 받은 클러스터 데이터 → Cytoscape compound node 구조로 변환                                                                          
+- 클러스터 더블클릭 → 서버에 expand 요청 → 자식 노드 추가                                                                                      
+- 접기: 자식 노드 제거 → 클러스터 노드로 복원                                                                                                  
+                                                                                                                                               
+**`packages/web-ui/src/components/graph/ForceGraphView.vue`** 변경:                                                                            
+- 초기 로딩: `cluster=true&depth=1`로 요청 (300-500개 노드)                                                                                    
+- Cytoscape compound nodes로 클러스터 렌더링                                                                                                   
+- 뷰포트 컬링: `cy.on('viewport')` 이벤트에서 화면 밖 노드 `display: none`                                                                     
+- 줌 레벨 LOD: 줌아웃 시 라벨 숨김, 엣지 단순화                                                                                                
+                                                                                                                                               
+---                                                                                                                                            
+                                                                                                                                               
+## Step 4: 반응성 최적화 (HIGH)                                                                                                                
+                                                                                                                                               
+**목표**: 필터 토글 5-10초 → <200ms                                                                                                            
+                                                                                                                                               
+### 변경 파일                                                                                                                                  
+                                                                                                                                               
+**`packages/web-ui/src/stores/graphStore.ts`**:                                                                                                
+- `ref()` → `shallowRef()`로 그래프 데이터 변경 (deep reactivity 제거)                                                                         
+- 필터 변경 시 전체 배열 교체 대신 diff 계산:                                                                                                  
+  ```typescript                                                                                                                                
+  const added = newNodes.filter(n => !currentSet.has(n.id));                                                                                   
+  const removed = currentNodes.filter(n => !newSet.has(n.id));                                                                                 
+  ```                                                                                                                                          
+- 빠른 연속 필터 토글 시 `debounce(applyFilter, 150)` 적용                                                                                     
+- `triggerRef()` 로 명시적 업데이트 트리거                                                                                                     
+                                                                                                                                               
+**`packages/web-ui/src/components/graph/ForceGraphView.vue`**:                                                                                 
+- `watch(data, { deep: true })` → `watch(data)`로 변경 (shallow)                                                                               
+- diff 기반 Cytoscape 업데이트: `cy.add(added)`, `cy.remove(removed)`                                                                          
+- 레이아웃: 전체 relayout 대신 새 노드만 위치 계산 (`layout.run()` 대신 incremental positioning)                                               
+                                                                                                                                               
+---                                                                                                                                            
+                                                                                                                                               
+## Step 5: tsconfig 자동 감지 + MSA 지원 + `vda init` (독립)                                                                                   
+                                                                                                                                               
+**이 Step은 다른 Step과 독립적이므로 아무 시점에나 구현 가능.**                                                                                
+                                                                                                                                               
+### tsconfig 지원                                                                                                                              
+                                                                                                                                               
+**`packages/core/src/parsers/typescript/ImportResolver.ts`** 변경:                                                                             
+- 프로젝트 루트에서 `tsconfig.json` 탐색 → `compilerOptions.paths` 읽기                                                                        
+- `baseUrl` + `paths` 조합으로 alias 자동 해석 (예: `@/*` → `src/*`)                                                                           
+- `extends` 체이닝 지원 (재귀 읽기)                                                                                                            
+- 기존 수동 alias 설정과 병합 (수동 설정이 우선)                                                                                               
+                                                                                                                                               
+### MSA 다중 서비스                                                                                                                            
+                                                                                                                                               
+**`packages/core/src/graph/types.ts`** 변경:                                                                                                   
+- `AnalysisConfig`에 `springBootRoots: string[]` 추가 (기존 단일 `springBootRoot` 대체)                                                        
+- `GraphNode`에 `serviceId?: string` 메타데이터 추가                                                                                           
+- 각 Spring Boot 서비스를 `serviceId`로 구분 → UI에서 서비스별 필터링 가능                                                                     
+                                                                                                                                               
+**`packages/core/src/parsers/java/` 관련 파서**:                                                                                               
+- 루트별로 순회하면서 `serviceId` 라벨 부착                                                                                                    
+                                                                                                                                               
+### `vda init` 명령어                                                                                                                          
+                                                                                                                                               
+**`packages/cli/src/commands/init.ts`** (새 파일):                                                                                             
+- 대화형 초기 설정 명령어                                                                                                                      
+- 자동 감지:                                                                                                                                   
+  - `package.json`에서 `vue` 의존성 → Vue 루트 감지                                                                                            
+  - `build.gradle` / `pom.xml` → Spring Boot 루트 감지 (복수 가능)                                                                             
+  - `tsconfig.json` → alias 자동 추출                                                                                                          
+- `.vdarc.json` 자동 생성 (사용자 확인 후)                                                                                                     
+                                                                                                                                               
+---                                                                                                                                            
+                                                                                                                                               
+## Step 6: 고급 UX (LOW priority)                                                                                                              
+                                                                                                                                               
+**Step 2, 3 완료 후 구현. 비핵심이므로 시간이 허락하면.**                                                                                      
+                                                                                                                                               
+### 새 파일                                                                                                                                    
+                                                                                                                                               
+**`packages/web-ui/src/components/graph/MiniMap.vue`**:                                                                                        
+- 우하단 미니맵 (Cytoscape `cy.png()` 기반 썸네일)                                                                                             
+- 현재 뷰포트 사각형 표시 + 드래그로 이동                                                                                                      
+                                                                                                                                               
+**`packages/web-ui/src/components/StatusBar.vue`**:                                                                                            
+- 하단 상태바: 노드수, 엣지수, 마지막 분석 시각, 감시 상태 (watching/stopped)                                                                  
+                                                                                                                                               
+### 변경 파일                                                                                                                                  
+                                                                                                                                               
+**`packages/web-ui/src/components/graph/ForceGraphView.vue`**:                                                                                 
+- 키보드 단축키: `/` 검색 포커스, `Esc` 선택 해제, `F` 전체 보기 (fit)                                                                         
+- 우클릭 컨텍스트 메뉴 (`cytoscape-cxtmenu`): "중심으로 보기", "의존성 트리", "영향 분석"                                                      
+- 선택 노드의 2차 이웃 하이라이트 토글                                                                                                         
+                                                                                                                                               
+**`packages/web-ui/src/App.vue`**:                                                                                                             
+- 빈 상태: 서버 미연결 시 연결 상태 + 재시도 UI                                                                                                
+- URL 해시 기반 상태 유지: `#node=vue:/src/App.vue&view=graph` → 공유 가능 링크                                                                
+                                                                                                                                               
+---                                                                                                                                            
+                                                                                                                                               
+## 성능 목표                                                                                                                                   
+                                                                                                                                               
+| 측정 항목 | Phase 1 예상 | Phase 2 목표 | 관련 Step |                                                                                        
+|-----------|-------------|-------------|-----------|                                                                                          
+| 3000파일 초기 분석 | 10-30분 | 1-3분 | Step 1 |                                                                                              
+| 캐시 히트 재분석 | 10-30분 | 5-10초 | Step 1 |                                                                                               
+| 단일 파일 변경 (watch) | 2-5초 | <500ms | Step 1 |                                                                                           
+| 초기 그래프 렌더링 | 30-60초 | <3초 | Step 3 |                                                                                               
+| 필터 토글 응답 | 5-10초 | <200ms | Step 4 |                                                                                                  
+| API 그래프 응답 크기 | 5-15MB | <500KB | Step 3 |                                                                                            
+                                                                                                                                               
+## 구현 순서                                                                                                                                   
+                                                                                                                                               
+1. **Step 1** (병렬 파싱 + 캐싱) — 성능의 핵심, 다른 모든 것의 기반                                                                            
+2. **Step 2** (진행률 피드백) — Step 1의 onProgress 인프라 위에 구축                                                                           
+3. **Step 3** (클러스터링 + 가상화) — UI 성능의 핵심                                                                                           
+4. **Step 4** (반응성 최적화) — Step 3의 변경된 그래프 구조 위에 구축                                                                          
+5. **Step 5** (tsconfig + MSA + init) — 독립적, 아무 때나 가능                                                                                 
+6. **Step 6** (고급 UX) — 낮은 우선순위, 시간 허용 시                                                                                          
+                                                                                                                                               
+## Verification                                                                                                                                
+                                                                                                                                               
+1. **벤치마크 스크립트**: `scripts/generate-fixtures.ts` — 3000개 더미 `.vue`/`.ts`/`.java` 파일 생성                                          
+2. **분석 성능**: fixture에 대해 분석 시간 측정 (순차 vs 병렬, 캐시 유무)                                                                      
+3. **UI 프로파일링**: Chrome DevTools Performance — 3000노드 렌더링 시간 <3초 확인                                                             
+4. **메모리**: 3000노드 그래프에서 힙 사용량 <500MB                                                                                            
+5. **WebSocket**: 진행률 메시지가 UI에 100ms 이내 도달 확인                                                                                    
+6. **클러스터**: depth=1 요청 시 응답 크기 <500KB, 노드 수 <500 확인                                                                           
+7. **필터**: 노드 종류 필터 토글 시 UI 응답 <200ms (Performance API 측정)                                                                      
+8. **캐시**: 두 번째 분석 실행이 첫 번째 대비 10x+ 빠른지 확인                                                                                 
+</ultraplan>                                                                                                                                   
+                                                                                                                                               
+The user approved this plan in the remote session. Give them a brief summary, then start implementing.                                         
+
+● Ultraplan 승인되었지만, Phase 2는 이미 구현 완료된 상태입니다. 현재 해결해야 할 것은 사용자가 발견한 클러스터링 버그입니다.
+
+  버그: 필터에서 하나를 체크 해제하면 그래프가 backend/frontend 2개 클러스터로 묶이고 다시 펼쳐지지 않음.                                      
+   
+  원인 3가지:                                                                                                                                  
+  1. auto-clustering이 graphData.nodes.length(전체 830)로 판단 → 필터된 수가 아닌 전체 수 기준이라 항상 클러스터 모드 진입                   
+  2. cluster depth=1이 너무 얕아서 backend/frontend 2개만 표시                                                                                 
+  3. 필터 변경 시 클러스터 데이터가 서버 측 전체 기준이라 프론트 필터를 반영하지 않음
+                                                                                                                                               
+  바로 수정하겠습니다.                                                                                                                         
+                                                                                                                                               
+  Read 1 file (ctrl+o to expand)                                                                                                               
+                                                                                                                                               
+● 이제 3가지 버그를 한번에 수정합니다:                                                                                                         
+                                                                                                                                             
+  Fix 1: 클러스터링 기준을 filteredNodes.length로 변경                                                                                         
+  Fix 2: 기본 depth를 3으로 올려서 의미 있는 클러스터 생성                                                                                     
+  Fix 3: 필터 변경 시 클러스터 모드를 자동 해제하고 직접 렌더링                                        
+
+
+
+
+
+
+
+
+  ----
+
+  <ultraplan>                                                                                                 
+# Phase 3: UX/Design Excellence — Apple+Google Grade Polish                                                 
+                                                                                                            
+## Context                                                                                                  
+                                                                                                            
+Phase 1 (Core + CLI)과 Phase 2 (Server + Web UI)가 완료된 후 적용할 UX 폴리시 계획이다.                     
+현재 아키텍처: Vue 3 + Vite + Pinia + TailwindCSS, Cytoscape.js (그래프), d3-hierarchy (트리).              
+기능은 충분하나 **디자인 토큰 부재, 마이크로 인터랙션 결여, 접근성 미흡, 정보 계층 혼란**이 핵심 문제.      
+이 계획은 "도구"를 "제품"으로 전환하는 작업이다.                                                            
+                                                                                                            
+## 핵심 문제 8가지                                                                                          
+                                                                                                            
+| # | 문제 | 심각도 | 현재 상태 |                                                                           
+|---|------|--------|-----------|                                                                           
+| 1 | 디자인 토큰 부재 | HIGH | 하드코딩 색상/크기 산재 |                                                   
+| 2 | 노드 호버/선택 피드백 없음 | CRITICAL | 클릭해야만 반응 |                                             
+| 3 | 그래프 범례(Legend) 없음 | HIGH | 색상/선종류 의미를 모름 |                                           
+| 4 | 빈 상태/온보딩 없음 | HIGH | 빈 화면, 안내 없음 |                                                     
+| 5 | 트랜지션/애니메이션 없음 | MEDIUM | 노드 등장/퇴장이 즉시 |                                           
+| 6 | 노드 크기가 모두 동일 | MEDIUM | 중요도 구분 불가 |                                                   
+| 7 | 사이드바 리사이즈 불가 | MEDIUM | 고정 w-72, 작은 화면 문제 |                                         
+| 8 | Command Palette 없음 | HIGH | 파워유저 탐색 경로 없음 |                                               
+                                                                                                            
+## Dependency Flow                                                                                          
+                                                                                                            
+```mermaid                                                                                                  
+graph TD                                                                                                    
+    S1[Step 1: Design Tokens + Tailwind Theme]                                                              
+    S2[Step 2: Node Hover/Size — Cytoscape Stylesheet]                                                      
+    S3[Step 3: Graph Legend Component]                                                                      
+    S4[Step 4: Empty States + Onboarding]                                                                   
+    S5[Step 5: Transitions + Micro-interactions]                                                            
+    S6[Step 6: Command Palette — Cmd+K]                                                                     
+    S7[Step 7: Sidebar Resize + Responsive]                                                                 
+    S8[Step 8: Accessibility — A11y]                                                                        
+                                                                                                            
+    S1 --> S2                                                                                               
+    S1 --> S3                                                                                               
+    S1 --> S4                                                                                               
+    S1 --> S7                                                                                               
+    S2 --> S5                                                                                               
+    S3 --> S5                                                                                               
+    S2 --> S6                                                                                               
+    S5 --> S8                                                                                               
+    S7 --> S8                                                                                               
+```                                                                                                         
+                                                                                                            
+## File Map (All paths relative to `packages/web-ui/`)                                                      
+                                                                                                            
+```                                                                                                         
+packages/web-ui/                                                                                            
+├── tailwind.config.ts          ← Step 1: extend theme with design tokens                                   
+├── src/                                                                                                    
+│   ├── assets/main.css         ← Step 1: CSS custom properties layer                                       
+│   ├── App.vue                 ← Steps 1,4,5,7: token migration, empty states, transitions, resize         
+│   ├── components/                                                                                         
+│   │   ├── graph/                                                                                          
+│   │   │   ├── ForceGraphView.vue  ← Steps 2,5: hover/size/animations                                      
+│   │   │   ├── GraphLegend.vue     ← Step 3: NEW — legend panel                                            
+│   │   │   └── TreeView.vue        ← Step 5: D3 transitions                                                
+│   │   ├── CommandPalette.vue      ← Step 6: NEW — Cmd+K modal                                             
+│   │   ├── OnboardingGuide.vue     ← Step 4: NEW — first-run guide                                         
+│   │   └── ui/                                                                                             
+│   │       └── ResizeHandle.vue    ← Step 7: NEW — reusable drag handle                                    
+│   ├── composables/                                                                                        
+│   │   └── useKeyboard.ts          ← Step 6: NEW — global keyboard shortcuts                               
+│   └── stores/                                                                                             
+│       └── ui.ts                   ← Steps 4,6,7: UI state (onboarding, palette, panel widths)             
+```                                                                                                         
+                                                                                                            
+---                                                                                                         
+                                                                                                            
+## Step 1: Design Token System + Tailwind Theme Integration                                                 
+                                                                                                            
+TailwindCSS가 이미 프로젝트 스타일링 도구이므로, CSS custom properties를 정의하고 Tailwind `extend`로 연결  
+… +316 lines …                                                                                              
+px | 오버레이 (햄버거 토글) | 하단 시트 (drag-up) |                                                         
+| 768–1024px | 축소 (아이콘 + 라벨), 리사이즈 가능 | 축소 너비 |                                            
+| > 1024px | 전체 (리사이즈 가능) | 전체 (리사이즈 가능) |                                                  
+                                                                                                            
+`uiStore`에 패널 너비를 `localStorage`로 persist하여 새로고침 후에도 유지.                                  
+                                                                                                            
+---                                                                                                         
+                                                                                                            
+## Step 8: 접근성 (A11y)                                                                                    
+                                                                                                            
+**전체 파일 수정 — ARIA + 키보드 + 색맹 대응:**                                                             
+                                                                                                            
+- **ARIA 랜드마크:**                                                                                        
+  - `<aside role="complementary" aria-label="파일 탐색기">`                                                 
+  - `<main role="main" aria-label="의존성 그래프">`                                                         
+  - `<nav role="navigation" aria-label="뷰 전환 탭">`                                                       
+                                                                                                            
+- **포커스 관리:**                                                                                          
+  - 모든 인터랙티브 요소: `focus-visible:ring-2 focus-visible:ring-accent-primary/50                        
+focus-visible:ring-offset-2 focus-visible:ring-offset-surface-primary`                                      
+  - Tab 순서: 사이드바 → 뷰 전환 탭 → 그래프 영역 → 디테일 패널                                             
+  - Command Palette 열릴 때: focus trap (Tab이 모달 내에서만 순환)                                          
+                                                                                                            
+- **Cytoscape 키보드 탐색:**                                                                                
+  - 그래프에 포커스 시 화살표 키로 이웃 노드 이동                                                           
+  - Enter → 노드 선택 (상세 패널 열기)                                                                      
+  - `cy.on('select')` 이벤트에서 `aria-live="polite"` 영역에 선택 노드 정보 알림                            
+                                                                                                            
+- **색맹 대응 — 노드 모양 차별화:**                                                                         
+                                                                                                            
+| NodeKind | 색상 | Cytoscape shape |                                                                       
+|----------|------|-----------------|                                                                       
+| vue-component | accent-primary (green) | `ellipse` |                                                      
+| pinia-store | accent-blue | `diamond` |                                                                   
+| spring-endpoint | accent-warning | `rectangle` |                                                          
+| composable | #a78bfa (purple) | `triangle` |                                                              
+| api-call-site | accent-danger (red) | `pentagon` |                                                        
+| 기타 | text-tertiary | `hexagon` |                                                                        
+                                                                                                            
+`types/graph.ts`의 NODE_STYLES 맵에 shape 필드 추가 → Cytoscape stylesheet의 `'shape'` 속성으로 적용.       
+                                                                                                            
+---                                                                                                         
+                                                                                                            
+## Implementation Order                                                                                     
+                                                                                                            
+```                                                                                                         
+Step 1 (Tokens)     ████████░░  — 모든 후속 작업의 기반                                                     
+  ├─→ Step 2 (Hover/Size)  ████████████░░  — 가장 큰 인터랙션 개선                                          
+  ├─→ Step 3 (Legend)       ██████░░  — 즉각적 이해도 향상                                                  
+  └─→ Step 4 (Onboarding)  ██████░░  — 첫 사용자 경험                                                       
+Step 5 (Transitions) ██████████░░  — Step 2,3 완료 후 전체 품질감                                           
+Step 6 (Cmd+K)       ████████░░  — 파워유저 생산성                                                          
+Step 7 (Resize)      ████████░░  — 다양한 화면 지원                                                         
+Step 8 (A11y)        ██████████░░  — 최종 품질 마무리                                                       
+```                                                                                                         
+                                                                                                            
+Steps 2, 3, 4는 Step 1 완료 후 **병렬 진행 가능**.                                                          
+                                                                                                            
+## Verification                                                                                             
+                                                                                                            
+1. `npm run dev` 로 web-ui 개발 서버 실행, test-project 서버와 연결                                         
+2. **인터랙션 테스트:** 노드 hover → 1.3x 확대 + 이웃 하이라이트 확인, mouseout → 복귀 확인                 
+3. **범례 테스트:** 범례 항목 클릭 → 해당 종류 필터 토글, 카운트 갱신 확인                                  
+4. **빈 상태:** 서버 끄고 접속 → ConnectionError 표시, 서버 켜고 빈 그래프 → EmptyState 표시                
+5. **Cmd+K:** `Cmd+K` 입력 → 팔레트 열림, 노드 검색 → 결과 클릭 → 해당 노드 포커스                          
+6. **리사이즈:** 사이드바 핸들 드래그 → 너비 변경, 새로고침 후 유지 확인                                    
+7. **반응형:** Chrome DevTools에서 768px, 1024px 뷰포트 전환 → 레이아웃 적응 확인                           
+8. **접근성:** Tab 키로 전체 앱 탐색 가능, 스크린 리더에서 노드 선택 알림 확인                              
+9. **성능:** Chrome DevTools Performance 탭에서 hover/click 시 16ms 프레임 이내                             
+10. **Lighthouse:** Accessibility 점수 90+ 목표                                                             
+</ultraplan>                                                                                                
+                                                                                                            
 The user approved this plan in the remote session. Give them a brief summary, then start implementing.  

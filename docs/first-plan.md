@@ -334,3 +334,174 @@ Vue Dependency Analyzer (VDA) - Implementation Plan
  3. 메모리: 3000 노드 그래프에서 메모리 사용량 < 500MB
  4. WebSocket: 진행률 메시지가 100ms 간격으로 UI에 도달하는지 확인
  5. 캐시: 두 번째 분석 실행 시 10배 이상 빠른지 확인
+
+
+ ────────────────────────────────────────────────────────────────────────────────────────────────────────────
+ Ready to code?
+
+ Here is Claude's plan:
+╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌╌
+ Phase 3: UX/Design Excellence — Apple+Google Grade Polish
+
+ Context
+
+ 20년차 Apple/Google 시니어 프론트엔드 리드 + UX Researcher 그룹 관점에서 전체 Web UI를 감사했다. 기능은
+ 충분하나 디자인 시스템 부재, 마이크로 인터랙션 결여, 접근성 미흡, 정보 계층 혼란이 핵심 문제. 이 계획은
+ "도구"를 "제품"으로 전환하는 작업이다.
+
+ 핵심 문제 8가지
+
+ ┌─────┬────────────────────────────┬──────────┬───────────────────────────┐
+ │  #  │            문제            │  심각도  │         현재 상태         │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 1   │ 디자인 토큰 부재           │ HIGH     │ 하드코딩 색상/크기 산재   │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 2   │ 노드 호버/선택 피드백 없음 │ CRITICAL │ 클릭해야만 반응           │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 3   │ 그래프 범례(Legend) 없음   │ HIGH     │ 색상/선종류 의미를 모름   │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 4   │ 빈 상태/온보딩 없음        │ HIGH     │ 빈 화면, 안내 없음        │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 5   │ 트랜지션/애니메이션 없음   │ MEDIUM   │ 노드 등장/퇴장이 즉시     │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 6   │ 노드 크기가 모두 동일      │ MEDIUM   │ 중요도 구분 불가          │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 7   │ 사이드바 리사이즈 불가     │ MEDIUM   │ 고정 w-72, 작은 화면 문제 │
+ ├─────┼────────────────────────────┼──────────┼───────────────────────────┤
+ │ 8   │ Command Palette 없음       │ HIGH     │ 파워유저 탐색 경로 없음   │
+ └─────┴────────────────────────────┴──────────┴───────────────────────────┘
+
+ Implementation Steps
+
+ Step 1: Design Token System + Theme
+
+ 새 파일: src/styles/tokens.css
+ :root {
+   --surface-primary: #0f1219;
+   --surface-secondary: #1a1f2e;
+   --surface-elevated: #242938;
+   --border-subtle: #2a3040;
+   --border-default: #3a4050;
+   --text-primary: #f0f0f0;
+   --text-secondary: #a0a8b8;
+   --text-tertiary: #6b7280;
+   --accent-primary: #42b883;    /* Vue green */
+   --accent-blue: #3b82f6;
+   --accent-warning: #f59e0b;
+   --accent-danger: #ef4444;
+   --radius-sm: 4px;
+   --radius-md: 8px;
+   --radius-lg: 12px;
+   --transition-fast: 150ms ease;
+   --transition-default: 250ms ease;
+ }
+
+ 변경:
+ - App.vue — 모든 하드코딩 색상을 CSS 변수로 교체
+ - types/graph.ts — NODE_COLORS/EDGE_STYLES를 CSS 변수 기반으로 변환
+ - .bg-gray-850 제거 → var(--surface-secondary) 사용
+
+ Step 2: 노드 호버 피드백 + 크기 차별화
+
+ ForceGraphView.vue 변경:
+ - 노드 호버 시: 1.3x 확대 + 밝기 120% + 연결 엣지 하이라이트 (200ms ease)
+ - 노드 크기를 degree(연결 수) 기반으로 차별화:
+ 'width': (ele) => Math.max(20, 16 + Math.sqrt(ele.degree()) * 4),
+ - 선택 노드: 글로우 효과 (box-shadow 대신 Cytoscape overlay-opacity)
+ - 호버 시 툴팁: 노드명 + 종류 + 연결 수
+
+ Step 3: 그래프 범례 (Legend) + 엣지 설명
+
+ 새 파일: src/components/graph/GraphLegend.vue
+ - 접기/펼치기 가능한 좌상단 범례 패널
+ - 노드 종류별: 색상 원 + 라벨 + 현재 개수
+ - 엣지 종류별: 선 스타일 샘플 (실선/점선) + 색상 + 라벨
+ - 클릭 시 해당 종류만 필터링 (FilterPanel과 연동)
+ - 기본 접힌 상태, 마우스 호버로 펼침
+
+ Step 4: 빈 상태 + 온보딩 가이드
+
+ 새 파일: src/components/OnboardingGuide.vue
+ - 첫 로딩 완료 후 3초간 표시되는 가이드 오버레이:
+   - "그래프 위에서 노드를 클릭하면 상세 정보를 봅니다"
+   - "더블클릭으로 클러스터를 펼칩니다"
+   - "/ 키로 검색합니다"
+   - "필터 패널에서 보고 싶은 종류만 선택합니다"
+ - localStorage에 "dismissed" 저장 → 한 번만 표시
+ - "다시 보지 않기" 체크박스
+
+ App.vue 변경:
+ - 서버 미연결 시: 연결 실패 화면 + 자동 재시도 카운트다운
+ - 그래프 없을 때: "아직 분석 결과가 없습니다. 터미널에서 vda analyze를 실행하세요"
+
+ Step 5: 트랜지션 + 마이크로 인터랙션
+
+ ForceGraphView.vue 변경:
+ - 노드 등장: opacity 0→1 (200ms ease-out) + scale 0.8→1.0
+ - 노드 퇴장(필터): opacity 1→0 (150ms) 후 remove
+ - 필터 토글 시: cy.batch() 내에서 fade-in/out 적용
+ - 줌 임계값(LOD) 전환: linear interpolation으로 부드럽게
+
+ TreeView.vue 변경:
+ - D3 enter/exit 트랜지션 적용 (현재 전체 re-render → incremental update)
+ - 노드 클릭 시 brief 0.7 opacity flash → 1.0 복귀
+
+ App.vue / 전체:
+ - 사이드바 탭 전환: slide-fade transition
+ - 상세 패널 열기/닫기: slide-in-right animation (300ms)
+ - 분석 완료 시: success toast notification (3초 자동 소멸)
+
+ Step 6: Command Palette (Cmd+K)
+
+ 새 파일: src/components/CommandPalette.vue
+ - Ctrl/Cmd + K 로 열리는 모달 검색
+ - 검색 범위:
+   - 노드 이름 검색 (기존 /api/search 활용)
+   - 명령어: "Re-analyze", "Fit to view", "Toggle clustering", "Export as JSON"
+   - 필터 프리셋: "Show only Vue components", "Show API connections only"
+ - 퍼지 매칭 (입력 오타 허용)
+ - 상하 화살표 키보드 네비게이션
+ - Enter 키로 실행
+ - 최근 사용 항목 상단 표시 (localStorage)
+
+ Step 7: 사이드바 리사이즈 + 반응형
+
+ App.vue 변경:
+ - 좌측 사이드바: 드래그 가능한 리사이저 핸들 추가 (min: 200px, max: 400px)
+ - 우측 디테일 패널: 동일한 리사이저
+ - 브레이크포인트:
+   - < 768px: 사이드바 오버레이 (햄버거 토글), 디테일 패널 하단 시트
+   - 768-1024px: 좁은 사이드바 (아이콘만), 디테일 패널 축소
+   ▎ 1024px: 전체 레이아웃
+
+ Step 8: 접근성 (A11y)
+
+ 전체 파일 변경:
+ - ARIA 랜드마크: role="main", role="complementary", role="navigation"
+ - 포커스 링: 모든 인터랙티브 요소에 focus-visible:ring-2 focus-visible:ring-blue-400
+ - 키보드 탐색: Tab으로 사이드바→툴바→그래프→디테일 순서
+ - 색맹 대응: 노드에 색상 외에 아이콘/모양 차별화 추가
+   - vue-component: 원
+   - pinia-store: 다이아몬드
+   - spring-endpoint: 사각형
+   - composable: 삼각형
+ - 스크린 리더: aria-label로 그래프 상태 설명
+
+ Implementation Order
+
+ 1. Step 1 (Design Tokens) — 모든 후속 작업의 기반
+ 2. Step 2 (노드 호버/크기) — 가장 큰 인터랙션 개선
+ 3. Step 3 (범례) — 즉각적 이해도 향상
+ 4. Step 5 (트랜지션) — 전체적 품질감 상승
+ 5. Step 4 (온보딩) — 첫 사용자 경험
+ 6. Step 6 (Command Palette) — 파워유저 생산성
+ 7. Step 7 (리사이즈/반응형) — 다양한 화면 지원
+ 8. Step 8 (접근성) — 품질 마무리
+
+ Verification
+
+ 1. 브라우저에서 test-project 서버 실행 → 모든 인터랙션 직접 테스트
+ 2. Lighthouse Accessibility 점수 90+ 목표
+ 3. Chrome DevTools Performance: 호버/클릭 시 16ms 프레임 이내
+ 4. 768px 뷰포트에서 레이아웃 깨지지 않는지 확인
+ 5. 키보드만으로 전체 앱 탐색 가능한지 확인

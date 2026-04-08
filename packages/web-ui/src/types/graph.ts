@@ -61,20 +61,32 @@ export interface SearchResult {
   filePath: string;
 }
 
-export const NODE_COLORS: Record<NodeKind, string> = {
-  'vue-component': '#42b883',
-  'vue-composable': '#35495e',
-  'pinia-store': '#ffd859',
-  'vue-directive': '#8e44ad',
-  'vue-router-route': '#3498db',
-  'ts-module': '#3178c6',
-  'api-call-site': '#e74c3c',
-  'spring-controller': '#6db33f',
-  'spring-endpoint': '#8bc34a',
-  'spring-service': '#4caf50',
-  'native-bridge': '#ff7043',
-  'native-method': '#ff9800',
+export type CytoscapeShape = 'ellipse' | 'diamond' | 'rectangle' | 'triangle' | 'pentagon' | 'hexagon' | 'round-rectangle' | 'star';
+
+export interface NodeStyle {
+  color: string;
+  shape: CytoscapeShape;
+}
+
+export const NODE_STYLES: Record<NodeKind, NodeStyle> = {
+  'vue-component':     { color: '#42b883', shape: 'ellipse' },
+  'vue-composable':    { color: '#a78bfa', shape: 'triangle' },
+  'pinia-store':       { color: '#ffd859', shape: 'diamond' },
+  'vue-directive':     { color: '#8e44ad', shape: 'hexagon' },
+  'vue-router-route':  { color: '#3498db', shape: 'round-rectangle' },
+  'ts-module':         { color: '#3178c6', shape: 'rectangle' },
+  'api-call-site':     { color: '#ef4444', shape: 'pentagon' },
+  'spring-controller': { color: '#6db33f', shape: 'round-rectangle' },
+  'spring-endpoint':   { color: '#8bc34a', shape: 'rectangle' },
+  'spring-service':    { color: '#4caf50', shape: 'hexagon' },
+  'native-bridge':     { color: '#ff7043', shape: 'star' },
+  'native-method':     { color: '#ff9800', shape: 'star' },
 };
+
+// Backward compat
+export const NODE_COLORS: Record<NodeKind, string> = Object.fromEntries(
+  Object.entries(NODE_STYLES).map(([k, v]) => [k, v.color])
+) as Record<NodeKind, string>;
 
 export const NODE_LABELS: Record<NodeKind, string> = {
   'vue-component': 'Vue Component',

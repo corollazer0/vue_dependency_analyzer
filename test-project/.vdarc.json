@@ -1,0 +1,18 @@
+{
+  "vueRoot": "./frontend/src",
+  "springBootRoot": "./backend/src/main/java",
+  "aliases": {
+    "@": "./frontend/src"
+  },
+  "apiBaseUrl": "/api",
+  "include": [
+    "**/*.vue",
+    "**/*.ts",
+    "**/*.java"
+  ],
+  "exclude": [
+    "node_modules/**",
+    "dist/**",
+    "build/**"
+  ]
+}

@@ -4,13 +4,16 @@ import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import { useGraphStore } from '@/stores/graphStore';
 import { useGraphClustering } from '@/composables/useGraphClustering';
-import { NODE_COLORS, EDGE_STYLES } from '@/types/graph';
+import { NODE_STYLES, EDGE_STYLES } from '@/types/graph';
 
 cytoscape.use(fcose);
 
 const graphStore = useGraphStore();
 const clustering = useGraphClustering();
 const container = ref<HTMLElement>();
+const tooltip = ref<{ show: boolean; x: number; y: number; text: string; kind: string; degree: number }>({
+  show: false, x: 0, y: 0, text: '', kind: '', degree: 0,
+});
 let cy: cytoscape.Core | null = null;
 const useClusters = ref(false);
 
@@ -46,38 +49,20 @@ function buildClusterElements() {
 
   for (const cluster of clustering.clusterData.value.clusters) {
     if (clustering.isExpanded(cluster.id)) {
-      // Show expanded children
       const cached = clustering.expandedNodeCache.value.get(cluster.id);
       if (cached) {
-        // Compound parent
         elements.push({
-          data: {
-            id: cluster.id,
-            label: `${cluster.label} (${cluster.childCount})`,
-            kind: 'cluster',
-            isCluster: true,
-          },
+          data: { id: cluster.id, label: `${cluster.label} (${cluster.childCount})`, kind: 'cluster', isCluster: true },
         });
         for (const node of cached.nodes) {
-          elements.push({
-            data: {
-              id: node.id,
-              label: node.label,
-              kind: node.kind,
-              parent: cluster.id,
-            },
-          });
+          elements.push({ data: { id: node.id, label: node.label, kind: node.kind, parent: cluster.id } });
         }
         for (const edge of cached.edges) {
-          elements.push({
-            data: { id: edge.id, source: edge.source, target: edge.target, kind: edge.kind },
-          });
+          elements.push({ data: { id: edge.id, source: edge.source, target: edge.target, kind: edge.kind } });
         }
       }
     } else {
-      // Collapsed cluster
-      const dominantKind = Object.entries(cluster.childKinds)
-        .sort((a, b) => b[1] - a[1])[0]?.[0] || 'ts-module';
+      const dominantKind = Object.entries(cluster.childKinds).sort((a, b) => b[1] - a[1])[0]?.[0] || 'ts-module';
       elements.push({
         data: {
           id: cluster.id,
@@ -90,19 +75,12 @@ function buildClusterElements() {
     }
   }
 
-  // Inter-cluster edges
   for (const edge of clustering.clusterData.value.edges) {
     const sourceExists = elements.some(e => e.data.id === edge.source);
     const targetExists = elements.some(e => e.data.id === edge.target);
     if (sourceExists && targetExists) {
       elements.push({
-        data: {
-          id: edge.id,
-          source: edge.source,
-          target: edge.target,
-          kind: 'imports',
-          weight: edge.weight,
-        },
+        data: { id: edge.id, source: edge.source, target: edge.target, kind: 'imports', weight: edge.weight },
       });
     }
   }
@@ -113,23 +91,16 @@ function buildClusterElements() {
 // ─── Stylesheet ───
 
 function buildStylesheet(): any[] {
-  const nodeStyles = Object.entries(NODE_COLORS).map(([kind, color]) => ({
+  // Node styles by kind — with shapes for colorblind support
+  const nodeKindStyles = Object.entries(NODE_STYLES).map(([kind, style]) => ({
     selector: `node[kind = "${kind}"]`,
     style: {
-      'background-color': color,
-      'label': 'data(label)',
-      'color': '#fff',
-      'text-outline-color': '#1a1a2e',
-      'text-outline-width': 2,
-      'font-size': '10px',
-      'width': 24,
-      'height': 24,
-      'text-valign': 'bottom',
-      'text-margin-y': 4,
+      'background-color': style.color,
+      'shape': style.shape,
     },
   }));
 
-  const edgeStyles = Object.entries(EDGE_STYLES).map(([kind, style]) => ({
+  const edgeKindStyles = Object.entries(EDGE_STYLES).map(([kind, style]) => ({
     selector: `edge[kind = "${kind}"]`,
     style: {
       'line-color': style.color,
@@ -143,39 +114,78 @@ function buildStylesheet(): any[] {
   }));
 
   return [
-    // Base node
+    // Base node — degree-based sizing
     {
       selector: 'node',
       style: {
         'background-color': '#666',
         'label': 'data(label)',
-        'color': '#ccc',
-        'text-outline-color': '#1a1a2e',
+        'color': 'var(--text-secondary, #a0a8b8)',
+        'text-outline-color': 'var(--surface-primary, #0f1219)',
         'text-outline-width': 2,
-        'font-size': '10px',
-        'width': 24,
-        'height': 24,
+        'font-size': '11px',
+        'width': (ele: any) => Math.max(22, 16 + Math.sqrt(ele.degree() + 1) * 5),
+        'height': (ele: any) => Math.max(22, 16 + Math.sqrt(ele.degree() + 1) * 5),
         'text-valign': 'bottom',
-        'text-margin-y': 4,
+        'text-margin-y': 5,
         'min-zoomed-font-size': 8,
+        'transition-property': 'width, height, opacity, overlay-opacity, border-width',
+        'transition-duration': '200ms',
       },
     },
-    // Cluster (compound) node
+    // Hover state
+    {
+      selector: 'node.hover',
+      style: {
+        'width': (ele: any) => Math.max(22, 16 + Math.sqrt(ele.degree() + 1) * 5) * 1.35,
+        'height': (ele: any) => Math.max(22, 16 + Math.sqrt(ele.degree() + 1) * 5) * 1.35,
+        'overlay-opacity': 0.1,
+        'overlay-color': '#42b883',
+        'z-index': 20,
+        'font-size': '12px',
+        'font-weight': 'bold',
+        'color': '#fff',
+      },
+    },
+    // Selected
+    {
+      selector: 'node:selected',
+      style: {
+        'border-width': 3,
+        'border-color': '#42b883',
+        'overlay-opacity': 0.12,
+        'overlay-color': '#42b883',
+        'z-index': 30,
+      },
+    },
+    // Neighbor highlight
+    {
+      selector: 'node.highlighted',
+      style: {
+        'border-width': 2,
+        'border-color': '#f1c40f',
+        'opacity': 1,
+      },
+    },
+    {
+      selector: 'node.faded',
+      style: { 'opacity': 0.12 },
+    },
+    // Cluster node
     {
       selector: 'node[?isCluster]',
       style: {
         'shape': 'round-rectangle',
-        'background-opacity': 0.15,
+        'background-opacity': 0.2,
         'border-width': 2,
-        'border-color': '#555',
+        'border-color': 'var(--border-default, #3a4050)',
         'padding': '20px',
         'font-size': '13px',
         'text-valign': 'top',
         'text-halign': 'center',
-        'color': '#aaa',
+        'color': 'var(--text-secondary, #a0a8b8)',
       },
     },
-    // Collapsed cluster with size indicator
     {
       selector: 'node[childCount]',
       style: {
@@ -188,26 +198,6 @@ function buildStylesheet(): any[] {
         'background-opacity': 0.7,
       },
     },
-    // Selected
-    {
-      selector: 'node:selected',
-      style: {
-        'border-width': 3,
-        'border-color': '#fff',
-      },
-    },
-    // Highlighted neighbors
-    {
-      selector: 'node.highlighted',
-      style: {
-        'border-width': 2,
-        'border-color': '#f1c40f',
-      },
-    },
-    {
-      selector: 'node.faded',
-      style: { 'opacity': 0.12 },
-    },
     // Base edge
     {
       selector: 'edge',
@@ -218,25 +208,35 @@ function buildStylesheet(): any[] {
         'curve-style': 'bezier',
         'width': 1,
         'arrow-scale': 0.6,
+        'opacity': 0.6,
+        'transition-property': 'opacity, width, line-color',
+        'transition-duration': '200ms',
+      },
+    },
+    {
+      selector: 'edge.neighbor-highlight',
+      style: {
+        'opacity': 1,
+        'width': 2.5,
+        'z-index': 10,
       },
     },
     {
       selector: 'edge.highlighted',
-      style: { 'width': 3, 'z-index': 10 },
+      style: { 'width': 3, 'opacity': 1, 'z-index': 10 },
     },
     {
       selector: 'edge.faded',
-      style: { 'opacity': 0.08 },
+      style: { 'opacity': 0.05 },
     },
-    // Weighted cluster edges
     {
       selector: 'edge[weight]',
       style: {
         'width': (ele: any) => Math.min(6, 1 + Math.log2(ele.data('weight') || 1)),
       },
     },
-    ...nodeStyles,
-    ...edgeStyles,
+    ...nodeKindStyles,
+    ...edgeKindStyles,
   ];
 }
 
@@ -264,18 +264,44 @@ function initCytoscape() {
     wheelSensitivity: 0.3,
   });
 
-  // Node click
-  cy.on('tap', 'node', (evt) => {
-    const data = evt.target.data();
-    if (data.isCluster && !clustering.isExpanded(data.id)) {
-      // Double-click to expand
-      return;
+  // ─── Hover interaction ───
+  cy.on('mouseover', 'node', (evt) => {
+    const node = evt.target;
+    if (node.data('isCluster') && !clustering.isExpanded(node.id())) {
+      // Just show tooltip for clusters
     }
-    graphStore.selectNode(data.id);
-    highlightConnected(data.id);
+    node.addClass('hover');
+
+    // Highlight neighborhood
+    const neighborhood = node.closedNeighborhood();
+    cy!.elements().not(neighborhood).addClass('faded');
+    neighborhood.edges().addClass('neighbor-highlight');
+
+    // Show tooltip
+    const pos = node.renderedPosition();
+    tooltip.value = {
+      show: true,
+      x: pos.x,
+      y: pos.y - 20,
+      text: node.data('fullLabel') || node.data('label'),
+      kind: node.data('kind'),
+      degree: node.degree(),
+    };
   });
 
-  // Double-click cluster to expand
+  cy.on('mouseout', 'node', (evt) => {
+    evt.target.removeClass('hover');
+    cy!.elements().removeClass('faded').removeClass('neighbor-highlight');
+    tooltip.value.show = false;
+  });
+
+  // ─── Click interaction ───
+  cy.on('tap', 'node', (evt) => {
+    const data = evt.target.data();
+    if (data.isCluster && !clustering.isExpanded(data.id)) return;
+    graphStore.selectNode(data.id);
+  });
+
   cy.on('dbltap', 'node[?isCluster]', async (evt) => {
     const clusterId = evt.target.id();
     if (clustering.isExpanded(clusterId)) {
@@ -286,61 +312,39 @@ function initCytoscape() {
     refreshGraph();
   });
 
-  // Background click
   cy.on('tap', (evt) => {
     if (evt.target === cy) {
       graphStore.selectNode(null);
-      clearHighlights();
+      tooltip.value.show = false;
     }
   });
 
-  // LOD based on zoom
-  cy.on('zoom', () => {
-    updateLOD();
-  });
+  // ─── LOD ───
+  cy.on('zoom', () => updateLOD());
 }
 
 function updateLOD() {
   if (!cy) return;
   const zoom = cy.zoom();
+  const labelOpacity = Math.min(1, Math.max(0, (zoom - 0.2) / 0.5));
 
   cy.batch(() => {
-    if (zoom < 0.3) {
-      // Far zoom: hide labels on non-cluster nodes
-      cy!.nodes('[!isCluster]').style('label', '');
-      cy!.edges().style('opacity', 0.3);
-    } else if (zoom < 0.7) {
-      // Medium zoom: short labels
-      cy!.nodes('[!isCluster]').style('label', (ele: any) => {
-        const label = ele.data('label') || '';
-        return label.length > 15 ? label.slice(0, 12) + '...' : label;
+    if (zoom < 0.25) {
+      cy!.nodes('[!isCluster]').style({ 'label': '', 'text-opacity': 0 });
+      cy!.edges().style('opacity', 0.15);
+    } else if (zoom < 0.6) {
+      cy!.nodes('[!isCluster]').style({
+        'label': (ele: any) => {
+          const l = ele.data('label') || '';
+          return l.length > 12 ? l.slice(0, 10) + '..' : l;
+        },
+        'text-opacity': labelOpacity,
       });
-      cy!.edges().style('opacity', 0.6);
+      cy!.edges().style('opacity', 0.4);
     } else {
-      // Close zoom: full labels
-      cy!.nodes('[!isCluster]').style('label', 'data(label)');
-      cy!.edges().style('opacity', 1);
+      cy!.nodes('[!isCluster]').style({ 'label': 'data(label)', 'text-opacity': 1 });
+      cy!.edges().style('opacity', 0.7);
     }
-  });
-}
-
-function highlightConnected(nodeId: string) {
-  if (!cy) return;
-  cy.batch(() => {
-    cy!.elements().addClass('faded');
-    const node = cy!.$id(nodeId);
-    const neighborhood = node.neighborhood().add(node);
-    // 2nd degree neighbors
-    const secondDegree = neighborhood.neighborhood().add(neighborhood);
-    secondDegree.removeClass('faded');
-    neighborhood.addClass('highlighted');
-  });
-}
-
-function clearHighlights() {
-  if (!cy) return;
-  cy.batch(() => {
-    cy!.elements().removeClass('faded').removeClass('highlighted');
   });
 }
 
@@ -356,7 +360,8 @@ function refreshGraph() {
   cy.layout({
     name: 'fcose',
     animate: true,
-    animationDuration: 300,
+    animationDuration: 400,
+    animationEasing: 'ease-out',
     quality: 'default',
     nodeSeparation: 80,
     idealEdgeLength: 120,
@@ -364,15 +369,14 @@ function refreshGraph() {
 }
 
 function fitToView() {
-  cy?.fit(undefined, 50);
+  cy?.animate({ fit: { eles: cy.elements(), padding: 50 } } as any, { duration: 400, easing: 'ease-out-cubic' as any });
 }
 
 function focusNode(nodeId: string) {
   if (!cy) return;
   const node = cy.$id(nodeId);
   if (node.length) {
-    cy.animate({ center: { eles: node }, zoom: 2 });
-    highlightConnected(nodeId);
+    cy.animate({ center: { eles: node }, zoom: 2 }, { duration: 400, easing: 'ease-out-cubic' as any });
   }
 }
 
@@ -380,16 +384,12 @@ function focusNode(nodeId: string) {
 
 watch(() => graphStore.filteredNodes.length + graphStore.filteredEdges.length, () => {
   if (!cy) return;
-
-  // Use FILTERED count for clustering decision, not total
   const filteredCount = graphStore.filteredNodes.length;
 
   if (clustering.needsClustering(filteredCount) && !useClusters.value) {
-    // Too many filtered nodes — enable clustering
     useClusters.value = true;
     clustering.fetchClustered(3).then(() => refreshGraph());
   } else if (useClusters.value && !clustering.needsClustering(filteredCount)) {
-    // Filtered count dropped below threshold — disable clustering
     useClusters.value = false;
     refreshGraph();
   } else {
@@ -399,18 +399,14 @@ watch(() => graphStore.filteredNodes.length + graphStore.filteredEdges.length, (
 
 watch(() => graphStore.selectedNodeId, (nodeId) => {
   if (nodeId) focusNode(nodeId);
-  else clearHighlights();
 });
 
 onMounted(async () => {
-  // Use FILTERED count for clustering decision
   const filteredCount = graphStore.filteredNodes.length;
-
   if (clustering.needsClustering(filteredCount)) {
     useClusters.value = true;
-    await clustering.fetchClustered(3); // depth=3 for meaningful clusters
+    await clustering.fetchClustered(3);
   }
-
   await nextTick();
   if (graphStore.filteredNodes.length > 0 || clustering.clusterData.value) {
     initCytoscape();
@@ -418,35 +414,57 @@ onMounted(async () => {
 });
 
 watch(() => graphStore.filteredNodes.length, (count) => {
-  if (count > 0 && !cy) {
-    nextTick(initCytoscape);
-  }
+  if (count > 0 && !cy) nextTick(initCytoscape);
 });
 
-onUnmounted(() => {
-  cy?.destroy();
-});
+onUnmounted(() => { cy?.destroy(); });
 
 defineExpose({ fitToView, focusNode });
 </script>
 
 <template>
   <div class="relative w-full h-full">
-    <div ref="container" class="w-full h-full bg-gray-900"></div>
+    <div ref="container" class="w-full h-full" style="background: var(--surface-primary)"></div>
 
-    <!-- Cluster mode indicator -->
-    <div v-if="useClusters" class="absolute top-3 left-3 bg-gray-800/90 rounded px-3 py-1.5 text-xs text-gray-400 border border-gray-700">
+    <!-- Tooltip -->
+    <Transition name="fade">
+      <div
+        v-if="tooltip.show"
+        class="absolute pointer-events-none z-50 px-3 py-2 rounded-lg text-xs shadow-xl border"
+        style="background: var(--surface-elevated); border-color: var(--border-subtle)"
+        :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px', transform: 'translate(-50%, -100%)' }"
+      >
+        <div class="font-semibold" style="color: var(--text-primary)">{{ tooltip.text }}</div>
+        <div class="flex items-center gap-2 mt-0.5" style="color: var(--text-tertiary)">
+          <span>{{ tooltip.kind }}</span>
+          <span>&middot;</span>
+          <span>{{ tooltip.degree }} connections</span>
+        </div>
+      </div>
+    </Transition>
+
+    <!-- Cluster indicator -->
+    <div
+      v-if="useClusters"
+      class="absolute top-3 left-3 rounded-lg px-3 py-2 text-xs border backdrop-blur-sm"
+      style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)"
+    >
       Clustered view ({{ clustering.clusterData.value?.clusters.length || 0 }} groups) · Double-click to expand
     </div>
 
     <!-- Controls -->
-    <div class="absolute bottom-3 right-3 flex gap-1">
-      <button @click="fitToView()" class="bg-gray-800/90 hover:bg-gray-700 rounded px-2 py-1 text-xs border border-gray-700">
+    <div class="absolute bottom-3 right-3 flex gap-1.5">
+      <button
+        @click="fitToView()"
+        class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm transition-colors"
+        style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)"
+      >
         Fit
       </button>
       <button
         @click="useClusters = !useClusters; if (useClusters) { clustering.fetchClustered(3).then(() => refreshGraph()) } else { refreshGraph() }"
-        class="bg-gray-800/90 hover:bg-gray-700 rounded px-2 py-1 text-xs border border-gray-700"
+        class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm transition-colors"
+        style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)"
       >
         {{ useClusters ? 'Expand All' : 'Cluster' }}
       </button>
