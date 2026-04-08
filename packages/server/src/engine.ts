@@ -375,7 +375,10 @@ export class AnalysisEngine {
     const complexity = calculateComplexity(this.graph).slice(0, 20);
 
     return {
-      ...stats,
+      nodesByKind: stats.nodesByKind,
+      edgesByKind: stats.edgesByKind,
+      totalNodes: stats.totalNodes,
+      totalEdges: stats.totalEdges,
       circularDeps,
       orphanNodes: orphans,
       unusedEndpoints,

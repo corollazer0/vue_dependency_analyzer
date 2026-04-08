@@ -179,7 +179,7 @@ export class DependencyGraph {
 
   // ─── Stats ───
 
-  getStats(): Record<string, number> {
+  getStats(): { nodesByKind: Record<string, number>; edgesByKind: Record<string, number>; totalNodes: number; totalEdges: number } {
     const nodesByKind: Record<string, number> = {};
     const edgesByKind: Record<string, number> = {};
     for (const node of this.nodes.values()) {
@@ -188,6 +188,6 @@ export class DependencyGraph {
     for (const edge of this.edges.values()) {
       edgesByKind[edge.kind] = (edgesByKind[edge.kind] || 0) + 1;
     }
-    return { ...nodesByKind, ...edgesByKind, totalNodes: this.nodes.size, totalEdges: this.edges.size };
+    return { nodesByKind, edgesByKind, totalNodes: this.nodes.size, totalEdges: this.edges.size };
   }
 }

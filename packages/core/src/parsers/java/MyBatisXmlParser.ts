@@ -67,7 +67,7 @@ export class MyBatisXmlParser implements FileParser {
             id: tableNodeId,
             kind: 'db-table',
             label: table,
-            filePath: '',
+            filePath,
             metadata: { tableName: table },
           });
         }

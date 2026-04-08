@@ -108,9 +108,9 @@ describe('DependencyGraph', () => {
     graph.addEdge(makeEdge('A', 'B', 'uses-store'));
 
     const stats = graph.getStats();
-    expect(stats['vue-component']).toBe(1);
-    expect(stats['pinia-store']).toBe(1);
-    expect(stats['uses-store']).toBe(1);
+    expect(stats.nodesByKind['vue-component']).toBe(1);
+    expect(stats.nodesByKind['pinia-store']).toBe(1);
+    expect(stats.edgesByKind['uses-store']).toBe(1);
     expect(stats.totalNodes).toBe(2);
     expect(stats.totalEdges).toBe(1);
   });

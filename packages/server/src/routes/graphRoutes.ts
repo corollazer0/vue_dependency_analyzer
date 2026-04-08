@@ -32,11 +32,14 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
     return engine.expandCluster(decodeURIComponent(clusterId));
   });
 
-  // Single node detail
-  fastify.get('/api/graph/node/:nodeId', async (request, reply) => {
-    const { nodeId } = request.params as { nodeId: string };
-    const decoded = decodeURIComponent(nodeId);
-    const result = engine.getNode(decoded);
+  // Single node detail — query param to support IDs with slashes
+  fastify.get('/api/graph/node', async (request, reply) => {
+    const { id } = request.query as { id?: string };
+    if (!id) {
+      reply.code(400);
+      return { error: '"id" query parameter is required' };
+    }
+    const result = engine.getNode(decodeURIComponent(id));
     if (!result) {
       reply.code(404);
       return { error: 'Node not found' };
@@ -44,12 +47,14 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
     return result;
   });
 
-  // Impact analysis
-  fastify.get('/api/graph/node/:nodeId/impact', async (request, reply) => {
-    const { nodeId } = request.params as { nodeId: string };
-    const { depth } = request.query as { depth?: string };
-    const decoded = decodeURIComponent(nodeId);
-    return engine.getNodeImpact(decoded, depth ? parseInt(depth, 10) : undefined);
+  // Impact analysis — query param
+  fastify.get('/api/graph/node/impact', async (request, reply) => {
+    const { id, depth } = request.query as { id?: string; depth?: string };
+    if (!id) {
+      reply.code(400);
+      return { error: '"id" query parameter is required' };
+    }
+    return engine.getNodeImpact(decodeURIComponent(id), depth ? parseInt(depth, 10) : undefined);
   });
 
   // Path finding between two nodes

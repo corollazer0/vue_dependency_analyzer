@@ -37,12 +37,13 @@ export async function analyzeCommand(dir: string, options: CliOptions): Promise<
 
     const allStats = graph.getStats();
     console.log('   Node Types:');
-    for (const [key, count] of Object.entries(allStats)) {
-      if (key.startsWith('vue-') || key.startsWith('pinia-') || key.startsWith('spring-') ||
-          key.startsWith('ts-') || key.startsWith('api-') || key.startsWith('native-') ||
-          key.startsWith('mybatis-') || key.startsWith('db-')) {
-        console.log(`     ${key}: ${count}`);
-      }
+    for (const [key, count] of Object.entries(allStats.nodesByKind)) {
+      console.log(`     ${key}: ${count}`);
+    }
+    console.log('');
+    console.log('   Edge Types:');
+    for (const [key, count] of Object.entries(allStats.edgesByKind)) {
+      console.log(`     ${key}: ${count}`);
     }
 
     if (stats.circularDeps.length > 0) {

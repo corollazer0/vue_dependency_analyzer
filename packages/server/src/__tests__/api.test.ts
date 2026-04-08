@@ -55,32 +55,31 @@ describe('Server API', () => {
     });
   });
 
-  // ─── GET /api/graph/node/:nodeId ───
+  // ─── GET /api/graph/node?id= ───
 
-  describe('GET /api/graph/node/:nodeId', () => {
-    it('should return node detail with edges', async () => {
+  describe('GET /api/graph/node?id=', () => {
+    it('should return node detail for any node ID including file paths', async () => {
       const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
       const { nodes } = JSON.parse(graphRes.body);
-      // Fastify decodes URL params, and the route handler also calls decodeURIComponent
-      // So we need to encode once for the URL, and the handler will decode it
-      const nodeId = encodeURIComponent(nodes[0].id);
+      // Test with a node that has file path in ID (slash-containing)
+      const fileNode = nodes.find((n: any) => n.id.includes('/')) || nodes[0];
+      const id = encodeURIComponent(fileNode.id);
 
-      const res = await fastify.inject({ method: 'GET', url: `/api/graph/node/${nodeId}` });
-      // The handler decodeURIComponent receives the already-decoded value from Fastify
-      // which means it tries to decode an already-decoded string (which is fine for most chars)
-      if (res.statusCode === 200) {
-        const body = JSON.parse(res.body);
-        expect(body.node).toBeDefined();
-      } else {
-        // Node ID with special chars might not match after double-decode
-        // This is a known limitation — skip this assertion
-        expect(res.statusCode).toBe(404);
-      }
+      const res = await fastify.inject({ method: 'GET', url: `/api/graph/node?id=${id}` });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.node).toBeDefined();
+      expect(body.node.id).toBe(fileNode.id);
     });
 
     it('should return 404 for unknown node', async () => {
-      const res = await fastify.inject({ method: 'GET', url: '/api/graph/node/nonexistent' });
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/node?id=nonexistent' });
       expect(res.statusCode).toBe(404);
+    });
+
+    it('should return 400 when id param missing', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/node' });
+      expect(res.statusCode).toBe(400);
     });
   });
 
