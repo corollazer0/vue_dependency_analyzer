@@ -1,5 +1,5 @@
 import { defineStore } from 'pinia';
-import { ref } from 'vue';
+import { ref, watch } from 'vue';
 
 export const useUiStore = defineStore('ui', () => {
   const sidebarWidth = ref(parseInt(localStorage.getItem('vda-sidebar-width') || '288', 10));
@@ -9,15 +9,18 @@ export const useUiStore = defineStore('ui', () => {
   const onboardingDismissed = ref(localStorage.getItem('vda-onboarding-dismissed') === 'true');
   const legendExpanded = ref(false);
 
-  function setSidebarWidth(w: number) {
-    sidebarWidth.value = Math.max(200, Math.min(400, w));
-    localStorage.setItem('vda-sidebar-width', String(sidebarWidth.value));
-  }
+  // Auto-persist widths when changed (handles both setter and v-model direct writes)
+  watch(sidebarWidth, (w) => {
+    const clamped = Math.max(200, Math.min(400, w));
+    if (clamped !== w) sidebarWidth.value = clamped;
+    localStorage.setItem('vda-sidebar-width', String(clamped));
+  });
 
-  function setDetailWidth(w: number) {
-    detailWidth.value = Math.max(280, Math.min(500, w));
-    localStorage.setItem('vda-detail-width', String(detailWidth.value));
-  }
+  watch(detailWidth, (w) => {
+    const clamped = Math.max(280, Math.min(500, w));
+    if (clamped !== w) detailWidth.value = clamped;
+    localStorage.setItem('vda-detail-width', String(clamped));
+  });
 
   function dismissOnboarding() {
     onboardingDismissed.value = true;
@@ -31,8 +34,6 @@ export const useUiStore = defineStore('ui', () => {
     showCommandPalette,
     onboardingDismissed,
     legendExpanded,
-    setSidebarWidth,
-    setDetailWidth,
     dismissOnboarding,
   };
 });

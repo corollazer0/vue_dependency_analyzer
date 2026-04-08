@@ -5,7 +5,7 @@ const uiStore = useUiStore();
 
 const tips = [
   { icon: '👆', title: 'Click nodes', desc: 'Click any node to see its dependencies and details' },
-  { icon: '👆👆', title: 'Double-click clusters', desc: 'Expand grouped nodes by double-clicking them' },
+  { icon: '📂', title: 'Click clusters', desc: 'Click grouped nodes to expand or collapse them' },
   { icon: '⌨️', title: 'Quick search', desc: 'Press / or Cmd+K to search for any file or component' },
   { icon: '🔍', title: 'Filter by type', desc: 'Use the Filter panel or Legend to show specific dependency types' },
 ];

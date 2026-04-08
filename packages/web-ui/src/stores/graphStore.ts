@@ -16,11 +16,14 @@ export const useGraphStore = defineStore('graph', () => {
     'vue-router-route', 'ts-module', 'api-call-site',
     'spring-controller', 'spring-endpoint', 'spring-service',
     'native-bridge', 'native-method',
+    'mybatis-mapper', 'mybatis-statement', 'db-table',
   ]));
   const activeEdgeKinds = ref<Set<EdgeKind>>(new Set([
     'imports', 'uses-component', 'uses-store', 'uses-composable',
     'uses-directive', 'provides', 'injects', 'api-call', 'api-serves',
     'native-call', 'route-renders', 'spring-injects',
+    'mybatis-maps', 'reads-table', 'writes-table', 'dto-flows',
+    'emits-event', 'listens-event',
   ]));
 
   // Debounce filter changes
@@ -129,6 +132,24 @@ export const useGraphStore = defineStore('graph', () => {
     filterDebounce = setTimeout(recomputeFiltered, 150);
   }
 
+  function resetFilters() {
+    activeNodeKinds.value = new Set([
+      'vue-component', 'vue-composable', 'pinia-store', 'vue-directive',
+      'vue-router-route', 'ts-module', 'api-call-site',
+      'spring-controller', 'spring-endpoint', 'spring-service',
+      'native-bridge', 'native-method',
+      'mybatis-mapper', 'mybatis-statement', 'db-table',
+    ]);
+    activeEdgeKinds.value = new Set([
+      'imports', 'uses-component', 'uses-store', 'uses-composable',
+      'uses-directive', 'provides', 'injects', 'api-call', 'api-serves',
+      'native-call', 'route-renders', 'spring-injects',
+      'mybatis-maps', 'reads-table', 'writes-table', 'dto-flows',
+      'emits-event', 'listens-event',
+    ]);
+    recomputeFiltered();
+  }
+
   return {
     graphData,
     loading,
@@ -148,5 +169,6 @@ export const useGraphStore = defineStore('graph', () => {
     selectNode,
     toggleNodeKind,
     toggleEdgeKind,
+    resetFilters,
   };
 });

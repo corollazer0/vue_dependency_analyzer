@@ -25,9 +25,9 @@ interface PaletteItem {
 
 const commands: PaletteItem[] = [
   { id: 'cmd:reanalyze', label: 'Re-analyze project', kind: 'Command', type: 'command', icon: '🔄', action: () => graphStore.triggerReanalyze() },
-  { id: 'cmd:fit', label: 'Fit graph to view', kind: 'Command', type: 'command', icon: '⊡', action: () => { /* emit via event */ } },
+  { id: 'cmd:fit', label: 'Fit graph to view', kind: 'Command', type: 'command', icon: '⊡', action: () => { document.dispatchEvent(new CustomEvent('vda:fit-graph')); } },
   { id: 'cmd:export', label: 'Export as JSON', kind: 'Command', type: 'command', icon: '📦', action: () => exportAsJson() },
-  { id: 'cmd:reset', label: 'Reset all filters', kind: 'Command', type: 'command', icon: '↺', action: () => resetFilters() },
+  { id: 'cmd:reset', label: 'Reset all filters', kind: 'Command', type: 'command', icon: '↺', action: () => graphStore.resetFilters() },
 ];
 
 const recentItems = computed(() => {

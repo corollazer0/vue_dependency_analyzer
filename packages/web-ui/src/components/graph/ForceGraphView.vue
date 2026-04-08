@@ -99,7 +99,7 @@ function buildClusterElements() {
   for (const edge of clustering.clusterData.value.edges) {
     if (allNodeIds.has(edge.source) && allNodeIds.has(edge.target)) {
       elements.push({
-        data: { id: edge.id, source: edge.source, target: edge.target, kind: 'imports', weight: edge.weight },
+        data: { id: edge.id, source: edge.source, target: edge.target, kind: edge.kinds?.[0] || 'imports', weight: edge.weight },
       });
     }
   }
@@ -394,6 +394,9 @@ onMounted(async () => {
   }
   await nextTick();
   if (graphStore.filteredNodes.length > 0 || clustering.clusterData.value) initCytoscape();
+
+  // Listen for Command Palette "Fit graph to view"
+  document.addEventListener('vda:fit-graph', () => fitToView());
 });
 
 watch(() => graphStore.filteredNodes.length, (count) => {

@@ -92,6 +92,7 @@ export async function runAnalysis(
     patterns.push(join(config.projectRoot, '**/*.js'));
     patterns.push(join(config.projectRoot, '**/*.java'));
     patterns.push(join(config.projectRoot, '**/*.kt'));
+    patterns.push(join(config.projectRoot, '**/*.xml'));
   }
 
   const files = await glob(patterns, excludePatterns);

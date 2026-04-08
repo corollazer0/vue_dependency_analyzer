@@ -119,9 +119,20 @@ export class AnalysisEngine {
       for (const edge of result.edges) this.graph.addEdge(edge);
       this.graph.metadata.parseErrors = result.errors;
 
-      // Update cache with newly parsed files
-      // (cache entries updated inline during parsing would be ideal,
-      //  but we do it via re-read here for simplicity)
+      // Populate cache with parsed results for files that weren't cached
+      for (const filePath of files) {
+        try {
+          const content = readFileSync(filePath, 'utf-8');
+          if (!this.cache.get(filePath, content)) {
+            const fileNodes = result.nodes.filter(n => n.filePath === filePath);
+            const fileEdges = result.edges.filter(e => fileNodes.some(n => n.id === e.source));
+            const fileErrors = result.errors.filter(e => e.filePath === filePath);
+            if (fileNodes.length > 0) {
+              this.cache.set(filePath, content, { nodes: fileNodes, edges: fileEdges, errors: fileErrors });
+            }
+          }
+        } catch { /* file may have been removed */ }
+      }
       this.cache.save();
 
       // Cross-boundary resolution
@@ -159,7 +170,7 @@ export class AnalysisEngine {
       patterns.push(join(this.config.springBootRoot, '**/*.xml'));
     }
     if (patterns.length === 0) {
-      patterns.push(join(this.config.projectRoot, '**/*.{vue,ts,js,java,kt}'));
+      patterns.push(join(this.config.projectRoot, '**/*.{vue,ts,js,java,kt,xml}'));
     }
 
     const files: string[] = [];

@@ -34,13 +34,19 @@ const appState = computed(() => {
 });
 
 // Auto-open detail when node selected, keep open if manually toggled
-watch(() => graphStore.selectedNodeId, (nodeId) => {
-  if (nodeId) uiStore.showDetail = true;
+function updateHash() {
   const params = new URLSearchParams();
-  if (nodeId) params.set('node', nodeId);
+  if (graphStore.selectedNodeId) params.set('node', graphStore.selectedNodeId);
   params.set('view', activeView.value);
   history.replaceState(null, '', `#${params.toString()}`);
+}
+
+watch(() => graphStore.selectedNodeId, (nodeId) => {
+  if (nodeId) uiStore.showDetail = true;
+  updateHash();
 });
+
+watch(activeView, () => updateHash());
 
 onMounted(async () => {
   await graphStore.fetchGraph();

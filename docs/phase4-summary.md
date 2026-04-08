@@ -33,7 +33,7 @@ Vue Component → axios.post('/api/users') → Spring @PostMapping("/api/users")
     → MyBatis XML <insert id="insert"> → DB: users 테이블
 ```
 
-프론트엔드부터 DB 테이블까지 완전한 E2E 의존성 체인 추적 가능.
+프론트엔드부터 DB 테이블까지 기본 체인 추적 가능. (조건: API URL 매칭 성공 + MyBatis XML 발견 시. Mapper interface 자동 연결, DTO flow, event virtual edge는 부분 구현.)
 
 ## 새 파일 목록
 - `core/src/parsers/java/MyBatisXmlParser.ts` — MyBatis XML 파서

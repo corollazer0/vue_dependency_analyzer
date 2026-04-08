@@ -11,14 +11,18 @@ const uiStore = useUiStore();
 const nodeKinds = Object.keys(NODE_STYLES) as NodeKind[];
 const edgeKinds = Object.keys(EDGE_STYLES) as EdgeKind[];
 
+// Count from TOTAL graph data (not filtered) so legend always shows all kinds
 const nodeCounts = computed(() => {
   const counts: Record<string, number> = {};
-  for (const n of graphStore.filteredNodes) {
-    counts[n.kind] = (counts[n.kind] || 0) + 1;
+  if (graphStore.graphData) {
+    for (const n of graphStore.graphData.nodes) {
+      counts[n.kind] = (counts[n.kind] || 0) + 1;
+    }
   }
   return counts;
 });
 
+// Show all kinds that exist in the graph (not just filtered)
 const activeNodeKinds = computed(() =>
   nodeKinds.filter(k => (nodeCounts.value[k] || 0) > 0)
 );

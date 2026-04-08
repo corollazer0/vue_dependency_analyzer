@@ -1,0 +1,11 @@
+{
+  "aliases": {},
+  "exclude": [
+    "**/node_modules/**",
+    "**/dist/**",
+    "**/.git/**",
+    "**/.vda-cache/**"
+  ],
+  "nativeBridges": [],
+  "vueRoot": "src"
+}

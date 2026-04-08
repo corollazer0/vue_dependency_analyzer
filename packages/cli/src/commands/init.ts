@@ -1,5 +1,5 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
-import { resolve, join, relative } from 'path';
+import { resolve, join, relative, parse as pathParse } from 'path';
 import type { AnalysisConfig, ServiceConfig } from '@vda/core';
 
 export async function initCommand(dir: string): Promise<void> {
@@ -220,7 +220,7 @@ function detectNativeBridges(vueRoot: string): string[] {
 
 function findUp(filename: string, fromDir: string): string | null {
   let dir = fromDir;
-  const root = require('path').parse(dir).root;
+  const root = pathParse(dir).root;
   while (dir !== root) {
     const candidate = join(dir, filename);
     if (existsSync(candidate)) return candidate;

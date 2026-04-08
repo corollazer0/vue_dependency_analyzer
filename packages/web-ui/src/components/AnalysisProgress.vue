@@ -62,13 +62,13 @@ const shortFile = computed(() => {
         <span>Remaining: ~{{ remaining }}s</span>
       </div>
 
-      <!-- Cancel -->
+      <!-- Dismiss (hides overlay; server analysis continues) -->
       <div class="flex justify-end">
         <button
           @click="emit('cancel')"
           class="px-4 py-1.5 rounded text-sm bg-gray-700 hover:bg-gray-600 text-gray-300"
         >
-          Cancel
+          Dismiss
         </button>
       </div>
     </div>

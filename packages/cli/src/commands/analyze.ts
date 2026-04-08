@@ -39,7 +39,8 @@ export async function analyzeCommand(dir: string, options: CliOptions): Promise<
     console.log('   Node Types:');
     for (const [key, count] of Object.entries(allStats)) {
       if (key.startsWith('vue-') || key.startsWith('pinia-') || key.startsWith('spring-') ||
-          key.startsWith('ts-') || key.startsWith('api-') || key.startsWith('native-')) {
+          key.startsWith('ts-') || key.startsWith('api-') || key.startsWith('native-') ||
+          key.startsWith('mybatis-') || key.startsWith('db-')) {
         console.log(`     ${key}: ${count}`);
       }
     }
