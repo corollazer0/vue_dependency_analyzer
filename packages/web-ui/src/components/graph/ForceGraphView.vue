@@ -31,12 +31,7 @@ function buildElements() {
   }));
 
   const edges = graphStore.filteredEdges.map(e => ({
-    data: {
-      id: e.id,
-      source: e.source,
-      target: e.target,
-      kind: e.kind,
-    },
+    data: { id: e.id, source: e.source, target: e.target, kind: e.kind },
   }));
 
   return [...nodes, ...edges];
@@ -46,23 +41,44 @@ function buildClusterElements() {
   if (!clustering.clusterData.value) return [];
 
   const elements: any[] = [];
+  const allNodeIds = new Set<string>();
 
+  // First pass: collect all node IDs that will be in the graph
   for (const cluster of clustering.clusterData.value.clusters) {
     if (clustering.isExpanded(cluster.id)) {
       const cached = clustering.expandedNodeCache.value.get(cluster.id);
       if (cached) {
+        allNodeIds.add(cluster.id);
+        for (const node of cached.nodes) allNodeIds.add(node.id);
+      }
+    } else if (cluster.childCount > 0) {
+      allNodeIds.add(cluster.id);
+    } else {
+      allNodeIds.add(cluster.id);
+    }
+  }
+
+  // Second pass: build elements
+  for (const cluster of clustering.clusterData.value.clusters) {
+    if (clustering.isExpanded(cluster.id)) {
+      const cached = clustering.expandedNodeCache.value.get(cluster.id);
+      if (cached) {
+        // Compound parent node
         elements.push({
-          data: { id: cluster.id, label: `${cluster.label} (${cluster.childCount})`, kind: 'cluster', isCluster: true },
+          data: { id: cluster.id, label: `${cluster.label} (${cluster.childCount})`, kind: 'cluster', isCluster: true, isExpanded: true },
         });
+        // Child nodes
         for (const node of cached.nodes) {
           elements.push({ data: { id: node.id, label: node.label, kind: node.kind, parent: cluster.id } });
         }
+        // Only add edges where BOTH endpoints exist in our graph
         for (const edge of cached.edges) {
-          elements.push({ data: { id: edge.id, source: edge.source, target: edge.target, kind: edge.kind } });
+          if (allNodeIds.has(edge.source) && allNodeIds.has(edge.target)) {
+            elements.push({ data: { id: edge.id, source: edge.source, target: edge.target, kind: edge.kind } });
+          }
         }
       }
     } else if (cluster.childCount > 0) {
-      // Real cluster with children
       const dominantKind = Object.entries(cluster.childKinds).sort((a, b) => b[1] - a[1])[0]?.[0] || 'ts-module';
       elements.push({
         data: {
@@ -74,22 +90,14 @@ function buildClusterElements() {
         },
       });
     } else {
-      // Individual node (too small to cluster)
       const kind = Object.keys(cluster.childKinds)[0] || 'ts-module';
-      elements.push({
-        data: {
-          id: cluster.id,
-          label: cluster.label,
-          kind,
-        },
-      });
+      elements.push({ data: { id: cluster.id, label: cluster.label, kind } });
     }
   }
 
+  // Inter-cluster edges — only if both endpoints exist
   for (const edge of clustering.clusterData.value.edges) {
-    const sourceExists = elements.some(e => e.data.id === edge.source);
-    const targetExists = elements.some(e => e.data.id === edge.target);
-    if (sourceExists && targetExists) {
+    if (allNodeIds.has(edge.source) && allNodeIds.has(edge.target)) {
       elements.push({
         data: { id: edge.id, source: edge.source, target: edge.target, kind: 'imports', weight: edge.weight },
       });
@@ -102,13 +110,9 @@ function buildClusterElements() {
 // ─── Stylesheet ───
 
 function buildStylesheet(): any[] {
-  // Node styles by kind — with shapes for colorblind support
   const nodeKindStyles = Object.entries(NODE_STYLES).map(([kind, style]) => ({
     selector: `node[kind = "${kind}"]`,
-    style: {
-      'background-color': style.color,
-      'shape': style.shape,
-    },
+    style: { 'background-color': style.color, 'shape': style.shape },
   }));
 
   const edgeKindStyles = Object.entries(EDGE_STYLES).map(([kind, style]) => ({
@@ -125,14 +129,13 @@ function buildStylesheet(): any[] {
   }));
 
   return [
-    // Base node — degree-based sizing
     {
       selector: 'node',
       style: {
         'background-color': '#666',
         'label': 'data(label)',
-        'color': 'var(--text-secondary, #a0a8b8)',
-        'text-outline-color': 'var(--surface-primary, #0f1219)',
+        'color': '#a0a8b8',
+        'text-outline-color': '#0f1219',
         'text-outline-width': 2,
         'font-size': '11px',
         'width': (ele: any) => Math.max(22, 16 + Math.sqrt(ele.degree() + 1) * 5),
@@ -144,7 +147,6 @@ function buildStylesheet(): any[] {
         'transition-duration': '200ms',
       },
     },
-    // Hover state
     {
       selector: 'node.hover',
       style: {
@@ -154,11 +156,9 @@ function buildStylesheet(): any[] {
         'overlay-color': '#42b883',
         'z-index': 20,
         'font-size': '12px',
-        'font-weight': 'bold',
         'color': '#fff',
       },
     },
-    // Selected
     {
       selector: 'node:selected',
       style: {
@@ -169,36 +169,17 @@ function buildStylesheet(): any[] {
         'z-index': 30,
       },
     },
-    // Neighbor highlight
     {
       selector: 'node.highlighted',
-      style: {
-        'border-width': 2,
-        'border-color': '#f1c40f',
-        'opacity': 1,
-      },
+      style: { 'border-width': 2, 'border-color': '#f1c40f', 'opacity': 1 },
     },
     {
       selector: 'node.faded',
       style: { 'opacity': 0.12 },
     },
-    // Cluster node
+    // Cluster: collapsed
     {
-      selector: 'node[?isCluster]',
-      style: {
-        'shape': 'round-rectangle',
-        'background-opacity': 0.2,
-        'border-width': 2,
-        'border-color': 'var(--border-default, #3a4050)',
-        'padding': '20px',
-        'font-size': '13px',
-        'text-valign': 'top',
-        'text-halign': 'center',
-        'color': 'var(--text-secondary, #a0a8b8)',
-      },
-    },
-    {
-      selector: 'node[childCount]',
+      selector: 'node[?isCluster][childCount]',
       style: {
         'width': (ele: any) => Math.min(60, 20 + Math.sqrt(ele.data('childCount')) * 5),
         'height': (ele: any) => Math.min(60, 20 + Math.sqrt(ele.data('childCount')) * 5),
@@ -207,6 +188,25 @@ function buildStylesheet(): any[] {
         'text-halign': 'center',
         'shape': 'round-rectangle',
         'background-opacity': 0.7,
+        'border-width': 2,
+        'border-color': '#3a4050',
+        'cursor': 'pointer',
+      },
+    },
+    // Cluster: expanded (compound parent)
+    {
+      selector: 'node[?isExpanded]',
+      style: {
+        'shape': 'round-rectangle',
+        'background-opacity': 0.08,
+        'border-width': 1,
+        'border-color': '#3a4050',
+        'border-style': 'dashed',
+        'padding': '20px',
+        'font-size': '13px',
+        'text-valign': 'top',
+        'text-halign': 'center',
+        'color': '#6b7280',
       },
     },
     // Base edge
@@ -220,21 +220,13 @@ function buildStylesheet(): any[] {
         'width': 1,
         'arrow-scale': 0.6,
         'opacity': 0.6,
-        'transition-property': 'opacity, width, line-color',
+        'transition-property': 'opacity, width',
         'transition-duration': '200ms',
       },
     },
     {
       selector: 'edge.neighbor-highlight',
-      style: {
-        'opacity': 1,
-        'width': 2.5,
-        'z-index': 10,
-      },
-    },
-    {
-      selector: 'edge.highlighted',
-      style: { 'width': 3, 'opacity': 1, 'z-index': 10 },
+      style: { 'opacity': 1, 'width': 2.5, 'z-index': 10 },
     },
     {
       selector: 'edge.faded',
@@ -242,62 +234,38 @@ function buildStylesheet(): any[] {
     },
     {
       selector: 'edge[weight]',
-      style: {
-        'width': (ele: any) => Math.min(6, 1 + Math.log2(ele.data('weight') || 1)),
-      },
+      style: { 'width': (ele: any) => Math.min(6, 1 + Math.log2(ele.data('weight') || 1)) },
     },
     ...nodeKindStyles,
     ...edgeKindStyles,
   ];
 }
 
-// ─── Core Graph Functions ───
+// ─── Core ───
 
 function initCytoscape() {
   if (!container.value) return;
-
   const elements = useClusters.value ? buildClusterElements() : buildElements();
 
   cy = cytoscape({
     container: container.value,
     elements,
     style: buildStylesheet(),
-    layout: {
-      name: 'fcose',
-      animate: false,
-      quality: 'default',
-      nodeSeparation: 80,
-      idealEdgeLength: 120,
-      nodeRepulsion: () => 8000,
-    } as any,
+    layout: { name: 'fcose', animate: false, quality: 'default', nodeSeparation: 80, idealEdgeLength: 120, nodeRepulsion: () => 8000 } as any,
     minZoom: 0.05,
     maxZoom: 5,
     wheelSensitivity: 0.3,
   });
 
-  // ─── Hover interaction ───
+  // Hover
   cy.on('mouseover', 'node', (evt) => {
     const node = evt.target;
-    if (node.data('isCluster') && !clustering.isExpanded(node.id())) {
-      // Just show tooltip for clusters
-    }
     node.addClass('hover');
-
-    // Highlight neighborhood
     const neighborhood = node.closedNeighborhood();
     cy!.elements().not(neighborhood).addClass('faded');
     neighborhood.edges().addClass('neighbor-highlight');
-
-    // Show tooltip
     const pos = node.renderedPosition();
-    tooltip.value = {
-      show: true,
-      x: pos.x,
-      y: pos.y - 20,
-      text: node.data('fullLabel') || node.data('label'),
-      kind: node.data('kind'),
-      degree: node.degree(),
-    };
+    tooltip.value = { show: true, x: pos.x, y: pos.y - 20, text: node.data('fullLabel') || node.data('label'), kind: node.data('kind'), degree: node.degree() };
   });
 
   cy.on('mouseout', 'node', (evt) => {
@@ -306,57 +274,49 @@ function initCytoscape() {
     tooltip.value.show = false;
   });
 
-  // ─── Click interaction ───
+  // Click: cluster → expand/collapse, node → select
   cy.on('tap', 'node', async (evt) => {
     const data = evt.target.data();
-
-    // Cluster node: single click expands/collapses
-    if (data.isCluster) {
-      const clusterId = data.id;
-      if (clustering.isExpanded(clusterId)) {
-        clustering.collapseCluster(clusterId);
-      } else {
-        await clustering.expandCluster(clusterId);
-      }
+    if (data.isCluster && data.childCount > 0 && !data.isExpanded) {
+      await clustering.expandCluster(data.id);
       refreshGraph();
       return;
     }
-
-    // Regular node: select it
+    if (data.isExpanded) {
+      clustering.collapseCluster(data.id);
+      refreshGraph();
+      return;
+    }
     graphStore.selectNode(data.id);
   });
 
+  // Background click → deselect
   cy.on('tap', (evt) => {
     if (evt.target === cy) {
       graphStore.selectNode(null);
+      cy!.elements().removeClass('faded').removeClass('neighbor-highlight');
       tooltip.value.show = false;
     }
   });
 
-  // ─── LOD ───
   cy.on('zoom', () => updateLOD());
 }
 
 function updateLOD() {
   if (!cy) return;
   const zoom = cy.zoom();
-  const labelOpacity = Math.min(1, Math.max(0, (zoom - 0.2) / 0.5));
-
   cy.batch(() => {
     if (zoom < 0.25) {
-      cy!.nodes('[!isCluster]').style({ 'label': '', 'text-opacity': 0 });
+      cy!.nodes('[!isCluster][!isExpanded]').style({ 'label': '', 'text-opacity': 0 });
       cy!.edges().style('opacity', 0.15);
     } else if (zoom < 0.6) {
-      cy!.nodes('[!isCluster]').style({
-        'label': (ele: any) => {
-          const l = ele.data('label') || '';
-          return l.length > 12 ? l.slice(0, 10) + '..' : l;
-        },
-        'text-opacity': labelOpacity,
+      cy!.nodes('[!isCluster][!isExpanded]').style({
+        'label': (ele: any) => { const l = ele.data('label') || ''; return l.length > 12 ? l.slice(0, 10) + '..' : l; },
+        'text-opacity': Math.min(1, (zoom - 0.2) / 0.4),
       });
       cy!.edges().style('opacity', 0.4);
     } else {
-      cy!.nodes('[!isCluster]').style({ 'label': 'data(label)', 'text-opacity': 1 });
+      cy!.nodes('[!isCluster][!isExpanded]').style({ 'label': 'data(label)', 'text-opacity': 1 });
       cy!.edges().style('opacity', 0.7);
     }
   });
@@ -365,45 +325,29 @@ function updateLOD() {
 function refreshGraph() {
   if (!cy) return;
   const elements = useClusters.value ? buildClusterElements() : buildElements();
-
-  cy.batch(() => {
-    cy!.elements().remove();
-    cy!.add(elements);
-  });
-
-  cy.layout({
-    name: 'fcose',
-    animate: true,
-    animationDuration: 400,
-    animationEasing: 'ease-out',
-    quality: 'default',
-    nodeSeparation: 80,
-    idealEdgeLength: 120,
-  } as any).run();
+  cy.batch(() => { cy!.elements().remove(); cy!.add(elements); });
+  cy.layout({ name: 'fcose', animate: true, animationDuration: 400, quality: 'default', nodeSeparation: 80, idealEdgeLength: 120 } as any).run();
 }
 
 function fitToView() {
-  cy?.animate({ fit: { eles: cy.elements(), padding: 50 } } as any, { duration: 400, easing: 'ease-out-cubic' as any });
+  cy?.animate({ fit: { eles: cy.elements(), padding: 50 } } as any, { duration: 400 });
 }
 
 function focusNode(nodeId: string) {
   if (!cy) return;
   const node = cy.$id(nodeId);
-  if (node.length) {
-    cy.animate({ center: { eles: node }, zoom: 2 }, { duration: 400, easing: 'ease-out-cubic' as any });
-  }
+  if (node.length) cy.animate({ center: { eles: node }, zoom: 2 }, { duration: 400 });
 }
 
 // ─── Watchers ───
 
 watch(() => graphStore.filteredNodes.length + graphStore.filteredEdges.length, () => {
   if (!cy) return;
-  const filteredCount = graphStore.filteredNodes.length;
-
-  if (clustering.needsClustering(filteredCount) && !useClusters.value) {
+  const count = graphStore.filteredNodes.length;
+  if (clustering.needsClustering(count) && !useClusters.value) {
     useClusters.value = true;
     clustering.fetchClustered(3).then(() => refreshGraph());
-  } else if (useClusters.value && !clustering.needsClustering(filteredCount)) {
+  } else if (useClusters.value && !clustering.needsClustering(count)) {
     useClusters.value = false;
     refreshGraph();
   } else {
@@ -416,15 +360,13 @@ watch(() => graphStore.selectedNodeId, (nodeId) => {
 });
 
 onMounted(async () => {
-  const filteredCount = graphStore.filteredNodes.length;
-  if (clustering.needsClustering(filteredCount)) {
+  const count = graphStore.filteredNodes.length;
+  if (clustering.needsClustering(count)) {
     useClusters.value = true;
     await clustering.fetchClustered(3);
   }
   await nextTick();
-  if (graphStore.filteredNodes.length > 0 || clustering.clusterData.value) {
-    initCytoscape();
-  }
+  if (graphStore.filteredNodes.length > 0 || clustering.clusterData.value) initCytoscape();
 });
 
 watch(() => graphStore.filteredNodes.length, (count) => {
@@ -432,7 +374,6 @@ watch(() => graphStore.filteredNodes.length, (count) => {
 });
 
 onUnmounted(() => { cy?.destroy(); });
-
 defineExpose({ fitToView, focusNode });
 </script>
 
@@ -442,44 +383,27 @@ defineExpose({ fitToView, focusNode });
 
     <!-- Tooltip -->
     <Transition name="fade">
-      <div
-        v-if="tooltip.show"
-        class="absolute pointer-events-none z-50 px-3 py-2 rounded-lg text-xs shadow-xl border"
+      <div v-if="tooltip.show" class="absolute pointer-events-none z-50 px-3 py-2 rounded-lg text-xs shadow-xl border"
         style="background: var(--surface-elevated); border-color: var(--border-subtle)"
-        :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px', transform: 'translate(-50%, -100%)' }"
-      >
+        :style="{ left: tooltip.x + 'px', top: tooltip.y + 'px', transform: 'translate(-50%, -100%)' }">
         <div class="font-semibold" style="color: var(--text-primary)">{{ tooltip.text }}</div>
         <div class="flex items-center gap-2 mt-0.5" style="color: var(--text-tertiary)">
-          <span>{{ tooltip.kind }}</span>
-          <span>&middot;</span>
-          <span>{{ tooltip.degree }} connections</span>
+          <span>{{ tooltip.kind }}</span><span>&middot;</span><span>{{ tooltip.degree }} connections</span>
         </div>
       </div>
     </Transition>
 
     <!-- Cluster indicator -->
-    <div
-      v-if="useClusters"
-      class="absolute top-3 left-3 rounded-lg px-3 py-2 text-xs border backdrop-blur-sm"
-      style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)"
-    >
-      Clustered view ({{ clustering.clusterData.value?.clusters.length || 0 }} groups) · Double-click to expand
+    <div v-if="useClusters" class="absolute top-3 left-3 rounded-lg px-3 py-2 text-xs border backdrop-blur-sm"
+      style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">
+      Clustered view · Click cluster to expand
     </div>
 
     <!-- Controls -->
     <div class="absolute bottom-3 right-3 flex gap-1.5">
-      <button
-        @click="fitToView()"
-        class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm transition-colors"
-        style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)"
-      >
-        Fit
-      </button>
-      <button
-        @click="useClusters = !useClusters; if (useClusters) { clustering.fetchClustered(3).then(() => refreshGraph()) } else { refreshGraph() }"
-        class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm transition-colors"
-        style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)"
-      >
+      <button @click="fitToView()" class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">Fit</button>
+      <button @click="useClusters = !useClusters; if (useClusters) { clustering.fetchClustered(3).then(() => refreshGraph()) } else { refreshGraph() }"
+        class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">
         {{ useClusters ? 'Expand All' : 'Cluster' }}
       </button>
     </div>
