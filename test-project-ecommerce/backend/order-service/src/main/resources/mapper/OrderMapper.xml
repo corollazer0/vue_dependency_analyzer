@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shop.order.mapper.OrderMapper">
+    <select id="findAll">
+        SELECT * FROM orders
+    </select>
+    <select id="findById">
+        SELECT o.*, p.status as payment_status FROM orders o LEFT JOIN payments p ON o.id = p.order_id WHERE o.id = #{id}
+    </select>
+    <select id="findItems">
+        SELECT * FROM order_items WHERE order_id = #{orderId}
+    </select>
+    <insert id="insert">
+        INSERT INTO orders (user_id, total_amount, status, shipping_address) VALUES (#{userId}, #{totalAmount}, #{status}, #{shippingAddress})
+    </insert>
+    <insert id="insertItem">
+        INSERT INTO order_items (order_id, product_id, product_name, quantity, unit_price) VALUES (#{orderId}, #{productId}, #{productName}, #{quantity}, #{unitPrice})
+    </insert>
+    <update id="updateStatus">
+        UPDATE orders SET status = #{status} WHERE id = #{id}
+    </update>
+    <insert id="insertPayment">
+        INSERT INTO payments (order_id, amount, method, transaction_id, status) VALUES (#{orderId}, #{amount}, #{method}, #{transactionId}, #{status})
+    </insert>
+</mapper>

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shop.product.mapper.CategoryMapper">
+    <select id="findAll">
+        SELECT * FROM categories
+    </select>
+    <select id="findTree">
+        SELECT c.*, p.name as parent_name FROM categories c LEFT JOIN categories p ON c.parent_id = p.id
+    </select>
+    <insert id="insert">
+        INSERT INTO categories (name, parent_id) VALUES (#{name}, #{parentId})
+    </insert>
+</mapper>

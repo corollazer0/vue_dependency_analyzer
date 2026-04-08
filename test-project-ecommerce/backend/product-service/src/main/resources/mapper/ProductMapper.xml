@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.shop.product.mapper.ProductMapper">
+    <select id="findAll">
+        SELECT * FROM products
+    </select>
+    <select id="findById">
+        SELECT p.*, c.name as category_name FROM products p JOIN categories c ON p.category_id = c.id WHERE p.id = #{id}
+    </select>
+    <insert id="insert">
+        INSERT INTO products (title, description, price, stock, category_id) VALUES (#{title}, #{description}, #{price}, #{stock}, #{categoryId})
+    </insert>
+    <update id="update">
+        UPDATE products SET title=#{title}, price=#{price}, stock=#{stock} WHERE id = #{id}
+    </update>
+    <delete id="delete">
+        DELETE FROM products WHERE id = #{id}
+    </delete>
+</mapper>

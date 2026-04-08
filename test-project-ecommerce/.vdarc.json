@@ -1,0 +1,29 @@
+{
+  "vueRoot": "./frontend/src",
+  "apiBaseUrl": "/api",
+  "aliases": {
+    "@": "./frontend/src"
+  },
+  "nativeBridges": [
+    "NativeApp",
+    "AndroidBridge",
+    "iOSBridge"
+  ],
+  "services": [
+    {
+      "id": "user-service",
+      "root": "./backend/user-service/src/main/java",
+      "type": "spring-boot"
+    },
+    {
+      "id": "product-service",
+      "root": "./backend/product-service/src/main/java",
+      "type": "spring-boot"
+    },
+    {
+      "id": "order-service",
+      "root": "./backend/order-service/src/main/java",
+      "type": "spring-boot"
+    }
+  ]
+}
