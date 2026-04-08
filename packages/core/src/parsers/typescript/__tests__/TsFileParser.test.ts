@@ -45,6 +45,54 @@ describe('TsFileParser', () => {
     });
   });
 
+  describe('router file (router.ts)', () => {
+    const content = readFileSync(resolve(fixturesDir, 'router.ts'), 'utf-8');
+    const result = parser.parse('/test/router.ts', content, {});
+
+    it('should detect as vue-router-route', () => {
+      const node = result.nodes.find(n => n.kind === 'vue-router-route');
+      expect(node).toBeDefined();
+    });
+
+    it('should create route-renders edges for static components', () => {
+      const staticEdges = result.edges.filter(
+        e => e.kind === 'route-renders' && (e.metadata as any).componentName,
+      );
+      expect(staticEdges.length).toBeGreaterThanOrEqual(2);
+      const names = staticEdges.map(e => (e.metadata as any).componentName);
+      expect(names).toContain('HomeView');
+      expect(names).toContain('UserListView');
+    });
+
+    it('should create route-renders edges for lazy imports', () => {
+      const lazyEdges = result.edges.filter(
+        e => e.kind === 'route-renders' && (e.metadata as any).isLazy,
+      );
+      expect(lazyEdges.length).toBeGreaterThanOrEqual(2);
+      const paths = lazyEdges.map(e => (e.metadata as any).importPath);
+      expect(paths).toContain('@/views/UserDetailView.vue');
+      expect(paths).toContain('@/views/ProductListView.vue');
+    });
+
+    it('should target unresolved imports for lazy routes', () => {
+      const lazyEdges = result.edges.filter(
+        e => e.kind === 'route-renders' && (e.metadata as any).isLazy,
+      );
+      for (const edge of lazyEdges) {
+        expect(edge.target).toMatch(/^unresolved:/);
+      }
+    });
+
+    it('should target component: prefix for static routes', () => {
+      const staticEdges = result.edges.filter(
+        e => e.kind === 'route-renders' && (e.metadata as any).componentName,
+      );
+      for (const edge of staticEdges) {
+        expect(edge.target).toMatch(/^component:/);
+      }
+    });
+  });
+
   describe('store file (userStore.ts)', () => {
     const content = readFileSync(resolve(fixturesDir, 'stores/userStore.ts'), 'utf-8');
     const result = parser.parse('/test/stores/userStore.ts', content, {});

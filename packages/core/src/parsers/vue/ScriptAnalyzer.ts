@@ -8,6 +8,7 @@ interface ScriptAnalysisResult {
   metadata: {
     props?: string[];
     emits?: string[];
+    routerNavigations?: Array<{ method: string; path?: string; name?: string }>;
   };
 }
 
@@ -157,6 +158,35 @@ export function analyzeScript(
       // defineEmits
       if (callText === 'defineEmits') {
         metadata.emits = extractDefineEmitsKeys(node, sourceFile);
+      }
+
+      // router.push / router.replace / this.$router.push / this.$router.replace
+      if (/^(?:this\.\$router|router)\.(push|replace)$/.test(callText) && node.arguments.length > 0) {
+        const method = callText.endsWith('push') ? 'push' : 'replace';
+        const firstArg = node.arguments[0];
+        let routePath: string | undefined;
+        let routeName: string | undefined;
+
+        if (ts.isStringLiteral(firstArg) || ts.isNoSubstitutionTemplateLiteral(firstArg)) {
+          routePath = firstArg.text;
+        } else if (ts.isObjectLiteralExpression(firstArg)) {
+          for (const prop of firstArg.properties) {
+            if (ts.isPropertyAssignment(prop) && prop.name.getText(sourceFile) === 'name' && ts.isStringLiteral(prop.initializer)) {
+              routeName = prop.initializer.text;
+            }
+          }
+        }
+
+        if (routePath || routeName) {
+          if (!metadata.routerNavigations) {
+            (metadata as Record<string, unknown>).routerNavigations = [];
+          }
+          ((metadata as Record<string, unknown>).routerNavigations as Array<Record<string, unknown>>).push({
+            method,
+            ...(routePath ? { path: routePath } : {}),
+            ...(routeName ? { name: routeName } : {}),
+          });
+        }
       }
     }
 

@@ -139,6 +139,14 @@ export class TsFileParser implements FileParser {
     (moduleNode.metadata as Record<string, unknown>).exportedFunctions = exportedFunctions;
     (moduleNode.metadata as Record<string, unknown>).isBarrel = !hasNonReExport && edges.length > 0;
 
+    // Route-renders edge generation for vue-router route files
+    if (kind === 'vue-router-route') {
+      parseRouteRenders(content, nodeId, edges);
+    }
+
+    // Detect router.push / router.replace navigation calls in any TS/JS file
+    parseRouterNavigation(content, nodeId, moduleNode);
+
     return { nodes, edges, errors };
   }
 }
@@ -173,4 +181,62 @@ function extractHttpMethod(callText: string): string {
   if (callText === 'fetch') return 'GET';
   const match = callText.match(/\.(get|post|put|delete|patch)$/i);
   return match ? match[1].toUpperCase() : 'GET';
+}
+
+/**
+ * Parse route definitions to create route-renders edges.
+ * Handles both static component references and lazy-loaded imports.
+ */
+function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]): void {
+  // Lazy import pattern: component: () => import('...')
+  const lazyPattern = /component\s*:\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/g;
+  const lazyPaths = new Set<string>();
+  let match: RegExpExecArray | null;
+
+  while ((match = lazyPattern.exec(content)) !== null) {
+    const importPath = match[1];
+    lazyPaths.add(importPath);
+    edges.push({
+      id: `${nodeId}:route-renders:${importPath}`,
+      source: nodeId,
+      target: `unresolved:${importPath}`,
+      kind: 'route-renders',
+      metadata: { importPath, isLazy: true },
+    });
+  }
+
+  // Static component pattern: component: SomeIdentifier
+  // Must exclude the lazy pattern matches (where identifier would be a '(' or 'import')
+  const staticPattern = /component\s*:\s*([A-Z]\w+)/g;
+  while ((match = staticPattern.exec(content)) !== null) {
+    const componentName = match[1];
+    edges.push({
+      id: `${nodeId}:route-renders:component:${componentName}`,
+      source: nodeId,
+      target: `component:${componentName}`,
+      kind: 'route-renders',
+      metadata: { componentName },
+    });
+  }
+}
+
+/**
+ * Detect router.push() / router.replace() / this.$router.push() / this.$router.replace()
+ * calls and store them as metadata on the module node.
+ */
+function parseRouterNavigation(content: string, _nodeId: string, moduleNode: GraphNode): void {
+  const navPattern = /(?:this\.\$router|router)\.(push|replace)\(\s*(?:['"]([^'"]+)['"]|\{[^}]*name\s*:\s*['"]([^'"]+)['"][^}]*\})/g;
+  const navigations: Array<{ method: string; path?: string; name?: string }> = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = navPattern.exec(content)) !== null) {
+    const method = match[1];
+    const path = match[2] || undefined;
+    const name = match[3] || undefined;
+    navigations.push({ method, path, name });
+  }
+
+  if (navigations.length > 0) {
+    (moduleNode.metadata as Record<string, unknown>).routerNavigations = navigations;
+  }
 }
