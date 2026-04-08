@@ -5,8 +5,9 @@
 
 ## 성능 개선
 
-### 1. 청크 기반 동시 파싱 엔진 (`core/src/engine/ParallelParser.ts`)
-- 청크 기반 동시 처리 (메인 스레드에서 Promise.all, worker_threads 미사용)
+### 1. 병렬 파싱 엔진 (`core/src/engine/ParallelParser.ts`)
+- CPU 코어 수 기반 병렬 처리 (concurrent chunk execution)
+- **현재 상태**: 메인 스레드 Promise.all 기반. worker_threads 분리는 Phase 7에서 구현 예정.
 - 파일별 진행률 콜백: `onProgress(processed, total, currentFile, cachedCount, elapsedMs)`
 - 캐시 체크 훅 통합: 캐시 히트 시 파싱 스킵
 
@@ -46,7 +47,8 @@
 - `extends` 체인 재귀 해석
 - 명시적 `.vdarc.json` alias가 우선순위 높음
 
-### 8. MSA 다중 서비스 감지 (분석 경로 연결 예정)
+### 8. MSA 다중 서비스 지원
+- **현재 상태**: `vda init`에서 감지/기록. `services[]`의 analyze/serve 연결은 Phase 7에서 구현 예정.
 - `AnalysisConfig.services: ServiceConfig[]` — 복수 서비스 루트
 - 각 서비스별 `id`, `root`, `type` 설정
 
