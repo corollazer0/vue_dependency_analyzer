@@ -40,7 +40,13 @@ export class CrossBoundaryResolver {
     // 6. Create virtual nodes for Spring event targets
     this.createSpringEventNodes(graph);
 
-    // 7. Link DTO flows between controllers/services sharing DTO types
+    // 7. Resolve spring-injects targets from type names to actual node IDs
+    this.resolveSpringInjects(graph);
+
+    // 8. Link Repository → Mapper (same domain name matching)
+    this.resolveRepositoryToMapper(graph);
+
+    // 9. Link DTO flows between controllers/services sharing DTO types
     this.dtoFlowLinker.link(graph);
   }
 
@@ -257,6 +263,96 @@ export class CrossBoundaryResolver {
         filePath: '',
         metadata: { eventClass, virtual: true },
       });
+    }
+  }
+
+  /**
+   * Resolve spring-injects edges whose targets are type names (e.g. "spring-service:UserService")
+   * to actual graph nodes (e.g. "spring-service:/path/to/UserService.java").
+   *
+   * The JavaFileParser creates edges like:
+   *   source: "spring-controller:/path/UserController.java"
+   *   target: "spring-service:UserService"  ← type name, NOT a real node ID
+   *
+   * Real nodes have IDs like "spring-service:/path/UserService.java".
+   * We match by className metadata or label.
+   */
+  private resolveSpringInjects(graph: DependencyGraph): void {
+    // Build lookup: className/label → node ID for all spring-service nodes
+    const nameToNodeId = new Map<string, string>();
+    for (const node of graph.getAllNodes()) {
+      if (node.kind === 'spring-service' || node.kind === 'spring-controller') {
+        const className = (node.metadata.className as string) || node.label;
+        if (className) nameToNodeId.set(className, node.id);
+      }
+      // Also match mybatis-mapper nodes by label
+      if (node.kind === 'mybatis-mapper') {
+        nameToNodeId.set(node.label, node.id);
+      }
+    }
+
+    const edgesToResolve = graph.getAllEdges().filter(e =>
+      e.kind === 'spring-injects' && !graph.hasNode(e.target)
+    );
+
+    for (const edge of edgesToResolve) {
+      // Target is like "spring-service:UserService" — extract the type name
+      const typeName = edge.target.replace(/^spring-service:/, '');
+      const realNodeId = nameToNodeId.get(typeName);
+
+      if (realNodeId && realNodeId !== edge.source) {
+        graph.removeEdge(edge.id);
+        graph.addEdge({
+          ...edge,
+          id: `${edge.source}:spring-injects:${realNodeId}`,
+          target: realNodeId,
+        });
+      }
+    }
+  }
+
+  /**
+   * Link Repository nodes to their corresponding Mapper nodes.
+   * Matches by domain name: UserRepository → UserMapper (both @Mapper interface and mybatis-mapper XML).
+   * This completes the chain: Service → Repository → Mapper → XML → DB Table.
+   */
+  private resolveRepositoryToMapper(graph: DependencyGraph): void {
+    const repositories = graph.getAllNodes().filter(n =>
+      n.kind === 'spring-service' && (n.metadata.isRepository || n.label.endsWith('Repository'))
+    );
+    const mappers = graph.getAllNodes().filter(n =>
+      n.kind === 'spring-service' && n.metadata.isMapper
+    );
+    const mybatisMappers = graph.getAllNodes().filter(n => n.kind === 'mybatis-mapper');
+
+    for (const repo of repositories) {
+      const domain = repo.label.replace('Repository', '');
+
+      // Find matching @Mapper interface
+      const mapper = mappers.find(m => m.label === domain + 'Mapper');
+      if (mapper && !graph.getAllEdges().some(e => e.source === repo.id && e.target === mapper.id)) {
+        graph.addEdge({
+          id: `${repo.id}:spring-injects:${mapper.id}`,
+          source: repo.id,
+          target: mapper.id,
+          kind: 'spring-injects',
+          metadata: { viaDomainMatch: true },
+        });
+      }
+
+      // Also link directly to mybatis-mapper if no @Mapper interface exists
+      if (!mapper) {
+        const mbMapper = mybatisMappers.find(m => m.label === domain + 'Mapper');
+        if (mbMapper && !graph.getAllEdges().some(e => e.source === repo.id && e.target === mbMapper.id)) {
+          graph.addEdge({
+            id: `${repo.id}:spring-injects:${mbMapper.id}`,
+            source: repo.id,
+            target: mbMapper.id,
+            kind: 'spring-injects',
+            metadata: { viaDomainMatch: true },
+          });
+        }
+      }
     }
   }
 
