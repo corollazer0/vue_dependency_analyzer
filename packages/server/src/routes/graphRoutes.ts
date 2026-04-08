@@ -51,4 +51,48 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
     const decoded = decodeURIComponent(nodeId);
     return engine.getNodeImpact(decoded, depth ? parseInt(depth, 10) : undefined);
   });
+
+  // Path finding between two nodes
+  fastify.get('/api/graph/paths', async (request, reply) => {
+    const { from, to, maxDepth } = request.query as { from?: string; to?: string; maxDepth?: string };
+    if (!from || !to) {
+      reply.code(400);
+      return { error: 'Both "from" and "to" query parameters are required' };
+    }
+    const paths = engine.findPaths(
+      decodeURIComponent(from),
+      decodeURIComponent(to),
+      maxDepth ? parseInt(maxDepth, 10) : 10,
+    );
+    return { paths, count: paths.length };
+  });
+
+  // Analysis overlays (circular, orphan, hub node IDs)
+  fastify.get('/api/analysis/overlays', async (request, reply) => {
+    return engine.getAnalysisOverlays();
+  });
+
+  // Source code snippet
+  fastify.get('/api/source-snippet', async (request, reply) => {
+    const { file, line, context } = request.query as { file?: string; line?: string; context?: string };
+    if (!file || !line) {
+      reply.code(400);
+      return { error: '"file" and "line" parameters required' };
+    }
+    const result = engine.getSourceSnippet(
+      decodeURIComponent(file),
+      parseInt(line, 10),
+      context ? parseInt(context, 10) : 5,
+    );
+    if (!result) {
+      reply.code(404);
+      return { error: 'File not found' };
+    }
+    return result;
+  });
+
+  // Parse errors
+  fastify.get('/api/analysis/parse-errors', async (request, reply) => {
+    return { errors: engine.getParseErrors() };
+  });
 }

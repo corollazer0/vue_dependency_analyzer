@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.example.mapper.UserMapper">
+
+    <select id="findById" resultType="com.example.model.User">
+        SELECT * FROM users WHERE id = #{id}
+    </select>
+
+    <select id="findByRole" resultType="com.example.model.User">
+        SELECT u.* FROM users u
+        JOIN user_roles ur ON u.id = ur.user_id
+        WHERE ur.role = #{role}
+    </select>
+
+    <insert id="insert" parameterType="com.example.model.User">
+        INSERT INTO users (name, email, created_at)
+        VALUES (#{name}, #{email}, NOW())
+    </insert>
+
+    <update id="updateEmail">
+        UPDATE users SET email = #{email} WHERE id = #{id}
+    </update>
+
+    <delete id="deleteById">
+        DELETE FROM users WHERE id = #{id}
+    </delete>
+
+</mapper>

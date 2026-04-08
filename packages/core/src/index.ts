@@ -10,11 +10,13 @@ export { TsFileParser } from './parsers/typescript/TsFileParser.js';
 export { ImportResolver } from './parsers/typescript/ImportResolver.js';
 export { JavaFileParser } from './parsers/java/JavaFileParser.js';
 export { KotlinFileParser } from './parsers/java/KotlinFileParser.js';
+export { MyBatisXmlParser } from './parsers/java/MyBatisXmlParser.js';
 
 // Linkers
 export { ApiCallLinker } from './linkers/ApiCallLinker.js';
 export { NativeBridgeLinker } from './linkers/NativeBridgeLinker.js';
 export { CrossBoundaryResolver } from './linkers/CrossBoundaryResolver.js';
+export { MyBatisLinker } from './linkers/MyBatisLinker.js';
 
 // Analyzers
 export { findCircularDependencies } from './analyzers/CircularDependencyAnalyzer.js';

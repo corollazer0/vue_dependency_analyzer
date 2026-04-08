@@ -837,3 +837,109 @@ Steps 2, 3, 4는 Step 1 완료 후 **병렬 진행 가능**.
 </ultraplan>                                                                                                
                                                                                                             
 The user approved this plan in the remote session. Give them a brief summary, then start implementing.  
+
+
+<ultraplan>                                                                                                                       
+# Phase 4: Full-Stack Deep Analysis                                                                                               
+                                                                                                                                  
+## Context                                                                                                                        
+                                                                                                                                  
+VDA (Vue Dependency Analyzer) has Phase 1-3 implemented: Vue/TS/Java parsers, cross-boundary linkers, analyzers                   
+(circular/orphan/impact/complexity), Fastify server with WebSocket, and a Cytoscape.js-based web UI with clustering, filtering,   
+and node detail panels.                                                                                                           
+                                                                                                                                  
+**What's missing** — the gap between the current codebase and full E2E dependency tracking:                                       
+- No MyBatis/DB layer (SQL→table nodes)                                                                                           
+- Spring parser only handles `@Autowired` and basic constructor injection — no Lombok `@RequiredArgsConstructor`,                 
+`@Configuration`/`@Bean`, or Spring Events                                                                                        
+- No DTO field-level analysis or frontend↔backend field consistency checking                                                      
+- No Vue emit↔parent `@event` virtual edges                                                                                       
+- `findPaths()` exists in `query.ts` but has no API route                                                                         
+- Circular/orphan/hub data returned by `/api/stats` but no dedicated overlay API for the graph                                    
+- No pathfinder UI, breadcrumb navigation, edge bundling, or source snippet viewer                                                
+- No parse error panel                                                                                                            
+                                                                                                                                  
+## Architecture Diagram                                                                                                           
+                                                                                                                                  
+```mermaid                                                                                                                        
+graph TD                                                                                                                          
+    subgraph "Step 1-2: Backend Parsing"                                                                                          
+        A1[MyBatisXmlParser] -->|mybatis-maps| A2[MyBatisLinker]                                                                  
+        A3[JavaFileParser enhancements] -->|@Bean, Lombok, Events| A2                                                             
+        A2 -->|reads-table, writes-table| A4[db-table nodes]                                                                      
+    end                                                                                                                           
+                                                                                                                                  
+    subgraph "Step 3: Analysis API"                                                                                               
+        B1[/api/graph/paths] -->|uses existing findPaths| B2[query.ts]                                                            
+        B3[/api/analysis/overlays] -->|circular+orphan+hub IDs| B4[graphStore overlays]                                           
+    end                                                                                                                           
+                                                                                                                                  
+    subgraph "Step 4-5: DTO + Events"                                                                                             
+        C1[DTO field extraction] --> C2[DtoFlowLinker]                                                                            
+        C2 --> C3[DtoConsistencyChecker]                                                                                          
+        C4[Vue emit resolver] --> C5[Spring Event edges]                                                                          
+    end                                                                                                                           
+                                                                                                                                  
+    subgraph "Step 6-7: Frontend"                                                                                                 
+        D1[PathfinderPanel] --> D2[ForceGraphView overlays]                                                                       
+        D3[BreadcrumbNav] --> D4[SourceSnippet]                                                                                   
+        D5[ParseErrorPanel]                                                                                                       
+    end                                                                                                                           
+                                                                                                                                  
+    A4 --> B3                                                                                                                     
+    C3 -->|/api/analysis/dto-consistency| D2                                                                                      
+    B4 --> D2                                                                                                                     
+```                                                                                                                               
+                                                                                                                                  
+## Implementation Steps                                                                                                           
+                                                                                                                                  
+### Step 1: MyBatis XML Parser + DB Table Layer                                                                                   
+                                                                                                                                  
+Adds `mybatis-mapper`, `mybatis-statement`, `db-table` nodes and `mybatis-maps`, `reads-table`, `writes-table` edges.             
+                                                                                                                                  
+**New files:**                                                                                                                    
+                                                                                                                                  
+1. **`packages/core/src/parsers/java/MyBatisXmlParser.ts`** — implements `FileParser`                                             
+   - `supports()`: `.xml` files only                                                                                              
+   - `parse()`: check for `<mapper namespace=` to confirm it's a MyBatis mapper                                                   
+   - Use regex (not a new dependency) to extract `<select id="..."`, `<insert id="..."`, e                                        
+… +193 lines …                                                                                                                    
+|---|---|                                                                                                                         
+| `findPaths()` in `core/src/graph/query.ts:92-117` | Step 3 API — just wrap in route |                                           
+| `findCircularDependencies()` in `core/src/analyzers/CircularDependencyAnalyzer.ts` | Step 3 overlays |                          
+| `findOrphanNodes()` in `core/src/analyzers/OrphanDetector.ts` | Step 3 overlays |                                               
+| `findHubs()` in `core/src/analyzers/ComplexityScorer.ts:32` | Step 3 overlays |                                                 
+| `FileParser` interface in `core/src/graph/types.ts:96-99` | Step 1 MyBatisXmlParser implements this |                           
+| `CrossBoundaryResolver.resolve()` pattern | Steps 1, 5, 6 linkers follow same orchestration |                                   
+| `CommandPalette.vue` command registration | Steps 4, 8 add new commands |                                                       
+| `NODE_STYLES` / `EDGE_STYLES` in `web-ui/src/types/graph.ts` | Steps 1, 2 extend these maps |                                   
+                                                                                                                                  
+## Verification Plan                                                                                                              
+                                                                                                                                  
+1. **Step 1**: Create `UserMapper.xml` fixture → run `MyBatisXmlParser.parse()` → assert `mybatis-mapper`, `mybatis-statement`,   
+`db-table` nodes exist and `reads-table`/`writes-table` edges connect correctly. Run `vitest run` in core package.                
+                                                                                                                                  
+2. **Step 2**: Create `AppConfig.java` fixture with `@Configuration`/`@Bean` → assert `spring-service` node with                  
+`isConfiguration: true` and bean-producing edges. Test `@RequiredArgsConstructor` with final fields.                              
+                                                                                                                                  
+3. **Step 3**: After full analysis, call `GET /api/graph/paths?from=<controller>&to=<store>` → verify non-empty path array. Call  
+`GET /api/analysis/overlays` → verify `circularNodeIds` contains known cycles from test-project.                                  
+                                                                                                                                  
+4. **Step 4**: In browser, open Pathfinder, select two nodes, verify path highlights appear as golden lines on graph.             
+                                                                                                                                  
+5. **Step 5**: Intentionally create a DTO mismatch in test-project (backend field not in frontend interface) → call `GET          
+/api/analysis/dto-consistency` → verify mismatch reported.                                                                        
+                                                                                                                                  
+6. **Step 6**: In test-project, verify Vue component with `defineEmits(['submit'])` and parent with `@submit="handler"` produces  
+connected `emits-event`/`listens-event` edges.                                                                                    
+                                                                                                                                  
+7. **Step 7**: Toggle edge bundling in cluster view → verify visual bundling. Hover a node → verify neighbors push outward.       
+                                                                                                                                  
+8. **Step 8**: Click an edge → verify source snippet popup shows correct code. Open parse errors panel → verify any parse         
+failures are listed.                                                                                                              
+                                                                                                                                  
+**Build verification**: `cd packages/core && npm run build && npm run test` after each step. Full integration: `npm run build` at 
+ root, then `vda serve test-project --watch` and check UI.                                                                        
+</ultraplan>                                                                                                                      
+                                                                                                                                  
+The user approved this plan in the remote session. Give them a brief summary, then start implementing.

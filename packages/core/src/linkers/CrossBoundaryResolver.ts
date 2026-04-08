@@ -1,17 +1,20 @@
 import { DependencyGraph } from '../graph/DependencyGraph.js';
 import { ApiCallLinker } from './ApiCallLinker.js';
 import { NativeBridgeLinker } from './NativeBridgeLinker.js';
+import { MyBatisLinker } from './MyBatisLinker.js';
 import { ImportResolver } from '../parsers/typescript/ImportResolver.js';
 import type { AnalysisConfig, GraphEdge } from '../graph/types.js';
 
 export class CrossBoundaryResolver {
   private apiCallLinker: ApiCallLinker;
   private nativeBridgeLinker: NativeBridgeLinker;
+  private myBatisLinker: MyBatisLinker;
   private importResolver: ImportResolver;
 
   constructor(config: AnalysisConfig, projectRoot: string) {
     this.apiCallLinker = new ApiCallLinker(config.apiBaseUrl);
     this.nativeBridgeLinker = new NativeBridgeLinker();
+    this.myBatisLinker = new MyBatisLinker();
     this.importResolver = new ImportResolver(config, projectRoot);
   }
 
@@ -24,6 +27,9 @@ export class CrossBoundaryResolver {
 
     // 3. Create native bridge nodes and link calls
     this.nativeBridgeLinker.link(graph);
+
+    // 4. Link MyBatis mappers to Java interfaces and deduplicate tables
+    this.myBatisLinker.link(graph);
   }
 
   private resolveImports(graph: DependencyGraph): void {

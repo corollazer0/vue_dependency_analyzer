@@ -8,6 +8,7 @@ import { VueSfcParser } from '../parsers/vue/VueSfcParser.js';
 import { TsFileParser } from '../parsers/typescript/TsFileParser.js';
 import { JavaFileParser } from '../parsers/java/JavaFileParser.js';
 import { KotlinFileParser } from '../parsers/java/KotlinFileParser.js';
+import { MyBatisXmlParser } from '../parsers/java/MyBatisXmlParser.js';
 
 export interface ProgressInfo {
   processed: number;
@@ -42,6 +43,7 @@ export function parseFile(filePath: string, content: string, config: AnalysisCon
     new TsFileParser(),
     new JavaFileParser(),
     new KotlinFileParser(),
+    new MyBatisXmlParser(),
   ];
 
   for (const parser of parsers) {

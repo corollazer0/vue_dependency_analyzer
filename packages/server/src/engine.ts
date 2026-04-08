@@ -12,6 +12,7 @@ import {
   calculateComplexity,
   filterByKind,
   analyzeImpact,
+  findPaths as findPathsFn,
   toJSON,
   type AnalysisConfig,
   type SerializedGraph,
@@ -366,6 +367,52 @@ export class AnalysisEngine {
       topComplexity: complexity,
       cacheSize: this.cache.size,
     };
+  }
+
+  findPaths(from: string, to: string, maxDepth: number = 10) {
+    return findPathsFn(this.graph, from, to, maxDepth);
+  }
+
+  getAnalysisOverlays() {
+    const circular = findCircularDependencies(this.graph);
+    const circularNodeIds = new Set<string>();
+    for (const group of circular) {
+      for (const id of group) circularNodeIds.add(id);
+    }
+
+    const orphans = findOrphanNodes(this.graph).map(n => n.id);
+    const hubs = calculateComplexity(this.graph)
+      .filter(s => s.fanIn >= 5 || s.fanOut >= 5)
+      .map(s => s.nodeId);
+
+    return {
+      circularNodeIds: Array.from(circularNodeIds),
+      orphanNodeIds: orphans,
+      hubNodeIds: hubs,
+      circularGroups: circular,
+    };
+  }
+
+  getSourceSnippet(filePath: string, line: number, context: number = 5): { lines: { num: number; text: string; highlight: boolean }[] } | null {
+    try {
+      const content = readFileSync(filePath, 'utf-8');
+      const allLines = content.split('\n');
+      const start = Math.max(0, line - context - 1);
+      const end = Math.min(allLines.length, line + context);
+      return {
+        lines: allLines.slice(start, end).map((text, i) => ({
+          num: start + i + 1,
+          text,
+          highlight: start + i + 1 === line,
+        })),
+      };
+    } catch {
+      return null;
+    }
+  }
+
+  getParseErrors() {
+    return this.graph.metadata.parseErrors;
   }
 
   addClient(socket: WebSocket): void {

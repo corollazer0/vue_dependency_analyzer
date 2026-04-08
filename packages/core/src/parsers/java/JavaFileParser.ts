@@ -21,6 +21,12 @@ export class JavaFileParser implements FileParser {
       );
       const isService = annotations.some(a => a === 'Service');
 
+      const isRepository = annotations.some(a => a === 'Repository');
+      const isMapper = annotations.some(a => a === 'Mapper');
+      const isConfiguration = annotations.some(a => a === 'Configuration');
+      const hasRequiredArgsConstructor = annotations.some(a => a === 'RequiredArgsConstructor');
+      const fqn = packageName ? `${packageName}.${className}` : className;
+
       if (isController) {
         const controllerNodeId = `spring-controller:${filePath}`;
         const endpoints = extractEndpoints(content, filePath, basePath, controllerNodeId);
@@ -30,30 +36,34 @@ export class JavaFileParser implements FileParser {
           kind: 'spring-controller',
           label: className,
           filePath,
-          metadata: {
-            className,
-            packageName,
-            basePath,
-            endpointCount: endpoints.length,
-          },
+          metadata: { className, packageName, basePath, fqn, endpointCount: endpoints.length },
         });
 
         for (const ep of endpoints) {
           nodes.push(ep.node);
           edges.push(ep.edge);
         }
-      } else if (isService) {
+      } else if (isService || isRepository || isMapper || isConfiguration) {
         nodes.push({
           id: `spring-service:${filePath}`,
           kind: 'spring-service',
           label: className,
           filePath,
-          metadata: { className, packageName },
+          metadata: {
+            className, packageName, fqn,
+            isRepository, isMapper, isConfiguration,
+          },
         });
+
+        // @Bean methods in @Configuration classes
+        if (isConfiguration) {
+          const beanEdges = extractBeanMethods(content, filePath);
+          edges.push(...beanEdges);
+        }
       }
 
-      // Detect @Autowired / constructor injection
-      const injections = extractInjections(content, filePath);
+      // Detect @Autowired / constructor injection / @RequiredArgsConstructor
+      const injections = extractInjections(content, filePath, hasRequiredArgsConstructor);
       const sourceId = isController ? `spring-controller:${filePath}` : `spring-service:${filePath}`;
       if (nodes.length > 0) {
         for (const injection of injections) {
@@ -66,6 +76,10 @@ export class JavaFileParser implements FileParser {
           });
         }
       }
+
+      // Spring Events: publishEvent() and @EventListener
+      const events = extractSpringEvents(content, filePath, sourceId);
+      edges.push(...events);
     } catch (e) {
       errors.push({
         filePath,
@@ -209,7 +223,7 @@ function normalizePath(p: string): string {
   return normalized;
 }
 
-function extractInjections(content: string, filePath: string): string[] {
+function extractInjections(content: string, filePath: string, hasRequiredArgsConstructor: boolean = false): string[] {
   const injections: string[] = [];
 
   // @Autowired pattern
@@ -219,19 +233,87 @@ function extractInjections(content: string, filePath: string): string[] {
     injections.push(match[1]);
   }
 
-  // Constructor injection pattern (most common in modern Spring)
-  // Look for constructor with parameters typed as services
+  // @RequiredArgsConstructor (Lombok): all private final fields are injected
+  if (hasRequiredArgsConstructor) {
+    const finalFieldPattern = /private\s+final\s+(\w+)\s+\w+\s*;/g;
+    while ((match = finalFieldPattern.exec(content)) !== null) {
+      const type = match[1];
+      if (/^[A-Z]/.test(type) && !['String', 'Integer', 'Long', 'Boolean', 'List', 'Map', 'Set'].includes(type)) {
+        injections.push(type);
+      }
+    }
+  }
+
+  // Constructor injection pattern
   const constructorPattern = /(?:public\s+)?\w+\s*\(\s*((?:\w+\s+\w+\s*,?\s*)+)\)/;
   const ctorMatch = content.match(constructorPattern);
   if (ctorMatch) {
     const params = ctorMatch[1].split(',').map(p => p.trim());
     for (const param of params) {
       const parts = param.split(/\s+/);
-      if (parts.length >= 2 && /^[A-Z]/.test(parts[0]) && /Service$|Repository$/.test(parts[0])) {
+      if (parts.length >= 2 && /^[A-Z]/.test(parts[0]) && /Service$|Repository$|Mapper$/.test(parts[0])) {
         injections.push(parts[0]);
       }
     }
   }
 
-  return injections;
+  return [...new Set(injections)];
+}
+
+function extractBeanMethods(content: string, filePath: string): GraphEdge[] {
+  const edges: GraphEdge[] = [];
+  const configNodeId = `spring-service:${filePath}`;
+  const beanPattern = /@Bean\s*(?:\([^)]*\))?\s*(?:public\s+)?(\w+)(?:<[^>]+>)?\s+(\w+)\s*\(/g;
+  let match;
+
+  while ((match = beanPattern.exec(content)) !== null) {
+    const returnType = match[1];
+    const methodName = match[2];
+    edges.push({
+      id: `${configNodeId}:spring-injects:bean:${methodName}`,
+      source: configNodeId,
+      target: `spring-service:${returnType}`,
+      kind: 'spring-injects',
+      metadata: { viaBean: true, beanMethod: methodName, beanType: returnType },
+    });
+  }
+
+  return edges;
+}
+
+function extractSpringEvents(content: string, filePath: string, sourceNodeId: string): GraphEdge[] {
+  const edges: GraphEdge[] = [];
+
+  // publishEvent(new XxxEvent(...))
+  const publishPattern = /publishEvent\(\s*new\s+(\w+)/g;
+  let match;
+  while ((match = publishPattern.exec(content)) !== null) {
+    const eventClass = match[1];
+    const line = content.substring(0, match.index).split('\n').length;
+    edges.push({
+      id: `${sourceNodeId}:emits-event:event:${eventClass}`,
+      source: sourceNodeId,
+      target: `event:${eventClass}`,
+      kind: 'emits-event',
+      metadata: { eventClass },
+      loc: { filePath, line, column: 0 },
+    });
+  }
+
+  // @EventListener methods
+  const listenerPattern = /@EventListener[\s\S]*?(?:public|protected|private)\s+\w+\s+\w+\s*\(\s*(\w+)/g;
+  while ((match = listenerPattern.exec(content)) !== null) {
+    const eventClass = match[1];
+    const line = content.substring(0, match.index).split('\n').length;
+    edges.push({
+      id: `${sourceNodeId}:listens-event:event:${eventClass}`,
+      source: `event:${eventClass}`,
+      target: sourceNodeId,
+      kind: 'listens-event',
+      metadata: { eventClass },
+      loc: { filePath, line, column: 0 },
+    });
+  }
+
+  return edges;
 }

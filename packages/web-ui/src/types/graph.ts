@@ -10,7 +10,10 @@ export type NodeKind =
   | 'spring-endpoint'
   | 'spring-service'
   | 'native-bridge'
-  | 'native-method';
+  | 'native-method'
+  | 'mybatis-mapper'
+  | 'mybatis-statement'
+  | 'db-table';
 
 export type EdgeKind =
   | 'imports'
@@ -26,7 +29,11 @@ export type EdgeKind =
   | 'api-serves'
   | 'native-call'
   | 'route-renders'
-  | 'spring-injects';
+  | 'spring-injects'
+  | 'mybatis-maps'
+  | 'reads-table'
+  | 'writes-table'
+  | 'dto-flows';
 
 export interface GraphNode {
   id: string;
@@ -81,6 +88,9 @@ export const NODE_STYLES: Record<NodeKind, NodeStyle> = {
   'spring-service':    { color: '#4caf50', shape: 'hexagon' },
   'native-bridge':     { color: '#ff7043', shape: 'star' },
   'native-method':     { color: '#ff9800', shape: 'star' },
+  'mybatis-mapper':    { color: '#e91e63', shape: 'round-rectangle' },
+  'mybatis-statement': { color: '#f06292', shape: 'rectangle' },
+  'db-table':          { color: '#00bcd4', shape: 'diamond' },
 };
 
 // Backward compat
@@ -101,6 +111,9 @@ export const NODE_LABELS: Record<NodeKind, string> = {
   'spring-service': 'Service',
   'native-bridge': 'Native Bridge',
   'native-method': 'Native Method',
+  'mybatis-mapper': 'MyBatis Mapper',
+  'mybatis-statement': 'SQL Statement',
+  'db-table': 'DB Table',
 };
 
 export const EDGE_STYLES: Record<EdgeKind, { color: string; dashed: boolean }> = {
@@ -118,4 +131,8 @@ export const EDGE_STYLES: Record<EdgeKind, { color: string; dashed: boolean }> =
   'native-call': { color: '#ff7043', dashed: true },
   'route-renders': { color: '#3498db', dashed: false },
   'spring-injects': { color: '#4caf50', dashed: false },
+  'mybatis-maps': { color: '#e91e63', dashed: false },
+  'reads-table': { color: '#00bcd4', dashed: false },
+  'writes-table': { color: '#ff5722', dashed: false },
+  'dto-flows': { color: '#9c27b0', dashed: true },
 };

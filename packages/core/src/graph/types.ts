@@ -12,7 +12,10 @@ export type NodeKind =
   | 'spring-endpoint'
   | 'spring-service'
   | 'native-bridge'
-  | 'native-method';
+  | 'native-method'
+  | 'mybatis-mapper'
+  | 'mybatis-statement'
+  | 'db-table';
 
 export type EdgeKind =
   | 'imports'
@@ -28,7 +31,11 @@ export type EdgeKind =
   | 'api-serves'
   | 'native-call'
   | 'route-renders'
-  | 'spring-injects';
+  | 'spring-injects'
+  | 'mybatis-maps'
+  | 'reads-table'
+  | 'writes-table'
+  | 'dto-flows';
 
 export interface SourceLocation {
   filePath: string;
