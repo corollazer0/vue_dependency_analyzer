@@ -22,7 +22,6 @@ const showSidebar = ref(true);
 const wsStatus = ref<'connecting' | 'connected' | 'disconnected'>('disconnected');
 const analyzing = ref(false);
 const progress = ref({ processed: 0, total: 0, currentFile: '', cachedCount: 0, elapsedMs: 0 });
-
 let ws: WebSocket | null = null;
 let reconnectTimer: ReturnType<typeof setTimeout>;
 
@@ -32,6 +31,15 @@ const appState = computed(() => {
   if (graphStore.loading) return 'loading';
   if (!graphStore.graphData || graphStore.graphData.nodes.length === 0) return 'empty';
   return 'ready';
+});
+
+// Auto-open detail when node selected, keep open if manually toggled
+watch(() => graphStore.selectedNodeId, (nodeId) => {
+  if (nodeId) uiStore.showDetail = true;
+  const params = new URLSearchParams();
+  if (nodeId) params.set('node', nodeId);
+  params.set('view', activeView.value);
+  history.replaceState(null, '', `#${params.toString()}`);
 });
 
 onMounted(async () => {
@@ -49,13 +57,6 @@ function loadHashState() {
   if (nodeId) graphStore.selectNode(decodeURIComponent(nodeId));
   if (params.get('view') === 'tree') activeView.value = 'tree';
 }
-
-watch(() => graphStore.selectedNodeId, (nodeId) => {
-  const params = new URLSearchParams();
-  if (nodeId) params.set('node', nodeId);
-  params.set('view', activeView.value);
-  history.replaceState(null, '', `#${params.toString()}`);
-});
 
 function connectWebSocket() {
   wsStatus.value = 'connecting';
@@ -91,7 +92,6 @@ function handleKeydown(e: KeyboardEvent) {
         <h2 class="text-lg font-semibold mb-2">Server not connected</h2>
         <p class="text-sm mb-4" style="color: var(--text-tertiary)">Make sure the VDA server is running</p>
         <code class="text-xs px-3 py-2 rounded-lg block mb-4" style="background: var(--surface-secondary); color: var(--accent-vue)">vda serve your-project --watch</code>
-        <p class="text-xs" style="color: var(--text-tertiary)">Reconnecting...</p>
       </div>
     </div>
 
@@ -109,56 +109,66 @@ function handleKeydown(e: KeyboardEvent) {
       <div class="flex-1 flex overflow-hidden">
 
         <!-- Left Sidebar -->
-        <template v-if="showSidebar">
-          <aside class="flex flex-col flex-shrink-0 border-r" :style="{ width: uiStore.sidebarWidth + 'px' }" style="background: var(--surface-secondary); border-color: var(--border-subtle)">
-            <div class="p-3 border-b flex items-center justify-between" style="border-color: var(--border-subtle)">
-              <div>
-                <h1 class="text-lg font-bold" style="color: var(--accent-vue)">VDA</h1>
-                <p class="text-xs" style="color: var(--text-tertiary)">Vue Dependency Analyzer</p>
-              </div>
-              <span class="w-2 h-2 rounded-full" :style="{ backgroundColor: wsStatus === 'connected' ? 'var(--accent-vue)' : wsStatus === 'connecting' ? 'var(--accent-warning)' : 'var(--accent-danger)' }" :class="wsStatus === 'connecting' ? 'animate-pulse' : ''"></span>
+        <aside
+          v-if="showSidebar"
+          class="flex flex-col flex-shrink-0 border-r"
+          :style="{ width: uiStore.sidebarWidth + 'px' }"
+          style="background: var(--surface-secondary); border-color: var(--border-subtle)"
+        >
+          <!-- Header with close button -->
+          <div class="p-3 border-b flex items-center justify-between" style="border-color: var(--border-subtle)">
+            <div class="flex items-center gap-2">
+              <h1 class="text-lg font-bold" style="color: var(--accent-vue)">VDA</h1>
+              <span class="w-2 h-2 rounded-full flex-shrink-0" :style="{ backgroundColor: wsStatus === 'connected' ? 'var(--accent-vue)' : wsStatus === 'connecting' ? 'var(--accent-warning)' : 'var(--accent-danger)' }" :class="wsStatus === 'connecting' ? 'animate-pulse' : ''"></span>
             </div>
-            <div class="flex border-b" style="border-color: var(--border-subtle)">
-              <button v-for="tab in [{id:'search',label:'Search'},{id:'filter',label:'Filter'}]" :key="tab.id" @click="sidebarTab = tab.id as any" class="flex-1 px-3 py-2 text-sm border-b-2 transition-colors" :style="{ color: sidebarTab === tab.id ? 'var(--text-primary)' : 'var(--text-tertiary)', borderColor: sidebarTab === tab.id ? 'var(--accent-blue)' : 'transparent' }">{{ tab.label }}</button>
-            </div>
-            <div class="flex-1 overflow-hidden">
-              <SearchPanel v-if="sidebarTab === 'search'" />
-              <FilterPanel v-else />
-            </div>
-            <div class="p-3 border-t text-xs" style="border-color: var(--border-subtle); color: var(--text-tertiary)">
-              <p><span style="color: var(--text-secondary)">{{ graphStore.filteredNodes.length }}</span> / {{ graphStore.graphData?.nodes.length || 0 }} nodes · <span style="color: var(--text-secondary)">{{ graphStore.filteredEdges.length }}</span> / {{ graphStore.graphData?.edges.length || 0 }} edges</p>
-            </div>
-          </aside>
-          <ResizeHandle v-model="uiStore.sidebarWidth" :min="200" :max="400" />
-        </template>
+            <button @click="showSidebar = false" class="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors" style="color: var(--text-tertiary)" title="Close sidebar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
 
-        <!-- Main -->
+          <!-- Tabs -->
+          <div class="flex border-b" style="border-color: var(--border-subtle)">
+            <button v-for="tab in [{id:'search',label:'Search'},{id:'filter',label:'Filter'}]" :key="tab.id" @click="sidebarTab = tab.id as any" class="flex-1 px-3 py-2 text-sm border-b-2 transition-colors" :style="{ color: sidebarTab === tab.id ? 'var(--text-primary)' : 'var(--text-tertiary)', borderColor: sidebarTab === tab.id ? 'var(--accent-blue)' : 'transparent' }">{{ tab.label }}</button>
+          </div>
+
+          <!-- Content -->
+          <div class="flex-1 overflow-hidden">
+            <SearchPanel v-if="sidebarTab === 'search'" />
+            <FilterPanel v-else />
+          </div>
+
+          <!-- Stats -->
+          <div class="p-3 border-t text-xs" style="border-color: var(--border-subtle); color: var(--text-tertiary)">
+            <span style="color: var(--text-secondary)">{{ graphStore.filteredNodes.length }}</span> / {{ graphStore.graphData?.nodes.length || 0 }} nodes ·
+            <span style="color: var(--text-secondary)">{{ graphStore.filteredEdges.length }}</span> / {{ graphStore.graphData?.edges.length || 0 }} edges
+          </div>
+        </aside>
+
+        <!-- Sidebar resize handle -->
+        <ResizeHandle v-if="showSidebar" v-model="uiStore.sidebarWidth" :min="200" :max="400" />
+
+        <!-- Main area -->
         <main class="flex-1 flex flex-col overflow-hidden">
           <!-- Toolbar -->
           <header class="h-10 flex items-center px-3 gap-2 flex-shrink-0 border-b" style="background: var(--surface-secondary); border-color: var(--border-subtle)">
-            <!-- Left sidebar toggle -->
-            <button @click="showSidebar = !showSidebar" class="px-2 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" :title="showSidebar ? 'Hide sidebar' : 'Show sidebar'">{{ showSidebar ? '◧' : '◨' }}</button>
-
-            <div class="w-px h-5" style="background: var(--border-subtle)"></div>
+            <!-- Open sidebar button (visible when sidebar is closed) -->
+            <button v-if="!showSidebar" @click="showSidebar = true" class="w-7 h-7 flex items-center justify-center rounded-md transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Open sidebar">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            </button>
 
             <!-- View switcher -->
             <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
 
             <div class="flex-1"></div>
 
-            <!-- Shortcuts hint -->
-            <span class="text-xs hidden sm:inline" style="color: var(--text-tertiary)">
-              <kbd class="px-1 rounded" style="background: var(--surface-elevated)">⌘K</kbd> commands
-            </span>
+            <span class="text-xs hidden sm:inline" style="color: var(--text-tertiary)"><kbd class="px-1 rounded" style="background: var(--surface-elevated)">⌘K</kbd></span>
 
             <button @click="graphStore.triggerReanalyze()" :disabled="graphStore.loading || analyzing" class="px-3 py-1 rounded-md text-xs font-medium disabled:opacity-40" style="background: var(--accent-vue); color: var(--text-inverse)">{{ graphStore.loading || analyzing ? 'Analyzing...' : 'Re-analyze' }}</button>
-
-            <!-- Right detail toggle -->
-            <button @click="uiStore.showDetail = !uiStore.showDetail" class="px-2 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" :title="uiStore.showDetail ? 'Hide detail' : 'Show detail'">{{ uiStore.showDetail ? '◨' : '◧' }}</button>
           </header>
 
-          <!-- Views -->
+          <!-- Views + Detail -->
           <div class="flex-1 flex overflow-hidden">
+            <!-- Graph/Tree -->
             <div class="flex-1 relative">
               <div v-if="graphStore.loading && !analyzing" class="absolute inset-0 flex items-center justify-center z-10" style="background: var(--surface-overlay)">
                 <div class="flex items-center gap-2" style="color: var(--text-secondary)">
@@ -170,11 +180,21 @@ function handleKeydown(e: KeyboardEvent) {
               <GraphLegend v-if="activeView === 'graph'" />
             </div>
 
-            <!-- Right Detail Panel -->
+            <!-- Right Detail Panel — always open when showDetail, with close button inside -->
             <template v-if="uiStore.showDetail">
               <ResizeHandle v-model="uiStore.detailWidth" :min="280" :max="500" />
-              <aside :style="{ width: uiStore.detailWidth + 'px' }" style="background: var(--surface-secondary)" class="flex-shrink-0">
-                <NodeDetail />
+              <aside :style="{ width: uiStore.detailWidth + 'px' }" style="background: var(--surface-secondary)" class="flex-shrink-0 flex flex-col">
+                <!-- Detail header with close -->
+                <div class="h-10 flex items-center px-3 border-b" style="border-color: var(--border-subtle)">
+                  <span class="text-xs font-medium" style="color: var(--text-secondary)">Detail</span>
+                  <div class="flex-1"></div>
+                  <button @click="uiStore.showDetail = false" class="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors" style="color: var(--text-tertiary)" title="Close detail panel">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                  </button>
+                </div>
+                <div class="flex-1 overflow-y-auto">
+                  <NodeDetail />
+                </div>
               </aside>
             </template>
           </div>
