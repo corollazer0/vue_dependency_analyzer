@@ -61,7 +61,8 @@ function buildClusterElements() {
           elements.push({ data: { id: edge.id, source: edge.source, target: edge.target, kind: edge.kind } });
         }
       }
-    } else {
+    } else if (cluster.childCount > 0) {
+      // Real cluster with children
       const dominantKind = Object.entries(cluster.childKinds).sort((a, b) => b[1] - a[1])[0]?.[0] || 'ts-module';
       elements.push({
         data: {
@@ -70,6 +71,16 @@ function buildClusterElements() {
           kind: dominantKind,
           isCluster: true,
           childCount: cluster.childCount,
+        },
+      });
+    } else {
+      // Individual node (too small to cluster)
+      const kind = Object.keys(cluster.childKinds)[0] || 'ts-module';
+      elements.push({
+        data: {
+          id: cluster.id,
+          label: cluster.label,
+          kind,
         },
       });
     }
@@ -296,20 +307,23 @@ function initCytoscape() {
   });
 
   // ─── Click interaction ───
-  cy.on('tap', 'node', (evt) => {
+  cy.on('tap', 'node', async (evt) => {
     const data = evt.target.data();
-    if (data.isCluster && !clustering.isExpanded(data.id)) return;
-    graphStore.selectNode(data.id);
-  });
 
-  cy.on('dbltap', 'node[?isCluster]', async (evt) => {
-    const clusterId = evt.target.id();
-    if (clustering.isExpanded(clusterId)) {
-      clustering.collapseCluster(clusterId);
-    } else {
-      await clustering.expandCluster(clusterId);
+    // Cluster node: single click expands/collapses
+    if (data.isCluster) {
+      const clusterId = data.id;
+      if (clustering.isExpanded(clusterId)) {
+        clustering.collapseCluster(clusterId);
+      } else {
+        await clustering.expandCluster(clusterId);
+      }
+      refreshGraph();
+      return;
     }
-    refreshGraph();
+
+    // Regular node: select it
+    graphStore.selectNode(data.id);
   });
 
   cy.on('tap', (evt) => {
