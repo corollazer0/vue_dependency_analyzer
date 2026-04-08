@@ -105,8 +105,16 @@ export const useGraphStore = defineStore('graph', () => {
     }
   }
 
+  // focusNodeId: set by double-click from Search or Tree to re-root the tree view
+  const focusNodeId = ref<string | null>(null);
+
   function selectNode(nodeId: string | null) {
     selectedNodeId.value = nodeId;
+  }
+
+  function focusNode(nodeId: string) {
+    selectedNodeId.value = nodeId;
+    focusNodeId.value = nodeId;
   }
 
   function toggleNodeKind(kind: NodeKind) {
@@ -155,6 +163,7 @@ export const useGraphStore = defineStore('graph', () => {
     loading,
     error,
     selectedNodeId,
+    focusNodeId,
     selectedNode,
     selectedNodeEdges,
     searchQuery,
@@ -167,6 +176,7 @@ export const useGraphStore = defineStore('graph', () => {
     search,
     triggerReanalyze,
     selectNode,
+    focusNode,
     toggleNodeKind,
     toggleEdgeKind,
     resetFilters,

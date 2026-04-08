@@ -86,10 +86,9 @@ function renderTree() {
   const nodeGroups = g.selectAll('.node').data(root.descendants()).join('g')
     .attr('transform', (d: any) => `translate(${d.y},${d.x})`).style('cursor', 'pointer');
 
-  // Single click = select (detail panel) without re-rooting tree
+  // Single click = select (detail panel only)
   // Double click = re-root tree on clicked node
   nodeGroups.on('click', (_e: any, d: any) => {
-    internalClick = true; // Prevent watcher from re-rooting
     graphStore.selectNode(d.data.id);
     // Visual highlight
     g.selectAll('circle').attr('stroke', (dd: any) => dd.depth === 0 ? '#fff' : 'none').attr('stroke-width', (dd: any) => dd.depth === 0 ? 2 : 0);
@@ -97,7 +96,7 @@ function renderTree() {
   });
   nodeGroups.on('dblclick', (_e: any, d: any) => {
     _e.stopPropagation();
-    treeRootId.value = d.data.id;
+    graphStore.focusNode(d.data.id); // Sets both selectedNodeId and focusNodeId → triggers tree re-root
   });
 
   nodeGroups.append('circle')
@@ -121,12 +120,14 @@ function renderTree() {
   }
 }
 
-// When a node is selected externally (Search, Graph click), update tree root
-// Internal tree clicks set internalClick flag to prevent unwanted re-root
-let internalClick = false;
+// focusNodeId: set by double-click in Search or Graph — always re-roots tree
+watch(() => graphStore.focusNodeId, (id) => {
+  if (id) treeRootId.value = id;
+});
+
+// First selection (if no root yet): auto-set from selectedNodeId
 watch(() => graphStore.selectedNodeId, (id) => {
-  if (id && !internalClick) treeRootId.value = id;
-  internalClick = false;
+  if (id && !treeRootId.value) treeRootId.value = id;
 });
 
 // Bug #1: re-render when filters change
