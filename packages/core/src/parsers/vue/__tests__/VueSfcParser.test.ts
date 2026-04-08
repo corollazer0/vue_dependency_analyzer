@@ -106,6 +106,19 @@ describe('VueSfcParser', () => {
       expect(directiveEdges[0].metadata).toMatchObject({ directiveName: 'highlight' });
     });
 
+    it('should detect @event listeners on child components', () => {
+      const listenEdges = result.edges.filter(e => e.kind === 'listens-event');
+      expect(listenEdges).toHaveLength(2);
+      const eventNames = listenEdges.map(e => (e.metadata as any).eventName);
+      expect(eventNames).toContain('refresh');
+      expect(eventNames).toContain('item-selected');
+      // All should target the unresolved child component
+      for (const edge of listenEdges) {
+        expect(edge.target).toBe('component:ChildComponent');
+        expect((edge.metadata as any).componentName).toBe('ChildComponent');
+      }
+    });
+
     it('should not have parsing errors', () => {
       expect(result.errors).toHaveLength(0);
     });
