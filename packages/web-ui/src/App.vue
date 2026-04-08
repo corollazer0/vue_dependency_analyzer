@@ -144,8 +144,8 @@ function handleKeydown(e: KeyboardEvent) {
             <button v-for="tab in [{id:'search',label:'Search'},{id:'filter',label:'Filter'}]" :key="tab.id" @click="sidebarTab = tab.id as any" class="flex-1 px-3 py-2 text-sm border-b-2 transition-colors" :style="{ color: sidebarTab === tab.id ? 'var(--text-primary)' : 'var(--text-tertiary)', borderColor: sidebarTab === tab.id ? 'var(--accent-blue)' : 'transparent' }">{{ tab.label }}</button>
           </div>
 
-          <!-- Content -->
-          <div class="flex-1 overflow-hidden">
+          <!-- Content — Bug #4: overflow-y-auto so long filter lists are scrollable -->
+          <div class="flex-1 overflow-y-auto">
             <SearchPanel v-if="sidebarTab === 'search'" />
             <FilterPanel v-else />
           </div>
@@ -165,8 +165,8 @@ function handleKeydown(e: KeyboardEvent) {
           <!-- Toolbar -->
           <header role="navigation" aria-label="Toolbar" class="h-10 flex items-center px-3 gap-2 flex-shrink-0 border-b" style="background: var(--surface-secondary); border-color: var(--border-subtle)">
             <!-- Open sidebar button (visible when sidebar is closed) -->
-            <button v-if="!showSidebar" @click="showSidebar = true" class="w-7 h-7 flex items-center justify-center rounded-md transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Open sidebar">
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <button v-if="!showSidebar" @click="showSidebar = true" class="w-8 h-8 flex items-center justify-center rounded-md transition-colors border" style="background: var(--surface-elevated); color: var(--text-primary); border-color: var(--border-default)" title="Open sidebar (☰)">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
 
             <!-- View switcher -->
