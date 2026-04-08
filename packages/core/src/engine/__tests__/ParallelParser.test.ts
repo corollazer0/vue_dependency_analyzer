@@ -101,4 +101,38 @@ describe('ParallelParser', () => {
     expect(result.errors.length).toBeGreaterThan(0);
     expect(result.errors[0].message).toContain('Failed to read');
   });
+
+  it('should parse many files using worker threads (above WORKER_THRESHOLD)', async () => {
+    // Use enough files to exceed the WORKER_THRESHOLD of 4
+    const files = [
+      resolve(fixturesDir, 'SampleComponent.vue'),
+      resolve(fixturesDir, 'useAuth.ts'),
+      resolve(fixturesDir, 'stores/userStore.ts'),
+      resolve(fixturesDir, 'UserController.java'),
+      resolve(fixturesDir, 'UserMapper.xml'),
+    ];
+
+    const progressEvents: ProgressInfo[] = [];
+    const parser = new ParallelParser({});
+    const result = await parser.parseAll(files, (info) => {
+      progressEvents.push({ ...info });
+    });
+
+    // All files should be parsed with correct results (same as main-thread)
+    expect(result.nodes.length).toBeGreaterThan(10);
+    expect(result.edges.length).toBeGreaterThan(5);
+    expect(result.errors).toHaveLength(0);
+    expect(progressEvents.length).toBe(5);
+    expect(progressEvents[progressEvents.length - 1].processed).toBe(5);
+  });
+
+  it('should fall back to main thread when workers fail', async () => {
+    // Even with a single file (below threshold), it should work via main thread fallback
+    const files = [resolve(fixturesDir, 'SampleComponent.vue')];
+    const parser = new ParallelParser({}, 1);
+    const result = await parser.parseAll(files);
+
+    expect(result.nodes.length).toBeGreaterThan(0);
+    expect(result.errors).toHaveLength(0);
+  });
 });

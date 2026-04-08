@@ -126,4 +126,211 @@ describe('CrossBoundaryResolver', () => {
     // Should not crash
     expect(graph.getNodeCount()).toBe(1);
   });
+
+  describe('emit listener resolution', () => {
+    it('should create virtual event nodes and connect emit/listen pairs', () => {
+      const graph = new DependencyGraph();
+
+      // Parent component
+      addNode(graph, 'vue:/parent.vue', 'vue-component', '/parent.vue');
+      // Child component with emits
+      graph.addNode({
+        id: 'vue:/child.vue',
+        kind: 'vue-component',
+        label: 'ChildForm',
+        filePath: '/child.vue',
+        metadata: { emits: ['submit', 'cancel'] },
+      });
+
+      // Parent uses child
+      addEdge(graph, 'vue:/parent.vue', 'component:ChildForm', 'uses-component', { componentName: 'ChildForm' });
+      // Parent listens to @submit on ChildForm
+      addEdge(graph, 'vue:/parent.vue', 'component:ChildForm', 'listens-event', { eventName: 'submit', componentName: 'ChildForm' });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      // Should create a vue-event node
+      const eventNodes = graph.getAllNodes().filter(n => n.kind === 'vue-event');
+      expect(eventNodes).toHaveLength(1);
+      expect(eventNodes[0].label).toBe('ChildForm::submit');
+      expect(eventNodes[0].metadata.eventName).toBe('submit');
+
+      // Should create emits-event edge from child to event node
+      const emitsEdges = graph.getAllEdges().filter(e => e.kind === 'emits-event');
+      expect(emitsEdges).toHaveLength(1);
+      expect(emitsEdges[0].source).toBe('vue:/child.vue');
+      expect(emitsEdges[0].target).toBe(eventNodes[0].id);
+
+      // Should re-target listens-event edge to event node
+      const listenEdges = graph.getAllEdges().filter(e => e.kind === 'listens-event');
+      expect(listenEdges).toHaveLength(1);
+      expect(listenEdges[0].source).toBe('vue:/parent.vue');
+      expect(listenEdges[0].target).toBe(eventNodes[0].id);
+    });
+
+    it('should handle kebab-case event names matching camelCase emits', () => {
+      const graph = new DependencyGraph();
+
+      addNode(graph, 'vue:/parent.vue', 'vue-component', '/parent.vue');
+      graph.addNode({
+        id: 'vue:/child.vue',
+        kind: 'vue-component',
+        label: 'DataGrid',
+        filePath: '/child.vue',
+        metadata: { emits: ['rowSelected'] },
+      });
+
+      addEdge(graph, 'vue:/parent.vue', 'component:DataGrid', 'uses-component', { componentName: 'DataGrid' });
+      addEdge(graph, 'vue:/parent.vue', 'component:DataGrid', 'listens-event', { eventName: 'row-selected', componentName: 'DataGrid' });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      const eventNodes = graph.getAllNodes().filter(n => n.kind === 'vue-event');
+      expect(eventNodes).toHaveLength(1);
+      expect(eventNodes[0].metadata.eventName).toBe('rowSelected');
+    });
+
+    it('should not create event nodes when child does not emit the event', () => {
+      const graph = new DependencyGraph();
+
+      addNode(graph, 'vue:/parent.vue', 'vue-component', '/parent.vue');
+      graph.addNode({
+        id: 'vue:/child.vue',
+        kind: 'vue-component',
+        label: 'ChildForm',
+        filePath: '/child.vue',
+        metadata: { emits: ['submit'] },
+      });
+
+      addEdge(graph, 'vue:/parent.vue', 'component:ChildForm', 'uses-component', { componentName: 'ChildForm' });
+      // Parent listens to 'cancel' but child only emits 'submit'
+      addEdge(graph, 'vue:/parent.vue', 'component:ChildForm', 'listens-event', { eventName: 'cancel', componentName: 'ChildForm' });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      const eventNodes = graph.getAllNodes().filter(n => n.kind === 'vue-event');
+      expect(eventNodes).toHaveLength(0);
+    });
+
+    it('should handle multiple events on the same child', () => {
+      const graph = new DependencyGraph();
+
+      addNode(graph, 'vue:/parent.vue', 'vue-component', '/parent.vue');
+      graph.addNode({
+        id: 'vue:/child.vue',
+        kind: 'vue-component',
+        label: 'ChildForm',
+        filePath: '/child.vue',
+        metadata: { emits: ['submit', 'cancel', 'reset'] },
+      });
+
+      addEdge(graph, 'vue:/parent.vue', 'component:ChildForm', 'uses-component', { componentName: 'ChildForm' });
+      graph.addEdge({
+        id: 'vue:/parent.vue:listens-event:ChildForm:submit',
+        source: 'vue:/parent.vue',
+        target: 'component:ChildForm',
+        kind: 'listens-event',
+        metadata: { eventName: 'submit', componentName: 'ChildForm' },
+      });
+      graph.addEdge({
+        id: 'vue:/parent.vue:listens-event:ChildForm:cancel',
+        source: 'vue:/parent.vue',
+        target: 'component:ChildForm',
+        kind: 'listens-event',
+        metadata: { eventName: 'cancel', componentName: 'ChildForm' },
+      });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      const eventNodes = graph.getAllNodes().filter(n => n.kind === 'vue-event');
+      expect(eventNodes).toHaveLength(2);
+
+      const emitsEdges = graph.getAllEdges().filter(e => e.kind === 'emits-event');
+      expect(emitsEdges).toHaveLength(2);
+
+      const listenEdges = graph.getAllEdges().filter(e => e.kind === 'listens-event');
+      expect(listenEdges).toHaveLength(2);
+      // All should target event nodes, not component: targets
+      for (const edge of listenEdges) {
+        expect(edge.target).toMatch(/^vue-event:/);
+      }
+    });
+  });
+
+  describe('Spring event node creation', () => {
+    it('should create virtual spring-event nodes for emits-event edge targets', () => {
+      const graph = new DependencyGraph();
+
+      addNode(graph, 'spring-service:/OrderService.java', 'spring-service', '/OrderService.java');
+      graph.addEdge({
+        id: 'spring-service:/OrderService.java:emits-event:event:OrderCreatedEvent',
+        source: 'spring-service:/OrderService.java',
+        target: 'event:OrderCreatedEvent',
+        kind: 'emits-event',
+        metadata: { eventClass: 'OrderCreatedEvent' },
+      });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      expect(graph.hasNode('event:OrderCreatedEvent')).toBe(true);
+      const eventNode = graph.getNode('event:OrderCreatedEvent')!;
+      expect(eventNode.kind).toBe('spring-event');
+      expect(eventNode.label).toBe('OrderCreatedEvent');
+      expect(eventNode.metadata.virtual).toBe(true);
+    });
+
+    it('should create virtual spring-event nodes for listens-event edge sources', () => {
+      const graph = new DependencyGraph();
+
+      addNode(graph, 'spring-service:/NotificationService.java', 'spring-service', '/NotificationService.java');
+      graph.addEdge({
+        id: 'spring-service:/NotificationService.java:listens-event:event:OrderCreatedEvent',
+        source: 'event:OrderCreatedEvent',
+        target: 'spring-service:/NotificationService.java',
+        kind: 'listens-event',
+        metadata: { eventClass: 'OrderCreatedEvent' },
+      });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      expect(graph.hasNode('event:OrderCreatedEvent')).toBe(true);
+      const eventNode = graph.getNode('event:OrderCreatedEvent')!;
+      expect(eventNode.kind).toBe('spring-event');
+    });
+
+    it('should not duplicate nodes when event already exists', () => {
+      const graph = new DependencyGraph();
+
+      // Two services, same event
+      addNode(graph, 'spring-service:/A.java', 'spring-service', '/A.java');
+      addNode(graph, 'spring-service:/B.java', 'spring-service', '/B.java');
+
+      graph.addEdge({
+        id: 'spring-service:/A.java:emits-event:event:UserEvent',
+        source: 'spring-service:/A.java',
+        target: 'event:UserEvent',
+        kind: 'emits-event',
+        metadata: { eventClass: 'UserEvent' },
+      });
+      graph.addEdge({
+        id: 'spring-service:/B.java:listens-event:event:UserEvent',
+        source: 'event:UserEvent',
+        target: 'spring-service:/B.java',
+        kind: 'listens-event',
+        metadata: { eventClass: 'UserEvent' },
+      });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      const eventNodes = graph.getAllNodes().filter(n => n.kind === 'spring-event');
+      expect(eventNodes).toHaveLength(1);
+    });
+  });
 });

@@ -135,6 +135,19 @@ export class AnalysisEngine {
       }
       this.cache.save();
 
+      // Tag nodes with serviceId based on which service root they fall under
+      if (this.config.services && this.config.services.length > 0) {
+        for (const node of this.graph.getAllNodes()) {
+          for (const service of this.config.services) {
+            const serviceRoot = resolve(this.config.projectRoot, service.root);
+            if (node.filePath.startsWith(serviceRoot)) {
+              node.metadata.serviceId = service.id;
+              break;
+            }
+          }
+        }
+      }
+
       // Cross-boundary resolution
       const resolver = new CrossBoundaryResolver(this.config, this.config.projectRoot);
       resolver.resolve(this.graph);
@@ -169,6 +182,22 @@ export class AnalysisEngine {
       patterns.push(join(springParent, '**/*.xml'));
       patterns.push(join(this.config.springBootRoot, '**/*.xml'));
     }
+
+    // MSA: additional service roots
+    if (this.config.services && this.config.services.length > 0) {
+      for (const service of this.config.services) {
+        const serviceRoot = resolve(this.config.projectRoot, service.root);
+        if (service.type === 'vue') {
+          patterns.push(join(serviceRoot, '**/*.{vue,ts,js}'));
+        } else if (service.type === 'spring-boot') {
+          patterns.push(join(serviceRoot, '**/*.{java,kt}'));
+          const springParent = resolve(serviceRoot, '..');
+          patterns.push(join(springParent, '**/*.xml'));
+          patterns.push(join(serviceRoot, '**/*.xml'));
+        }
+      }
+    }
+
     if (patterns.length === 0) {
       patterns.push(join(this.config.projectRoot, '**/*.{vue,ts,js,java,kt,xml}'));
     }
@@ -191,6 +220,11 @@ export class AnalysisEngine {
 
       if (this.config.vueRoot) watchPaths.push(this.config.vueRoot);
       if (this.config.springBootRoot) watchPaths.push(this.config.springBootRoot);
+      if (this.config.services) {
+        for (const service of this.config.services) {
+          watchPaths.push(resolve(this.config.projectRoot, service.root));
+        }
+      }
       if (watchPaths.length === 0) watchPaths.push(this.config.projectRoot);
 
       this.watcher = chokidar.watch(watchPaths, {

@@ -38,7 +38,7 @@ function callNative() {
 <template>
   <div>
     <h1>{{ title }}</h1>
-    <ChildComponent :data="count" />
+    <ChildComponent :data="count" @refresh="fetchUsers" @item-selected="createUser" />
     <base-button @click="fetchUsers">Fetch</base-button>
     <custom-dialog v-if="isLoggedIn">
       <p v-highlight>Content</p>

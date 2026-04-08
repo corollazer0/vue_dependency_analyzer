@@ -73,6 +73,28 @@ export function analyzeTemplate(
         }
       }
 
+      // Detect event listeners on custom components (@event / v-on:event)
+      if (!BUILTIN_ELEMENTS.has(tag) && !BUILTIN_ELEMENTS.has(tag.toLowerCase())) {
+        const normalizedTag = toPascalCase(tag);
+        for (const prop of element.props) {
+          if (prop.type === 7 /* DIRECTIVE */) {
+            const directive = prop as DirectiveNode;
+            if (directive.name === 'on' && directive.arg && directive.arg.type === 4 /* SIMPLE_EXPRESSION */) {
+              const eventName = (directive.arg as any).content as string;
+              if (eventName) {
+                edges.push({
+                  id: `${componentNodeId}:listens-event:${normalizedTag}:${eventName}`,
+                  source: componentNodeId,
+                  target: `component:${normalizedTag}`,
+                  kind: 'listens-event',
+                  metadata: { eventName, componentName: normalizedTag },
+                });
+              }
+            }
+          }
+        }
+      }
+
       // Detect custom directives
       for (const prop of element.props) {
         if (prop.type === 7 /* DIRECTIVE */) {

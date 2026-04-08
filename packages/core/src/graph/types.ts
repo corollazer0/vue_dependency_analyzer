@@ -15,7 +15,9 @@ export type NodeKind =
   | 'native-method'
   | 'mybatis-mapper'
   | 'mybatis-statement'
-  | 'db-table';
+  | 'db-table'
+  | 'vue-event'
+  | 'spring-event';
 
 export type EdgeKind =
   | 'imports'

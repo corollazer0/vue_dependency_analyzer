@@ -86,7 +86,26 @@ export async function runAnalysis(
     patterns.push(join(config.springBootRoot, '**/*.xml'));
   }
 
-  if (!config.vueRoot && !config.springBootRoot) {
+  // MSA: additional service roots
+  if (config.services && config.services.length > 0) {
+    for (const service of config.services) {
+      const serviceRoot = resolve(config.projectRoot, service.root);
+      if (service.type === 'vue') {
+        patterns.push(join(serviceRoot, '**/*.vue'));
+        patterns.push(join(serviceRoot, '**/*.ts'));
+        patterns.push(join(serviceRoot, '**/*.js'));
+      } else if (service.type === 'spring-boot') {
+        patterns.push(join(serviceRoot, '**/*.java'));
+        patterns.push(join(serviceRoot, '**/*.kt'));
+        // MyBatis XML — may be in resources/ sibling to java/
+        const springParent = resolve(serviceRoot, '..');
+        patterns.push(join(springParent, '**/*.xml'));
+        patterns.push(join(serviceRoot, '**/*.xml'));
+      }
+    }
+  }
+
+  if (!config.vueRoot && !config.springBootRoot && (!config.services || config.services.length === 0)) {
     patterns.push(join(config.projectRoot, '**/*.vue'));
     patterns.push(join(config.projectRoot, '**/*.ts'));
     patterns.push(join(config.projectRoot, '**/*.js'));
@@ -132,6 +151,19 @@ export async function runAnalysis(
       }
     }
     cache.save();
+  }
+
+  // Tag nodes with serviceId based on which service root they fall under
+  if (config.services && config.services.length > 0) {
+    for (const node of graph.getAllNodes()) {
+      for (const service of config.services) {
+        const serviceRoot = resolve(config.projectRoot, service.root);
+        if (node.filePath.startsWith(serviceRoot)) {
+          node.metadata.serviceId = service.id;
+          break;
+        }
+      }
+    }
   }
 
   // Cross-boundary resolution
