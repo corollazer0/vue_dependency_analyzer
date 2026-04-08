@@ -164,8 +164,9 @@ function detectModuleKind(filePath: string, content: string): NodeKind {
     return 'vue-composable';
   }
 
-  // Router detection
-  if (/router/i.test(base) && /createRouter|RouteRecordRaw/.test(content)) {
+  // Router detection — check basename and parent directory name
+  const dir = path.basename(path.dirname(filePath));
+  if ((/router/i.test(base) || /router/i.test(dir)) && /createRouter|RouteRecordRaw/.test(content)) {
     return 'vue-router-route';
   }
 
