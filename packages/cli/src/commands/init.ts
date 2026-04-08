@@ -163,25 +163,42 @@ function detectSpringBootProjects(root: string): SpringRoot[] {
 
 function readTsconfigAliases(vueRoot: string): Record<string, string> {
   const aliases: Record<string, string> = {};
+
+  function loadFromTsconfig(tsconfigPath: string, visited: Set<string> = new Set()): void {
+    if (!tsconfigPath || visited.has(tsconfigPath)) return;
+    visited.add(tsconfigPath);
+
+    try {
+      const raw = readFileSync(tsconfigPath, 'utf-8');
+      const cleaned = raw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+      const tsconfig = JSON.parse(cleaned);
+
+      // Follow extends first (base config has lower priority)
+      if (tsconfig.extends) {
+        const parentPath = resolve(join(tsconfigPath, '..'), tsconfig.extends);
+        // Try with and without .json extension
+        if (existsSync(parentPath)) loadFromTsconfig(parentPath, visited);
+        else if (existsSync(parentPath + '.json')) loadFromTsconfig(parentPath + '.json', visited);
+      }
+
+      const paths = tsconfig.compilerOptions?.paths || {};
+      const baseUrl = tsconfig.compilerOptions?.baseUrl || '.';
+      const base = resolve(join(tsconfigPath, '..'), baseUrl);
+
+      for (const [pattern, targets] of Object.entries(paths)) {
+        if (!Array.isArray(targets) || targets.length === 0) continue;
+        const alias = pattern.replace(/\/\*$/, '');
+        const target = (targets[0] as string).replace(/\/\*$/, '');
+        // Don't override already-set aliases (child takes priority)
+        if (!aliases[alias]) {
+          aliases[alias] = relative(vueRoot, resolve(base, target)) || '.';
+        }
+      }
+    } catch { /* ignore parse errors */ }
+  }
+
   const tsconfigPath = findUp('tsconfig.json', vueRoot);
-  if (!tsconfigPath) return aliases;
-
-  try {
-    const raw = readFileSync(tsconfigPath, 'utf-8');
-    const cleaned = raw.replace(/\/\/.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
-    const tsconfig = JSON.parse(cleaned);
-    const paths = tsconfig.compilerOptions?.paths || {};
-    const baseUrl = tsconfig.compilerOptions?.baseUrl || '.';
-    const base = resolve(join(tsconfigPath, '..'), baseUrl);
-
-    for (const [pattern, targets] of Object.entries(paths)) {
-      if (!Array.isArray(targets) || targets.length === 0) continue;
-      const alias = pattern.replace(/\/\*$/, '');
-      const target = (targets[0] as string).replace(/\/\*$/, '');
-      aliases[alias] = relative(vueRoot, resolve(base, target)) || '.';
-    }
-  } catch { /* ignore */ }
-
+  if (tsconfigPath) loadFromTsconfig(tsconfigPath);
   return aliases;
 }
 

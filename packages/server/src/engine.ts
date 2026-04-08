@@ -33,6 +33,7 @@ export class AnalysisEngine {
   private watcher: any = null;
   private watchEnabled: boolean;
   private analyzing = false;
+  private abortController: AbortController | null = null;
   private lastProgressBroadcast = 0;
 
   constructor(dir: string, options: Record<string, string | undefined>, watch: boolean) {
@@ -79,6 +80,7 @@ export class AnalysisEngine {
   async runAnalysis(): Promise<void> {
     if (this.analyzing) return;
     this.analyzing = true;
+    this.abortController = new AbortController();
 
     try {
       this.graph = new DependencyGraph();
@@ -100,6 +102,9 @@ export class AnalysisEngine {
         files,
         // Progress callback — throttle to max 10/sec
         (info: ProgressInfo) => {
+          if (this.abortController?.signal.aborted) {
+            throw new Error('Analysis cancelled');
+          }
           const now = Date.now();
           if (now - this.lastProgressBroadcast > 100) {
             this.lastProgressBroadcast = now;
@@ -166,7 +171,12 @@ export class AnalysisEngine {
       });
     } finally {
       this.analyzing = false;
+      this.abortController = null;
     }
+  }
+
+  cancelAnalysis(): void {
+    this.abortController?.abort();
   }
 
   private async discoverFiles(): Promise<string[]> {
@@ -221,7 +231,14 @@ export class AnalysisEngine {
       const watchPaths: string[] = [];
 
       if (this.config.vueRoot) watchPaths.push(this.config.vueRoot);
-      if (this.config.springBootRoot) watchPaths.push(this.config.springBootRoot);
+      if (this.config.springBootRoot) {
+        watchPaths.push(this.config.springBootRoot);
+        // Also watch resources/ sibling for MyBatis XML
+        const resourcesDir = resolve(this.config.springBootRoot, '..', 'resources');
+        if (existsSync(resourcesDir)) {
+          watchPaths.push(resourcesDir);
+        }
+      }
       if (this.config.services) {
         for (const service of this.config.services) {
           watchPaths.push(resolve(this.config.projectRoot, service.root));

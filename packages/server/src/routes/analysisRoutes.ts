@@ -7,6 +7,11 @@ export function registerAnalysisRoutes(fastify: FastifyInstance, engine: Analysi
     return { status: 'complete' };
   });
 
+  fastify.post('/api/analyze/cancel', async (request, reply) => {
+    engine.cancelAnalysis();
+    return { status: 'cancelled' };
+  });
+
   fastify.get('/api/stats', async (request, reply) => {
     return engine.getStats();
   });

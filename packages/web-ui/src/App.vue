@@ -80,6 +80,11 @@ function connectWebSocket() {
   ws.onerror = () => { ws?.close(); };
 }
 
+function cancelAnalysis() {
+  analyzing.value = false;
+  fetch('/api/analyze/cancel', { method: 'POST' }).catch(() => {});
+}
+
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && !uiStore.showCommandPalette) graphStore.selectNode(null);
 }
@@ -88,7 +93,7 @@ function handleKeydown(e: KeyboardEvent) {
 <template>
   <div class="h-screen w-screen flex flex-col overflow-hidden" style="background: var(--surface-primary); color: var(--text-primary)">
     <CommandPalette />
-    <AnalysisProgress v-if="analyzing" v-bind="progress" @cancel="analyzing = false" />
+    <AnalysisProgress v-if="analyzing" v-bind="progress" @cancel="cancelAnalysis" />
     <OnboardingGuide v-if="appState === 'ready'" />
 
     <!-- Disconnected -->
@@ -117,6 +122,8 @@ function handleKeydown(e: KeyboardEvent) {
         <!-- Left Sidebar -->
         <aside
           v-if="showSidebar"
+          role="complementary"
+          aria-label="Search and filter"
           class="flex flex-col flex-shrink-0 border-r"
           :style="{ width: uiStore.sidebarWidth + 'px' }"
           style="background: var(--surface-secondary); border-color: var(--border-subtle)"
@@ -154,9 +161,9 @@ function handleKeydown(e: KeyboardEvent) {
         <ResizeHandle v-if="showSidebar" v-model="uiStore.sidebarWidth" :min="200" :max="400" />
 
         <!-- Main area -->
-        <main class="flex-1 flex flex-col overflow-hidden">
+        <main role="main" class="flex-1 flex flex-col overflow-hidden">
           <!-- Toolbar -->
-          <header class="h-10 flex items-center px-3 gap-2 flex-shrink-0 border-b" style="background: var(--surface-secondary); border-color: var(--border-subtle)">
+          <header role="navigation" aria-label="Toolbar" class="h-10 flex items-center px-3 gap-2 flex-shrink-0 border-b" style="background: var(--surface-secondary); border-color: var(--border-subtle)">
             <!-- Open sidebar button (visible when sidebar is closed) -->
             <button v-if="!showSidebar" @click="showSidebar = true" class="w-7 h-7 flex items-center justify-center rounded-md transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Open sidebar">
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
@@ -189,7 +196,7 @@ function handleKeydown(e: KeyboardEvent) {
             <!-- Right Detail Panel — always open when showDetail, with close button inside -->
             <template v-if="uiStore.showDetail">
               <ResizeHandle v-model="uiStore.detailWidth" :min="280" :max="500" />
-              <aside :style="{ width: uiStore.detailWidth + 'px' }" style="background: var(--surface-secondary)" class="flex-shrink-0 flex flex-col">
+              <aside role="complementary" aria-label="Node detail" :style="{ width: uiStore.detailWidth + 'px' }" style="background: var(--surface-secondary)" class="flex-shrink-0 flex flex-col">
                 <!-- Detail header with close -->
                 <div class="h-10 flex items-center px-3 border-b" style="border-color: var(--border-subtle)">
                   <span class="text-xs font-medium" style="color: var(--text-secondary)">Detail</span>
