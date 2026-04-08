@@ -2,6 +2,7 @@ import { DependencyGraph } from '../graph/DependencyGraph.js';
 import { ApiCallLinker } from './ApiCallLinker.js';
 import { NativeBridgeLinker } from './NativeBridgeLinker.js';
 import { MyBatisLinker } from './MyBatisLinker.js';
+import { DtoFlowLinker } from './DtoFlowLinker.js';
 import { ImportResolver } from '../parsers/typescript/ImportResolver.js';
 import type { AnalysisConfig, GraphEdge, GraphNode } from '../graph/types.js';
 
@@ -9,12 +10,14 @@ export class CrossBoundaryResolver {
   private apiCallLinker: ApiCallLinker;
   private nativeBridgeLinker: NativeBridgeLinker;
   private myBatisLinker: MyBatisLinker;
+  private dtoFlowLinker: DtoFlowLinker;
   private importResolver: ImportResolver;
 
   constructor(config: AnalysisConfig, projectRoot: string) {
     this.apiCallLinker = new ApiCallLinker(config.apiBaseUrl);
     this.nativeBridgeLinker = new NativeBridgeLinker();
     this.myBatisLinker = new MyBatisLinker();
+    this.dtoFlowLinker = new DtoFlowLinker();
     this.importResolver = new ImportResolver(config, projectRoot);
   }
 
@@ -36,6 +39,9 @@ export class CrossBoundaryResolver {
 
     // 6. Create virtual nodes for Spring event targets
     this.createSpringEventNodes(graph);
+
+    // 7. Link DTO flows between controllers/services sharing DTO types
+    this.dtoFlowLinker.link(graph);
   }
 
   private resolveImports(graph: DependencyGraph): void {

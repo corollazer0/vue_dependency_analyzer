@@ -62,6 +62,26 @@ export class JavaFileParser implements FileParser {
         }
       }
 
+      // Detect DTO classes and extract their fields
+      const isDto = /(?:DTO|Dto|Request|Response|VO|Summary|Detail)$/.test(className);
+      if (isDto) {
+        const fields = extractDtoFields(content);
+        // If this class wasn't already added as a controller/service, add it as a spring-service with DTO metadata
+        const existingNode = nodes.find(n => n.label === className);
+        if (existingNode) {
+          existingNode.metadata.isDto = true;
+          existingNode.metadata.fields = fields;
+        } else {
+          nodes.push({
+            id: `spring-service:${filePath}`,
+            kind: 'spring-service',
+            label: className,
+            filePath,
+            metadata: { className, packageName, fqn, isDto: true, fields },
+          });
+        }
+      }
+
       // Detect @Autowired / constructor injection / @RequiredArgsConstructor
       const injections = extractInjections(content, filePath, hasRequiredArgsConstructor);
       const sourceId = isController ? `spring-controller:${filePath}` : `spring-service:${filePath}`;
@@ -162,7 +182,8 @@ function extractEndpoints(content: string, filePath: string, basePath: string, c
     const handlerMethod = extractMethodName(content, match.index);
     const line = content.substring(0, match.index).split('\n').length;
 
-    addEndpoint(endpoints, filePath, controllerNodeId, endpointPath, httpMethod, handlerMethod, line);
+    const sig = extractMethodSignature(content, match.index);
+    addEndpoint(endpoints, filePath, controllerNodeId, endpointPath, httpMethod, handlerMethod, line, sig.returnType, sig.paramTypes);
   }
 
   // Process each mapping type with global regex
@@ -173,8 +194,9 @@ function extractEndpoints(content: string, filePath: string, basePath: string, c
       const endpointPath = normalizePath(basePath + (methodPath || ''));
       const handlerMethod = extractMethodName(content, match.index);
       const line = content.substring(0, match.index).split('\n').length;
+      const sig = extractMethodSignature(content, match.index);
 
-      addEndpoint(endpoints, filePath, controllerNodeId, endpointPath, mp.method, handlerMethod, line);
+      addEndpoint(endpoints, filePath, controllerNodeId, endpointPath, mp.method, handlerMethod, line, sig.returnType, sig.paramTypes);
     }
   }
 
@@ -184,6 +206,7 @@ function extractEndpoints(content: string, filePath: string, basePath: string, c
 function addEndpoint(
   endpoints: EndpointInfo[], filePath: string, controllerNodeId: string,
   endpointPath: string, httpMethod: string, handlerMethod: string, line: number,
+  returnType: string = '', paramTypes: string[] = [],
 ): void {
   const nodeId = `spring-endpoint:${httpMethod}:${endpointPath}`;
 
@@ -196,7 +219,7 @@ function addEndpoint(
       kind: 'spring-endpoint',
       label: `${httpMethod} ${endpointPath}`,
       filePath,
-      metadata: { httpMethod, path: endpointPath, handlerMethod },
+      metadata: { httpMethod, path: endpointPath, handlerMethod, returnType, paramTypes },
       loc: { filePath, line, column: 0 },
     },
     edge: {
@@ -214,6 +237,23 @@ function extractMethodName(content: string, annotationPos: number): string {
   const after = content.substring(annotationPos, annotationPos + 500);
   const methodMatch = after.match(/(?:public|protected|private)?\s+\w+(?:<[^>]+>)?\s+(\w+)\s*\(/);
   return methodMatch ? methodMatch[1] : 'unknown';
+}
+
+function extractMethodSignature(content: string, annotationPos: number): { returnType: string; paramTypes: string[] } {
+  const after = content.substring(annotationPos, annotationPos + 500);
+  const methodMatch = after.match(/(?:public|protected|private)?\s+(\w+(?:<[^>]+>)?)\s+\w+\s*\(([^)]*)\)/);
+  if (!methodMatch) return { returnType: '', paramTypes: [] };
+  const returnType = methodMatch[1];
+  const params = methodMatch[2];
+  const paramTypes: string[] = [];
+  if (params.trim()) {
+    const paramPattern = /(?:@\w+(?:\([^)]*\))?\s+)*(\w+(?:<[^>]+>)?)\s+\w+/g;
+    let m;
+    while ((m = paramPattern.exec(params)) !== null) {
+      paramTypes.push(m[1]);
+    }
+  }
+  return { returnType, paramTypes };
 }
 
 function normalizePath(p: string): string {
@@ -279,6 +319,16 @@ function extractBeanMethods(content: string, filePath: string): GraphEdge[] {
   }
 
   return edges;
+}
+
+export function extractDtoFields(content: string): { name: string; type: string }[] {
+  const fields: { name: string; type: string }[] = [];
+  const pattern = /private\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
+  let match;
+  while ((match = pattern.exec(content)) !== null) {
+    fields.push({ type: match[1], name: match[2] });
+  }
+  return fields;
 }
 
 function extractSpringEvents(content: string, filePath: string, sourceNodeId: string): GraphEdge[] {

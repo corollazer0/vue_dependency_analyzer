@@ -12,6 +12,7 @@ import {
   calculateComplexity,
   filterByKind,
   analyzeImpact,
+  checkDtoConsistency,
   findPaths as findPathsFn,
   toJSON,
   type AnalysisConfig,
@@ -20,6 +21,7 @@ import {
   type NodeKind,
   type EdgeKind,
   type GraphNode,
+  type DtoMismatch,
 } from '@vda/core';
 import type { WebSocket } from 'ws';
 
@@ -419,6 +421,10 @@ export class AnalysisEngine {
       topComplexity: complexity,
       cacheSize: this.cache.size,
     };
+  }
+
+  checkDtoConsistency(): DtoMismatch[] {
+    return checkDtoConsistency(this.graph);
   }
 
   findPaths(from: string, to: string, maxDepth: number = 10) {
