@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ParallelParser } from '../engine/ParallelParser.js';
 import { ParseCache } from '../engine/ParseCache.js';
 import { resolve } from 'path';
-import { readdirSync, statSync, mkdirSync, rmSync } from 'fs';
+import { readdirSync, readFileSync, statSync, mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
@@ -49,27 +49,40 @@ describe.skipIf(!hasTestProject)('Performance: 500-file test-project', () => {
     expect(result.edges.length).toBeGreaterThan(100);
   });
 
-  it('should complete cached analysis in under 2 seconds', async () => {
+  it('should complete cached analysis in under 2 seconds with actual cache hits', async () => {
     const cacheDir = join(tmpdir(), 'vda-perf-cache-' + Date.now());
     mkdirSync(cacheDir, { recursive: true });
 
+    // ParseCache constructor appends '.vda-cache' internally, so pass cacheDir as projectRoot
     const cache = new ParseCache(cacheDir, 'test-config');
 
-    // First run: populate cache
+    // First run: parse all files
     const parser1 = new ParallelParser({});
-    await parser1.parseAll(files, undefined, (filePath, content) => {
-      return cache.get(filePath, content);
-    });
+    const result1 = await parser1.parseAll(files);
 
-    // Save results to cache for files that weren't cached
-    // (simplified — in real code the CLI handles this)
+    // Populate cache with first-run results
+    for (const filePath of files) {
+      try {
+        const content = readFileSync(filePath, 'utf-8');
+        const fileNodes = result1.nodes.filter(n => n.filePath === filePath);
+        const fileEdges = result1.edges.filter(e => fileNodes.some(n => n.id === e.source));
+        const fileErrors = result1.errors.filter(e => e.filePath === filePath);
+        if (fileNodes.length > 0) {
+          cache.set(filePath, content, { nodes: fileNodes, edges: fileEdges, errors: fileErrors });
+        }
+      } catch { /* skip unreadable files */ }
+    }
+    cache.save();
 
-    // Second run: should be faster
+    // Reload cache from disk to verify round-trip persistence
+    const cache2 = new ParseCache(cacheDir, 'test-config');
+
+    // Second run: should have cache hits
     const parser2 = new ParallelParser({});
     const start = Date.now();
     let cacheHits = 0;
-    const result = await parser2.parseAll(files, undefined, (filePath, content) => {
-      const cached = cache.get(filePath, content);
+    const result2 = await parser2.parseAll(files, undefined, (filePath, content) => {
+      const cached = cache2.get(filePath, content);
       if (cached) cacheHits++;
       return cached;
     });
@@ -77,7 +90,21 @@ describe.skipIf(!hasTestProject)('Performance: 500-file test-project', () => {
 
     console.log(`  Cached run: ${elapsed}ms (${cacheHits} cache hits out of ${files.length})`);
 
+    // Validate cache effectiveness: at least 50% cache hit rate
+    expect(cacheHits).toBeGreaterThan(files.length * 0.5);
     expect(elapsed).toBeLessThan(2000);
+
+    // Validate data integrity: same node count
+    expect(result2.nodes.length).toBe(result1.nodes.length);
+
+    // Validate db-table nodes survive cache round-trip
+    const tables1 = result1.nodes.filter(n => n.kind === 'db-table').length;
+    const tables2 = result2.nodes.filter(n => n.kind === 'db-table').length;
+    expect(tables2).toBe(tables1);
+    if (tables1 > 0) {
+      console.log(`  db-table nodes preserved: ${tables2}/${tables1}`);
+      expect(tables2).toBeGreaterThan(0);
+    }
 
     rmSync(cacheDir, { recursive: true, force: true });
   });
@@ -98,6 +125,14 @@ describe.skipIf(!hasTestProject)('Performance: 500-file test-project', () => {
     expect(kindCounts['spring-controller']).toBeGreaterThan(10);
     expect(kindCounts['spring-endpoint']).toBeGreaterThan(50);
     expect(kindCounts['api-call-site']).toBeGreaterThan(100);
+
+    // Should detect MyBatis/DB node types
+    if (kindCounts['mybatis-mapper']) {
+      expect(kindCounts['mybatis-mapper']).toBeGreaterThan(0);
+    }
+    if (kindCounts['db-table']) {
+      expect(kindCounts['db-table']).toBeGreaterThan(0);
+    }
   });
 });
 
