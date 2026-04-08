@@ -190,11 +190,135 @@ time node packages/cli/dist/bin/vda.js analyze large-project --no-cache
 
 - `packages/cli/src/__tests__/` — vda init, analyze, export 명령 실행 테스트
 
-#### T3-05. test-project fixture 현실성 보강 [P5-05]
+#### T3-05. test-project fixture 고도화 (generate-fixtures.js 전면 개편) [P5-05]
 
-- package.json, tsconfig.json, build.gradle 추가
-- @Mapper interface 파일 추가
-- 문법 오류 수정 (undefined id, duplicate const)
+**현재 fixture의 결함:**
+- `package.json`, `tsconfig.json`, `build.gradle` 없음 → `vda init` 감지 실패
+- `@Mapper interface` 없음 → MyBatis linker 검증 불가
+- Vue 컴포넌트에서 `const response` 중복 선언, 미정의 `id` 변수 사용
+- `router/index.ts`가 실제 routes 배열이 아님 → route-renders 검증 불가
+- `defineEmits` + 부모 `@event` 리스너 패턴 없음 → event virtual edge 검증 불가
+- `storeToRefs` 사용 없음
+- Spring Event (`publishEvent` / `@EventListener`) 없음
+- DTO 클래스에 필드가 `id`, `name` 2개뿐 → DTO 정합성 체크 무의미
+- MyBatis XML namespace에 대응하는 @Mapper interface가 없음
+
+**generate-fixtures.js 수정 범위:**
+
+1. **프로젝트 설정 파일 추가**
+   - `test-project/frontend/package.json` — `vue`, `pinia`, `vue-router`, `axios` 의존성
+   - `test-project/frontend/tsconfig.json` — `compilerOptions.paths: { "@/*": ["src/*"] }`
+   - `test-project/backend/build.gradle` — `org.springframework.boot` 플러그인
+
+2. **@Mapper interface 생성** (10개, 각 도메인별)
+   ```java
+   package com.example.mapper;
+   import org.apache.ibatis.annotations.Mapper;
+   @Mapper
+   public interface UserMapper {
+       User findById(Long id);
+       List<User> findAll();
+       void insert(User user);
+       void update(User user);
+       void deleteById(Long id);
+   }
+   ```
+
+3. **Vue Router 실제 routes 배열** (`router/index.ts`)
+   ```typescript
+   import { createRouter, createWebHistory } from 'vue-router'
+   import type { RouteRecordRaw } from 'vue-router'
+   import HomeView from '@/views/HomeView.vue'
+   import UserListView from '@/views/UserListView.vue'
+   // ...
+   const routes: RouteRecordRaw[] = [
+     { path: '/', component: HomeView },
+     { path: '/users', component: UserListView },
+     { path: '/users/:id', component: () => import('@/views/UserDetailView.vue') },
+     // ...
+   ]
+   export default createRouter({ history: createWebHistory(), routes })
+   ```
+
+4. **defineEmits + 부모 @event 패턴** (최소 5쌍)
+   ```vue
+   <!-- 자식: ChildForm.vue -->
+   <script setup>
+   const emit = defineEmits(['submit', 'cancel', 'validate'])
+   function onSubmit() { emit('submit', formData) }
+   </script>
+   
+   <!-- 부모: ParentView.vue -->
+   <template>
+     <child-form @submit="handleSubmit" @cancel="handleCancel" />
+   </template>
+   ```
+
+5. **storeToRefs 사용** (최소 5개 컴포넌트)
+   ```typescript
+   import { storeToRefs } from 'pinia'
+   const userStore = useUserStore()
+   const { userName, isLoggedIn, role } = storeToRefs(userStore)
+   ```
+
+6. **Spring Event 패턴** (2개 publisher + 2개 listener)
+   ```java
+   // Publisher
+   @Service
+   public class OrderService {
+       @Autowired private ApplicationEventPublisher eventPublisher;
+       public void createOrder(Order order) {
+           eventPublisher.publishEvent(new OrderCreatedEvent(order));
+       }
+   }
+   
+   // Listener
+   @Service
+   public class NotificationService {
+       @EventListener
+       public void handleOrderCreated(OrderCreatedEvent event) {
+           sendNotification(event.getOrder());
+       }
+   }
+   ```
+
+7. **DTO 클래스 현실화** — 필드 5-10개, 프론트엔드 TS interface와 의도적 불일치 1-2건
+   ```java
+   // Backend DTO
+   public class UserResponse {
+       private Long id;
+       private String name;
+       private String email;
+       private String phone;       // 프론트엔드에 없음 (의도적 불일치)
+       private LocalDateTime createdAt;
+   }
+   ```
+   ```typescript
+   // Frontend interface
+   interface UserResponse {
+     id: number;
+     name: string;
+     email: string;
+     // phone 없음 → DTO 정합성 체크에서 감지
+     createdAt: string;
+     avatar: string;  // 백엔드에 없음 → 불일치
+   }
+   ```
+
+8. **Vue 컴포넌트 문법 오류 수정**
+   - `const response` 중복 선언 → 각 API 호출에 고유 변수명
+   - 미정의 `id` → `props.id` 또는 `route.params.id`로 교체
+   - import 경로를 `@/` alias 사용으로 통일
+
+9. **router.push() 호출** (5개 컴포넌트에서)
+   ```typescript
+   import { useRouter } from 'vue-router'
+   const router = useRouter()
+   router.push('/users')
+   router.push({ name: 'user-detail', params: { id: userId } })
+   ```
+
+10. **@RequiredArgsConstructor + @Configuration + @Bean** (기존 service에 Lombok 적용, config에 Bean 추가)
 
 #### T3-06. A11y 기본 구현 [P3-06]
 
@@ -204,17 +328,238 @@ time node packages/cli/dist/bin/vda.js analyze large-project --no-cache
 
 ---
 
-## 실행 순서
+### Tier 4: E2E 테스트 체계
+
+#### T4-01. E2E Smoke Test Suite
+
+test-project fixture를 `vda analyze`로 실제 실행하여 **모든 Phase 7 기능이 동작하는지** 자동 검증하는 통합 테스트.
+
+**테스트 파일:** `packages/core/src/__tests__/e2e-fixture.test.ts`
+
+```typescript
+describe('E2E: test-project fixture', () => {
+  // fixture가 generate-fixtures.js로 생성된 상태에서 실행
+  let graph: DependencyGraph;
+
+  beforeAll(async () => {
+    // test-project를 실제 분석
+    const config = loadConfig('test-project');
+    const result = await runAnalysis(config);
+    graph = result.graph;
+  });
+
+  // ── T1-01: @Mapper interface ──
+  describe('MyBatis Mapper Interface Linking', () => {
+    it('should have @Mapper interface nodes', () => {
+      const mappers = graph.getAllNodes().filter(n => 
+        n.kind === 'spring-service' && n.metadata.isMapper
+      );
+      expect(mappers.length).toBeGreaterThanOrEqual(10);
+    });
+
+    it('should link Mapper interface → MyBatis XML', () => {
+      const mybatisEdges = graph.getAllEdges().filter(e => 
+        e.kind === 'spring-injects' && e.metadata.viaMyBatis
+      );
+      expect(mybatisEdges.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it('should trace Controller → Service → Mapper → XML → DB table', () => {
+      // 전체 E2E 체인 검증
+      const controllers = graph.getAllNodes().filter(n => n.kind === 'spring-controller');
+      for (const ctrl of controllers.slice(0, 3)) {
+        const services = graph.getOutEdges(ctrl.id)
+          .filter(e => e.kind === 'spring-injects')
+          .map(e => graph.getNode(e.target));
+        expect(services.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  // ── T1-02: route-renders ──
+  describe('Vue Router Route Rendering', () => {
+    it('should have vue-router-route nodes', () => {
+      const routes = graph.getAllNodes().filter(n => n.kind === 'vue-router-route');
+      expect(routes.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should create route-renders edges', () => {
+      const routeEdges = graph.getAllEdges().filter(e => e.kind === 'route-renders');
+      expect(routeEdges.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should link route to actual vue-component', () => {
+      const routeEdges = graph.getAllEdges().filter(e => e.kind === 'route-renders');
+      for (const edge of routeEdges) {
+        const target = graph.getNode(edge.target);
+        expect(target).toBeDefined();
+        expect(target!.kind).toBe('vue-component');
+      }
+    });
+  });
+
+  // ── T1-03: Event virtual edges ──
+  describe('Frontend Event Virtualization', () => {
+    it('should have emits-event edges from child components', () => {
+      const emitEdges = graph.getAllEdges().filter(e => e.kind === 'emits-event');
+      expect(emitEdges.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it('should have listens-event edges from parent components', () => {
+      const listenEdges = graph.getAllEdges().filter(e => e.kind === 'listens-event');
+      expect(listenEdges.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  // ── T1-05: MSA services[] ──
+  describe('MSA Multi-Service', () => {
+    it('should have serviceId in node metadata (if services configured)', () => {
+      // MSA가 설정된 경우에만
+      if (graph.metadata.config.services?.length) {
+        const nodesWithService = graph.getAllNodes().filter(n => n.metadata.serviceId);
+        expect(nodesWithService.length).toBeGreaterThan(0);
+      }
+    });
+  });
+
+  // ── API 매칭 ──
+  describe('API Endpoint Matching', () => {
+    it('should match frontend API calls to backend endpoints', () => {
+      const linkedCalls = graph.getAllEdges().filter(e => 
+        e.kind === 'api-call' && e.target.startsWith('spring-endpoint:')
+      );
+      expect(linkedCalls.length).toBeGreaterThan(100);
+    });
+  });
+
+  // ── MyBatis/DB ──
+  describe('MyBatis → DB Table Chain', () => {
+    it('should have db-table nodes', () => {
+      const tables = graph.getAllNodes().filter(n => n.kind === 'db-table');
+      expect(tables.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it('should have reads-table and writes-table edges', () => {
+      const reads = graph.getAllEdges().filter(e => e.kind === 'reads-table');
+      const writes = graph.getAllEdges().filter(e => e.kind === 'writes-table');
+      expect(reads.length + writes.length).toBeGreaterThanOrEqual(20);
+    });
+  });
+
+  // ── Spring Events ──
+  describe('Spring Event Tracking', () => {
+    it('should detect publishEvent calls', () => {
+      const emits = graph.getAllEdges().filter(e => e.kind === 'emits-event');
+      expect(emits.length).toBeGreaterThanOrEqual(1);
+    });
+
+    it('should detect @EventListener methods', () => {
+      const listens = graph.getAllEdges().filter(e => e.kind === 'listens-event');
+      expect(listens.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ── storeToRefs ──
+  describe('Pinia storeToRefs Tracking', () => {
+    it('should track subscribed fields in uses-store edges', () => {
+      const storeEdges = graph.getAllEdges().filter(e => 
+        e.kind === 'uses-store' && e.metadata.subscribedFields
+      );
+      expect(storeEdges.length).toBeGreaterThanOrEqual(3);
+    });
+  });
+
+  // ── Provide/Inject ──
+  describe('Provide/Inject', () => {
+    it('should detect provide and inject pairs', () => {
+      const provides = graph.getAllEdges().filter(e => e.kind === 'provides');
+      const injects = graph.getAllEdges().filter(e => e.kind === 'injects');
+      expect(provides.length).toBeGreaterThanOrEqual(1);
+      expect(injects.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ── Native Bridge ──
+  describe('Native Bridge', () => {
+    it('should detect native bridge calls', () => {
+      const bridges = graph.getAllNodes().filter(n => n.kind === 'native-bridge');
+      expect(bridges.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  // ── Circular Dependencies ──
+  describe('Circular Dependency Detection', () => {
+    it('should detect circular references', () => {
+      const cycles = findCircularDependencies(graph);
+      // fixture에 순환이 있으면 감지
+      expect(Array.isArray(cycles)).toBe(true);
+    });
+  });
+
+  // ── Orphan Detection ──
+  describe('Orphan/Unused Detection', () => {
+    it('should identify orphan nodes', () => {
+      const orphans = findOrphanNodes(graph);
+      expect(Array.isArray(orphans)).toBe(true);
+    });
+  });
+
+  // ── Performance ──
+  describe('Performance', () => {
+    it('should analyze 500+ files in under 5 seconds', () => {
+      expect(graph.metadata.fileCount).toBeGreaterThan(400);
+    });
+  });
+});
+```
+
+#### T4-02. Server API E2E Test
+
+test-project fixture를 서버로 실행하여 **모든 API 엔드포인트가 올바른 데이터를 반환하는지** 검증.
+
+**테스트 파일:** `packages/server/src/__tests__/e2e-api.test.ts`
+
+| 테스트 | 검증 내용 |
+|--------|----------|
+| GET /api/graph | db-table 노드 존재, api-call→endpoint 매칭 > 100건 |
+| GET /api/graph?cluster=true | 클러스터에 backend, frontend 외에 mapper/resources 포함 |
+| GET /api/graph/paths?from=controller&to=db-table | Controller→Service→Mapper→XML→DB 경로 존재 |
+| GET /api/analysis/overlays | circularNodeIds, orphanNodeIds, hubNodeIds 형식 검증 |
+| GET /api/analysis/dto-consistency | (T2-02 완성 후) 불일치 필드 1건 이상 감지 |
+| GET /api/search?q=UserMapper | @Mapper interface 노드 검색 결과 |
+| GET /api/source-snippet | 실제 파일 라인 반환 |
+| POST /api/analyze | 재분석 후 그래프 크기 동일 |
+
+#### T4-03. CLI E2E Test
+
+**테스트 파일:** `packages/cli/src/__tests__/e2e-cli.test.ts`
+
+| 테스트 | 검증 내용 |
+|--------|----------|
+| `vda init test-project` | Vue + Spring Boot 감지, .vdarc.json 생성, aliases 추출 |
+| `vda analyze test-project` | 종료 코드 0, mybatis/db 카운트 표시, 순환 경고 |
+| `vda analyze test-project --json` | 유효 JSON, nodes/edges/metadata 구조 |
+| `vda analyze test-project --no-cache` | 캐시 무시, 전체 파싱 |
+| `vda export test-project -f json` | JSON 파일 생성, nodes > 500 |
+| `vda export test-project -f dot` | DOT 형식, digraph 키워드 포함 |
+
+---
+
+## 실행 순서 (수정)
 
 ```
-Week 1-2: T1-01 (@Mapper interface) + T1-02 (route-renders) + T2-04 (캐시 검증)
-Week 3:   T1-03 (event virtual edges) + T2-03 (storeToRefs)
+Week 1:   T3-05 (fixture 고도화) ← 모든 E2E 테스트의 전제조건
+Week 2:   T1-01 (@Mapper) + T1-02 (route-renders)
+Week 3:   T1-03 (event edges) + T2-03 (storeToRefs)
 Week 4:   T1-04 (worker_threads) + T1-05 (MSA services[])
 Week 5:   T2-01 + T2-02 (DTO flow + consistency)
-Week 6:   T3-01~06 (polish + tests)
+Week 6:   T2-04 (캐시 검증) + T3-01~04 (polish)
+Week 7:   T4-01~03 (E2E tests) + T3-06 (A11y)
 ```
 
-## 성공 기준
+핵심: **fixture가 먼저 완성되어야 모든 기능의 E2E 검증이 가능하다.**
+
+## 성공 기준 (수정)
 
 Phase 7 완료 시:
 1. `@Mapper interface` → MyBatis XML 자동 연결 E2E 동작
@@ -225,3 +570,7 @@ Phase 7 완료 시:
 6. DTO 필드 추출 + 정합성 체크 API
 7. 캐시 성능 테스트가 실제 cache hit를 검증
 8. CLI 전용 테스트 커버리지
+9. **generate-fixtures.js가 위 모든 패턴을 포함하는 fixture 생성**
+10. **E2E Smoke Test가 fixture 기반으로 전체 기능 검증 (200+ assertions)**
+11. **Server API E2E Test가 모든 엔드포인트를 fixture 데이터로 검증**
+12. **CLI E2E Test가 init/analyze/export 명령을 실제 실행하여 검증**
