@@ -55,6 +55,19 @@ describe('JavaFileParser', () => {
       expect(result.errors).toHaveLength(0);
     });
   });
+
+  describe('Java interface (@Mapper)', () => {
+    const content = readFileSync(resolve(fixturesDir, 'UserMapperInterface.java'), 'utf-8');
+    const result = parser.parse('/test/UserMapperInterface.java', content, {});
+
+    it('should detect @Mapper interface as spring-service', () => {
+      const node = result.nodes.find(n => n.kind === 'spring-service');
+      expect(node).toBeDefined();
+      expect(node!.metadata.isMapper).toBe(true);
+      expect(node!.metadata.className).toBe('UserMapper');
+      expect(node!.metadata.fqn).toBe('com.example.mapper.UserMapper');
+    });
+  });
 });
 
 describe('KotlinFileParser', () => {

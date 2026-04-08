@@ -1,7 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import { DependencyGraph } from '../../graph/DependencyGraph.js';
 import { MyBatisLinker } from '../MyBatisLinker.js';
+import { JavaFileParser } from '../../parsers/java/JavaFileParser.js';
+import { MyBatisXmlParser } from '../../parsers/java/MyBatisXmlParser.js';
 import type { GraphNode } from '../../graph/types.js';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 
 function addNode(graph: DependencyGraph, node: Partial<GraphNode> & { id: string; kind: GraphNode['kind'] }) {
   graph.addNode({ label: node.id, filePath: '', metadata: {}, ...node });
@@ -65,5 +69,34 @@ describe('MyBatisLinker', () => {
     const linker = new MyBatisLinker();
     const edges = linker.link(graph);
     expect(edges).toHaveLength(0); // No match, no edge, no crash
+  });
+
+  it('should link a real parsed Java @Mapper interface to its MyBatis XML', () => {
+    const fixturesDir = resolve(import.meta.dirname, '../../__fixtures__');
+    const javaParser = new JavaFileParser();
+    const xmlParser = new MyBatisXmlParser();
+
+    const javaContent = readFileSync(resolve(fixturesDir, 'UserMapperInterface.java'), 'utf-8');
+    const xmlContent = readFileSync(resolve(fixturesDir, 'UserMapper.xml'), 'utf-8');
+
+    const javaResult = javaParser.parse('/test/UserMapperInterface.java', javaContent, {});
+    const xmlResult = xmlParser.parse('/test/UserMapper.xml', xmlContent, {});
+
+    const graph = new DependencyGraph();
+    for (const node of [...javaResult.nodes, ...xmlResult.nodes]) {
+      graph.addNode(node);
+    }
+    for (const edge of [...javaResult.edges, ...xmlResult.edges]) {
+      graph.addEdge(edge);
+    }
+
+    const linker = new MyBatisLinker();
+    const edges = linker.link(graph);
+
+    const injectEdge = edges.find(
+      e => e.kind === 'spring-injects' && e.target.includes('mybatis-mapper'),
+    );
+    expect(injectEdge).toBeDefined();
+    expect(injectEdge!.source).toBe('spring-service:/test/UserMapperInterface.java');
   });
 });

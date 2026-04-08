@@ -109,7 +109,7 @@ function extractClassInfo(content: string, filePath: string): ClassInfo | null {
   const classPattern = /(?:@(\w+)(?:\(([^)]*)\))?\s*)*(?:public\s+)?class\s+(\w+)/g;
 
   // First, find all annotations before the class declaration
-  const classMatch = content.match(/(?:public\s+)?class\s+(\w+)/);
+  const classMatch = content.match(/(?:public\s+)?(?:class|interface)\s+(\w+)/);
   if (!classMatch) return null;
 
   const className = classMatch[1];
