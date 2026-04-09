@@ -127,14 +127,46 @@ export const useGraphStore = defineStore('graph', () => {
   // focusNodeId: set by double-click from Search or Tree to re-root the tree view
   const focusNodeId = ref<string | null>(null);
 
+  // Navigation history (back/forward)
+  const navHistory = ref<string[]>([]);
+  const navIndex = ref(-1);
+  let navLock = false; // prevent history push during back/forward
+
   function selectNode(nodeId: string | null) {
+    if (nodeId && !navLock && nodeId !== selectedNodeId.value) {
+      // Trim forward history and push
+      navHistory.value = navHistory.value.slice(0, navIndex.value + 1);
+      navHistory.value.push(nodeId);
+      navIndex.value = navHistory.value.length - 1;
+    }
     selectedNodeId.value = nodeId;
   }
 
   function focusNode(nodeId: string) {
-    selectedNodeId.value = nodeId;
+    selectNode(nodeId);
     focusNodeId.value = nodeId;
   }
+
+  function navBack() {
+    if (navIndex.value > 0) {
+      navIndex.value--;
+      navLock = true;
+      selectedNodeId.value = navHistory.value[navIndex.value];
+      navLock = false;
+    }
+  }
+
+  function navForward() {
+    if (navIndex.value < navHistory.value.length - 1) {
+      navIndex.value++;
+      navLock = true;
+      selectedNodeId.value = navHistory.value[navIndex.value];
+      navLock = false;
+    }
+  }
+
+  const canNavBack = computed(() => navIndex.value > 0);
+  const canNavForward = computed(() => navIndex.value < navHistory.value.length - 1);
 
   function toggleNodeKind(kind: NodeKind) {
     if (activeNodeKinds.value.has(kind)) {
@@ -246,6 +278,10 @@ export const useGraphStore = defineStore('graph', () => {
     triggerReanalyze,
     selectNode,
     focusNode,
+    navBack,
+    navForward,
+    canNavBack,
+    canNavForward,
     toggleNodeKind,
     toggleEdgeKind,
     resetFilters,

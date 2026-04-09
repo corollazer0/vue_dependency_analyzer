@@ -104,6 +104,8 @@ function cancelAnalysis() {
 
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape' && !uiStore.showCommandPalette) graphStore.selectNode(null);
+  if (e.altKey && e.key === 'ArrowLeft') { e.preventDefault(); graphStore.navBack(); }
+  if (e.altKey && e.key === 'ArrowRight') { e.preventDefault(); graphStore.navForward(); }
 }
 </script>
 
@@ -193,6 +195,12 @@ function handleKeydown(e: KeyboardEvent) {
             <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
 
             <button @click="showPathfinder = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Pathfinder</button>
+
+            <!-- Navigation history -->
+            <div class="flex gap-0.5">
+              <button @click="graphStore.navBack()" :disabled="!graphStore.canNavBack" class="w-7 h-7 flex items-center justify-center rounded-md text-xs disabled:opacity-20 transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Back (Alt+←)">←</button>
+              <button @click="graphStore.navForward()" :disabled="!graphStore.canNavForward" class="w-7 h-7 flex items-center justify-center rounded-md text-xs disabled:opacity-20 transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Forward (Alt+→)">→</button>
+            </div>
 
             <div class="flex-1"></div>
 
