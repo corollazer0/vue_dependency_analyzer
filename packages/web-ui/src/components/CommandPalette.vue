@@ -28,6 +28,7 @@ const commands: PaletteItem[] = [
   { id: 'cmd:fit', label: 'Fit graph to view', kind: 'Command', type: 'command', icon: '⊡', action: () => { document.dispatchEvent(new CustomEvent('vda:fit-graph')); } },
   { id: 'cmd:export', label: 'Export as JSON', kind: 'Command', type: 'command', icon: '📦', action: () => exportAsJson() },
   { id: 'cmd:reset', label: 'Reset all filters', kind: 'Command', type: 'command', icon: '↺', action: () => graphStore.resetFilters() },
+  { id: 'cmd:export-png', label: 'Export graph as PNG', kind: 'Command', type: 'command', icon: '📷', action: () => { document.dispatchEvent(new CustomEvent('vda:export-graph-png')); } },
 ];
 
 const recentItems = computed(() => {

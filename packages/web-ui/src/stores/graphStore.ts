@@ -10,6 +10,12 @@ export const useGraphStore = defineStore('graph', () => {
   const searchQuery = ref('');
   const searchResults = shallowRef<SearchResult[]>([]);
 
+  // Overlay state (circular / orphan / hub highlighting)
+  const circularNodeIds = ref<Set<string>>(new Set());
+  const orphanNodeIds = ref<Set<string>>(new Set());
+  const hubNodeIds = ref<Set<string>>(new Set());
+  const showOverlays = ref(false);
+
   // Filters — use regular refs since these are small sets
   const activeNodeKinds = ref<Set<NodeKind>>(new Set([
     'vue-component', 'vue-composable', 'pinia-store', 'vue-directive',
@@ -66,6 +72,18 @@ export const useGraphStore = defineStore('graph', () => {
     };
   });
 
+  async function fetchOverlays() {
+    try {
+      const res = await fetch('/api/analysis/overlays');
+      const data = await res.json();
+      circularNodeIds.value = new Set(data.circularNodeIds || []);
+      orphanNodeIds.value = new Set(data.orphanNodeIds || []);
+      hubNodeIds.value = new Set(data.hubNodeIds || []);
+    } catch {
+      // silently ignore — overlays are non-critical
+    }
+  }
+
   async function fetchGraph() {
     loading.value = true;
     error.value = null;
@@ -74,6 +92,7 @@ export const useGraphStore = defineStore('graph', () => {
       graphData.value = await res.json();
       triggerRef(graphData);
       recomputeFiltered();
+      fetchOverlays();
     } catch (e) {
       error.value = `Failed to fetch graph: ${e}`;
     } finally {
@@ -158,6 +177,51 @@ export const useGraphStore = defineStore('graph', () => {
     recomputeFiltered();
   }
 
+  type FilterPreset = 'all' | 'none' | 'vue' | 'spring' | 'db' | 'api';
+
+  const FILTER_PRESETS: Record<FilterPreset, { nodes: NodeKind[]; edges: EdgeKind[] }> = {
+    all: {
+      nodes: [
+        'vue-component', 'vue-composable', 'pinia-store', 'vue-directive',
+        'vue-router-route', 'ts-module', 'api-call-site',
+        'spring-controller', 'spring-endpoint', 'spring-service',
+        'native-bridge', 'native-method',
+        'mybatis-mapper', 'mybatis-statement', 'db-table',
+      ],
+      edges: [
+        'imports', 'uses-component', 'uses-store', 'uses-composable',
+        'uses-directive', 'provides', 'injects', 'api-call', 'api-serves',
+        'native-call', 'route-renders', 'spring-injects',
+        'mybatis-maps', 'reads-table', 'writes-table', 'dto-flows',
+        'emits-event', 'listens-event',
+      ],
+    },
+    none: { nodes: [], edges: [] },
+    vue: {
+      nodes: ['vue-component', 'vue-composable', 'pinia-store', 'vue-directive', 'vue-router-route', 'ts-module'],
+      edges: ['imports', 'uses-component', 'uses-store', 'uses-composable', 'uses-directive', 'provides', 'injects', 'route-renders'],
+    },
+    spring: {
+      nodes: ['spring-controller', 'spring-endpoint', 'spring-service'],
+      edges: ['spring-injects', 'api-serves', 'emits-event', 'listens-event'],
+    },
+    db: {
+      nodes: ['mybatis-mapper', 'mybatis-statement', 'db-table'],
+      edges: ['mybatis-maps', 'reads-table', 'writes-table'],
+    },
+    api: {
+      nodes: ['api-call-site', 'spring-endpoint', 'vue-component'],
+      edges: ['api-call', 'api-serves'],
+    },
+  };
+
+  function applyFilterPreset(preset: FilterPreset) {
+    const config = FILTER_PRESETS[preset];
+    activeNodeKinds.value = new Set(config.nodes);
+    activeEdgeKinds.value = new Set(config.edges);
+    recomputeFiltered();
+  }
+
   return {
     graphData,
     loading,
@@ -172,7 +236,12 @@ export const useGraphStore = defineStore('graph', () => {
     activeEdgeKinds,
     filteredNodes,
     filteredEdges,
+    circularNodeIds,
+    orphanNodeIds,
+    hubNodeIds,
+    showOverlays,
     fetchGraph,
+    fetchOverlays,
     search,
     triggerReanalyze,
     selectNode,
@@ -180,5 +249,6 @@ export const useGraphStore = defineStore('graph', () => {
     toggleNodeKind,
     toggleEdgeKind,
     resetFilters,
+    applyFilterPreset,
   };
 });

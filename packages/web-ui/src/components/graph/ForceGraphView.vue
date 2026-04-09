@@ -236,6 +236,19 @@ function buildStylesheet(): any[] {
       selector: 'edge[weight]',
       style: { 'width': (ele: any) => Math.min(6, 1 + Math.log2(ele.data('weight') || 1)) },
     },
+    // Overlay styles
+    {
+      selector: 'node.circular',
+      style: { 'border-width': 3, 'border-color': '#ef4444', 'border-style': 'solid' },
+    },
+    {
+      selector: 'node.orphan-node',
+      style: { 'opacity': 0.35, 'border-width': 1, 'border-color': '#666', 'border-style': 'dashed' },
+    },
+    {
+      selector: 'node.hub-node',
+      style: { 'overlay-opacity': 0.15, 'overlay-color': '#f59e0b' },
+    },
     ...nodeKindStyles,
     ...edgeKindStyles,
   ];
@@ -309,6 +322,7 @@ function initCytoscape() {
   });
 
   cy.on('zoom', () => updateLOD());
+  applyOverlays();
 }
 
 function highlightNode(nodeId: string) {
@@ -359,6 +373,7 @@ function refreshGraph() {
   const elements = useClusters.value ? buildClusterElements() : buildElements();
   cy.batch(() => { cy!.elements().remove(); cy!.add(elements); });
   cy.layout({ name: 'fcose', animate: true, animationDuration: 400, quality: 'default', nodeSeparation: 80, idealEdgeLength: 120 } as any).run();
+  applyOverlays();
 }
 
 function fitToView() {
@@ -369,6 +384,27 @@ function focusNode(nodeId: string) {
   if (!cy) return;
   const node = cy.$id(nodeId);
   if (node.length) cy.animate({ center: { eles: node }, zoom: 2 }, { duration: 400 });
+}
+
+// ─── Overlays ───
+
+function applyOverlays() {
+  if (!cy || !graphStore.showOverlays) return;
+  cy.batch(() => {
+    cy!.nodes().forEach(node => {
+      const id = node.id();
+      if (graphStore.circularNodeIds.has(id)) node.addClass('circular');
+      if (graphStore.orphanNodeIds.has(id)) node.addClass('orphan-node');
+      if (graphStore.hubNodeIds.has(id)) node.addClass('hub-node');
+    });
+  });
+}
+
+function removeOverlays() {
+  if (!cy) return;
+  cy.batch(() => {
+    cy!.nodes().removeClass('circular').removeClass('orphan-node').removeClass('hub-node');
+  });
 }
 
 // ─── Watchers ───
@@ -391,6 +427,11 @@ watch(() => graphStore.selectedNodeId, (nodeId) => {
   if (nodeId) focusNode(nodeId);
 });
 
+watch(() => graphStore.showOverlays, (on) => {
+  if (on) applyOverlays();
+  else removeOverlays();
+});
+
 onMounted(async () => {
   const count = graphStore.filteredNodes.length;
   if (clustering.needsClustering(count)) {
@@ -400,16 +441,28 @@ onMounted(async () => {
   await nextTick();
   if (graphStore.filteredNodes.length > 0 || clustering.clusterData.value) initCytoscape();
 
-  // Listen for Command Palette "Fit graph to view"
+  // Listen for Command Palette events
   document.addEventListener('vda:fit-graph', () => fitToView());
+  document.addEventListener('vda:export-graph-png', () => exportGraph('png'));
 });
 
 watch(() => graphStore.filteredNodes.length, (count) => {
   if (count > 0 && !cy) nextTick(initCytoscape);
 });
 
+function exportGraph(format: 'png' | 'svg') {
+  if (!cy) return;
+  if (format === 'png') {
+    const dataUrl = cy.png({ full: true, scale: 2, bg: '#0f1219' });
+    const link = document.createElement('a');
+    link.href = dataUrl;
+    link.download = 'vda-graph.png';
+    link.click();
+  }
+}
+
 onUnmounted(() => { cy?.destroy(); });
-defineExpose({ fitToView, focusNode });
+defineExpose({ fitToView, focusNode, exportGraph });
 </script>
 
 <template>
@@ -436,11 +489,19 @@ defineExpose({ fitToView, focusNode });
 
     <!-- Controls -->
     <div class="absolute bottom-3 right-3 flex gap-1.5">
+      <button @click="graphStore.showOverlays = !graphStore.showOverlays"
+        class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm"
+        :style="{
+          background: graphStore.showOverlays ? 'var(--accent-primary, #42b883)' : 'var(--surface-elevated)',
+          borderColor: graphStore.showOverlays ? 'var(--accent-primary, #42b883)' : 'var(--border-subtle)',
+          color: graphStore.showOverlays ? '#fff' : 'var(--text-secondary)',
+        }">Overlays</button>
       <button @click="fitToView()" class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">Fit</button>
       <button @click="useClusters = !useClusters; if (useClusters) { clustering.fetchClustered(3).then(() => refreshGraph()) } else { refreshGraph() }"
         class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">
         {{ useClusters ? 'Expand All' : 'Cluster' }}
       </button>
+      <button @click="exportGraph('png')" class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">Export PNG</button>
     </div>
   </div>
 </template>

@@ -11,6 +11,19 @@ const edgeKindList = Object.keys(EDGE_STYLES) as EdgeKind[];
 
 <template>
   <div class="p-3 space-y-4 text-sm overflow-y-auto h-full">
+    <!-- Filter Presets -->
+    <div>
+      <h3 class="font-semibold text-gray-300 mb-2">Presets</h3>
+      <div class="flex flex-wrap gap-1 mb-3">
+        <button @click="graphStore.applyFilterPreset('all')" class="rounded px-2 py-1 text-xs border" style="background: var(--surface-elevated, #1a1f2e); border-color: var(--border-subtle, #2a2f3e); color: var(--text-secondary, #a0a8b8)">All</button>
+        <button @click="graphStore.applyFilterPreset('none')" class="rounded px-2 py-1 text-xs border" style="background: var(--surface-elevated, #1a1f2e); border-color: var(--border-subtle, #2a2f3e); color: var(--text-secondary, #a0a8b8)">None</button>
+        <button @click="graphStore.applyFilterPreset('vue')" class="rounded px-2 py-1 text-xs border" style="background: var(--surface-elevated, #1a1f2e); border-color: var(--border-subtle, #2a2f3e); color: #42b883">Vue</button>
+        <button @click="graphStore.applyFilterPreset('spring')" class="rounded px-2 py-1 text-xs border" style="background: var(--surface-elevated, #1a1f2e); border-color: var(--border-subtle, #2a2f3e); color: #6db33f">Spring</button>
+        <button @click="graphStore.applyFilterPreset('db')" class="rounded px-2 py-1 text-xs border" style="background: var(--surface-elevated, #1a1f2e); border-color: var(--border-subtle, #2a2f3e); color: #00bcd4">DB Chain</button>
+        <button @click="graphStore.applyFilterPreset('api')" class="rounded px-2 py-1 text-xs border" style="background: var(--surface-elevated, #1a1f2e); border-color: var(--border-subtle, #2a2f3e); color: #ef4444">API</button>
+      </div>
+    </div>
+
     <div>
       <h3 class="font-semibold text-gray-300 mb-2">Node Types</h3>
       <div v-for="kind in nodeKindList" :key="kind" class="flex items-center gap-2 py-0.5">
