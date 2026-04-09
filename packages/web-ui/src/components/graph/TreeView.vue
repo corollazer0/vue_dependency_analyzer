@@ -28,15 +28,43 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
   const edges = graphStore.filteredEdges;
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const visited = new Set<string>();
+  // Edge kinds where the "semantic dependency" direction is reversed from the edge direction.
+  // e.g. api-serves: Controller→Endpoint, but Endpoint "depends on" Controller
+  //      mybatis-maps: Mapper→Statement, but Statement "depends on" Mapper
+  const REVERSE_SEMANTIC_KINDS = new Set(['api-serves', 'mybatis-maps']);
+
   function traverse(nodeId: string, depth: number): TreeNode {
     const node = nodeMap.get(nodeId);
     visited.add(nodeId);
     const children: TreeNode[] = [];
     if (depth < maxDepth) {
-      const connected = dir === 'dependencies' ? edges.filter(e => e.source === nodeId) : edges.filter(e => e.target === nodeId);
-      for (const edge of connected) {
-        const nextId = dir === 'dependencies' ? edge.target : edge.source;
-        if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+      // Forward edges: this node is source
+      const forward = edges.filter(e => e.source === nodeId);
+      // Reverse edges: for certain edge kinds, follow incoming edges as "dependencies"
+      const reverse = edges.filter(e => e.target === nodeId && REVERSE_SEMANTIC_KINDS.has(e.kind));
+
+      if (dir === 'dependencies') {
+        // Follow outgoing + reverse-semantic incoming
+        for (const edge of forward) {
+          const nextId = edge.target;
+          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+        }
+        for (const edge of reverse) {
+          const nextId = edge.source;
+          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+        }
+      } else {
+        // Dependents: follow incoming + reverse-semantic outgoing
+        const incoming = edges.filter(e => e.target === nodeId);
+        const reverseOut = edges.filter(e => e.source === nodeId && REVERSE_SEMANTIC_KINDS.has(e.kind));
+        for (const edge of incoming) {
+          const nextId = edge.source;
+          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+        }
+        for (const edge of reverseOut) {
+          const nextId = edge.target;
+          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+        }
       }
     }
     return { id: nodeId, label: node?.label || nodeId.split(':').pop() || nodeId, kind: node?.kind || 'unknown', children };
