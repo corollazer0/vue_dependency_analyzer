@@ -318,4 +318,77 @@ describe.skipIf(!hasTestProject)('E2E: Full test-project analysis', () => {
     // Allow up to 10% error rate
     expect(errorCount).toBeLessThan(fileCount * 0.1);
   });
+
+  // === X1-09: Controller→Service→Repository→Mapper→XML→Table chain ===
+  describe('E2E Chain: Controller → DB Table', () => {
+    it('should trace from a controller through service to repository', () => {
+      const controllers = graph.getAllNodes().filter(n => n.kind === 'spring-controller');
+      expect(controllers.length).toBeGreaterThan(0);
+
+      let chainFound = false;
+      for (const ctrl of controllers) {
+        const ctrlInjects = graph.getOutEdges(ctrl.id).filter(e => e.kind === 'spring-injects');
+        for (const svcEdge of ctrlInjects) {
+          const svc = graph.getNode(svcEdge.target);
+          if (!svc) continue;
+          const svcInjects = graph.getOutEdges(svc.id).filter(e => e.kind === 'spring-injects');
+          for (const repoEdge of svcInjects) {
+            const repo = graph.getNode(repoEdge.target);
+            if (repo && (repo.metadata.isRepository || repo.label.endsWith('Repository'))) {
+              chainFound = true;
+            }
+          }
+        }
+      }
+      expect(chainFound).toBe(true);
+    });
+
+    it('should trace from repository to mapper to mybatis XML', () => {
+      const repos = graph.getAllNodes().filter(n =>
+        n.kind === 'spring-service' && (n.metadata.isRepository || n.label.endsWith('Repository'))
+      );
+      expect(repos.length).toBeGreaterThan(0);
+
+      let mapperLinked = false;
+      for (const repo of repos) {
+        const repoInjects = graph.getOutEdges(repo.id).filter(e => e.kind === 'spring-injects');
+        for (const edge of repoInjects) {
+          const target = graph.getNode(edge.target);
+          if (target && (target.metadata.isMapper || target.kind === 'mybatis-mapper')) {
+            mapperLinked = true;
+          }
+        }
+      }
+      expect(mapperLinked).toBe(true);
+    });
+
+    it('should trace from mybatis mapper to db tables via statements', () => {
+      const mybatisMappers = graph.getAllNodes().filter(n => n.kind === 'mybatis-mapper');
+      expect(mybatisMappers.length).toBeGreaterThan(0);
+
+      let tableFound = false;
+      for (const mapper of mybatisMappers) {
+        const stmtEdges = graph.getOutEdges(mapper.id).filter(e => e.kind === 'mybatis-maps');
+        for (const se of stmtEdges) {
+          const tableEdges = graph.getOutEdges(se.target).filter(e =>
+            e.kind === 'reads-table' || e.kind === 'writes-table'
+          );
+          for (const te of tableEdges) {
+            const table = graph.getNode(te.target);
+            if (table && table.kind === 'db-table') tableFound = true;
+          }
+        }
+      }
+      expect(tableFound).toBe(true);
+    });
+
+    it('should have complete chain: spring-injects resolved to real nodes', () => {
+      const springInjects = graph.getAllEdges().filter(e => e.kind === 'spring-injects');
+      const resolved = springInjects.filter(e => graph.hasNode(e.target));
+      const unresolved = springInjects.filter(e => !graph.hasNode(e.target));
+
+      // At least 70% should be resolved (unresolved are framework beans)
+      expect(resolved.length / springInjects.length).toBeGreaterThan(0.7);
+    });
+  });
 });
