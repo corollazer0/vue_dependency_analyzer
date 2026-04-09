@@ -14,7 +14,7 @@ const treeDepth = ref(5);
 // Bug #2: separate tree root from selected node — click selects, double-click re-roots
 const treeRootId = ref<string | null>(null);
 
-interface TreeNode { id: string; label: string; kind: string; children: TreeNode[]; }
+interface TreeNode { id: string; label: string; kind: string; children: TreeNode[]; duplicate?: boolean; }
 
 const nodeCount = computed(() => {
   if (!treeRootId.value) return 0;
@@ -39,10 +39,10 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
     visited.add(nodeId);
     const children: TreeNode[] = [];
 
-    // If already visited in another branch, show as leaf (label + "(→)") but don't recurse
-    // This prevents infinite loops while still showing the connection exists
+    // If already visited in another branch, show as leaf but mark as duplicate reference
+    // Visually distinguished (dimmed + dashed) — no label pollution
     if (alreadyVisited) {
-      return { id: nodeId, label: (node?.label || nodeId.split(':').pop() || nodeId) + ' (see above)', kind: node?.kind || 'unknown', children: [] };
+      return { id: nodeId, label: node?.label || nodeId.split(':').pop() || nodeId, kind: node?.kind || 'unknown', children: [], duplicate: true } as TreeNode;
     }
 
     if (depth < maxDepth) {
@@ -134,15 +134,19 @@ function renderTree() {
 
   nodeGroups.append('circle')
     .attr('r', (d: any) => d.depth === 0 ? 10 : 7)
-    .attr('fill', (d: any) => NODE_COLORS[d.data.kind as keyof typeof NODE_COLORS] || '#666')
-    .attr('stroke', (d: any) => d.depth === 0 ? '#fff' : 'none')
-    .attr('stroke-width', (d: any) => d.depth === 0 ? 2 : 0);
+    .attr('fill', (d: any) => d.data.duplicate ? 'none' : (NODE_COLORS[d.data.kind as keyof typeof NODE_COLORS] || '#666'))
+    .attr('stroke', (d: any) => d.data.duplicate ? (NODE_COLORS[d.data.kind as keyof typeof NODE_COLORS] || '#666') : (d.depth === 0 ? '#fff' : 'none'))
+    .attr('stroke-width', (d: any) => d.data.duplicate ? 1.5 : (d.depth === 0 ? 2 : 0))
+    .attr('stroke-dasharray', (d: any) => d.data.duplicate ? '3 2' : 'none')
+    .attr('opacity', (d: any) => d.data.duplicate ? 0.5 : 1);
 
   nodeGroups.append('text')
     .attr('x', (d: any) => d.children ? -12 : 12).attr('dy', 4)
     .attr('text-anchor', (d: any) => d.children ? 'end' : 'start')
-    .attr('font-size', '11px').attr('fill', '#a0a8b8')
-    .text((d: any) => { const l = d.data.label; return l.length > 30 ? l.slice(0, 27) + '...' : l; });
+    .attr('font-size', '11px')
+    .attr('fill', (d: any) => d.data.duplicate ? '#555' : '#a0a8b8')
+    .attr('font-style', (d: any) => d.data.duplicate ? 'italic' : 'normal')
+    .text((d: any) => { const l = d.data.label; return l.length > 35 ? l.slice(0, 32) + '...' : l; });
 
   // Root label
   const r0 = root.descendants()[0];
