@@ -29,6 +29,7 @@ const commands: PaletteItem[] = [
   { id: 'cmd:export', label: 'Export as JSON', kind: 'Command', type: 'command', icon: '📦', action: () => exportAsJson() },
   { id: 'cmd:reset', label: 'Reset all filters', kind: 'Command', type: 'command', icon: '↺', action: () => graphStore.resetFilters() },
   { id: 'cmd:export-png', label: 'Export graph as PNG', kind: 'Command', type: 'command', icon: '📷', action: () => { document.dispatchEvent(new CustomEvent('vda:export-graph-png')); } },
+  { id: 'cmd:dto-mismatches', label: 'Show DTO mismatches', kind: 'Command', type: 'command', icon: '🔍', action: () => { document.dispatchEvent(new CustomEvent('vda:show-dto-mismatches')); } },
 ];
 
 const recentItems = computed(() => {

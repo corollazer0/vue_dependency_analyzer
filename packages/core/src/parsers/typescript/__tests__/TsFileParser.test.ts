@@ -93,6 +93,54 @@ describe('TsFileParser', () => {
     });
   });
 
+  describe('nested routes with children', () => {
+    const nestedRouterContent = `
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import AdminLayout from '@/views/AdminLayout.vue'
+import AdminUsers from '@/views/AdminUsers.vue'
+
+const routes: RouteRecordRaw[] = [
+  { path: '/admin', component: AdminLayout, children: [
+    { path: 'users', component: AdminUsers },
+    { path: 'settings', component: () => import('@/views/AdminSettings.vue') },
+  ]},
+  { path: '/login', component: () => import('@/views/LoginView.vue') },
+]
+
+export default createRouter({ history: createWebHistory(), routes })
+`;
+    const result = parser.parse('/test/router/index.ts', nestedRouterContent, {});
+
+    it('should detect as vue-router-route', () => {
+      const node = result.nodes.find(n => n.kind === 'vue-router-route');
+      expect(node).toBeDefined();
+    });
+
+    it('should detect static components in children', () => {
+      const staticEdges = result.edges.filter(
+        e => e.kind === 'route-renders' && (e.metadata as any).componentName,
+      );
+      const names = staticEdges.map(e => (e.metadata as any).componentName);
+      expect(names).toContain('AdminLayout');
+      expect(names).toContain('AdminUsers');
+    });
+
+    it('should detect lazy imports in children', () => {
+      const lazyEdges = result.edges.filter(
+        e => e.kind === 'route-renders' && (e.metadata as any).isLazy,
+      );
+      const paths = lazyEdges.map(e => (e.metadata as any).importPath);
+      expect(paths).toContain('@/views/AdminSettings.vue');
+      expect(paths).toContain('@/views/LoginView.vue');
+    });
+
+    it('should create correct number of route-renders edges', () => {
+      const routeEdges = result.edges.filter(e => e.kind === 'route-renders');
+      // 2 static (AdminLayout, AdminUsers) + 2 lazy (AdminSettings, LoginView)
+      expect(routeEdges).toHaveLength(4);
+    });
+  });
+
   describe('store file (userStore.ts)', () => {
     const content = readFileSync(resolve(fixturesDir, 'stores/userStore.ts'), 'utf-8');
     const result = parser.parse('/test/stores/userStore.ts', content, {});

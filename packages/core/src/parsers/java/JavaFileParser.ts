@@ -24,6 +24,7 @@ export class JavaFileParser implements FileParser {
       const isRepository = annotations.some(a => a === 'Repository');
       const isMapper = annotations.some(a => a === 'Mapper');
       const isConfiguration = annotations.some(a => a === 'Configuration');
+      const isComponent = annotations.some(a => a === 'Component');
       const hasRequiredArgsConstructor = annotations.some(a => a === 'RequiredArgsConstructor');
       const fqn = packageName ? `${packageName}.${className}` : className;
 
@@ -43,7 +44,7 @@ export class JavaFileParser implements FileParser {
           nodes.push(ep.node);
           edges.push(ep.edge);
         }
-      } else if (isService || isRepository || isMapper || isConfiguration) {
+      } else if (isService || isRepository || isMapper || isConfiguration || isComponent) {
         nodes.push({
           id: `spring-service:${filePath}`,
           kind: 'spring-service',
@@ -51,7 +52,7 @@ export class JavaFileParser implements FileParser {
           filePath,
           metadata: {
             className, packageName, fqn,
-            isRepository, isMapper, isConfiguration,
+            isRepository, isMapper, isConfiguration, isComponent,
           },
         });
 

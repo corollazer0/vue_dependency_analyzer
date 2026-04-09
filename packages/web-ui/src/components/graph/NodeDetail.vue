@@ -1,8 +1,21 @@
 <script setup lang="ts">
+import { ref } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
 import { NODE_COLORS, NODE_LABELS } from '@/types/graph';
+import SourceSnippet from './SourceSnippet.vue';
 
 const graphStore = useGraphStore();
+const showSnippet = ref(false);
+const snippetRef = ref<InstanceType<typeof SourceSnippet>>();
+
+function viewSource(filePath: string, line: number) {
+  showSnippet.value = true;
+  snippetRef.value?.loadSnippet(filePath, line);
+}
+
+function hasLoc(edge: { metadata: Record<string, unknown> }): boolean {
+  return !!(edge.metadata?.filePath && edge.metadata?.line);
+}
 </script>
 
 <template>
@@ -53,16 +66,26 @@ const graphStore = useGraphStore();
         Dependencies ({{ graphStore.selectedNodeEdges.outgoing.length }})
       </h3>
       <div class="space-y-1">
-        <button
+        <div
           v-for="edge in graphStore.selectedNodeEdges.outgoing"
           :key="edge.id"
-          @click="graphStore.selectNode(edge.target)"
           class="w-full text-left px-2 py-1 rounded hover:bg-gray-700 flex items-center gap-2"
         >
-          <span class="text-blue-400">→</span>
-          <span class="text-gray-400 text-xs">{{ edge.kind }}</span>
-          <span class="text-gray-300 truncate">{{ edge.target }}</span>
-        </button>
+          <button
+            @click="graphStore.selectNode(edge.target)"
+            class="flex items-center gap-2 min-w-0 flex-1"
+          >
+            <span class="text-blue-400">→</span>
+            <span class="text-gray-400 text-xs">{{ edge.kind }}</span>
+            <span class="text-gray-300 truncate">{{ edge.target }}</span>
+          </button>
+          <button
+            v-if="hasLoc(edge)"
+            @click.stop="viewSource(String(edge.metadata.filePath), Number(edge.metadata.line))"
+            class="flex-shrink-0 text-xs px-1 rounded hover:bg-gray-600"
+            title="View Source"
+          >📄</button>
+        </div>
       </div>
     </div>
 
@@ -72,16 +95,26 @@ const graphStore = useGraphStore();
         Dependents ({{ graphStore.selectedNodeEdges.incoming.length }})
       </h3>
       <div class="space-y-1">
-        <button
+        <div
           v-for="edge in graphStore.selectedNodeEdges.incoming"
           :key="edge.id"
-          @click="graphStore.selectNode(edge.source)"
           class="w-full text-left px-2 py-1 rounded hover:bg-gray-700 flex items-center gap-2"
         >
-          <span class="text-green-400">←</span>
-          <span class="text-gray-400 text-xs">{{ edge.kind }}</span>
-          <span class="text-gray-300 truncate">{{ edge.source }}</span>
-        </button>
+          <button
+            @click="graphStore.selectNode(edge.source)"
+            class="flex items-center gap-2 min-w-0 flex-1"
+          >
+            <span class="text-green-400">←</span>
+            <span class="text-gray-400 text-xs">{{ edge.kind }}</span>
+            <span class="text-gray-300 truncate">{{ edge.source }}</span>
+          </button>
+          <button
+            v-if="hasLoc(edge)"
+            @click.stop="viewSource(String(edge.metadata.filePath), Number(edge.metadata.line))"
+            class="flex-shrink-0 text-xs px-1 rounded hover:bg-gray-600"
+            title="View Source"
+          >📄</button>
+        </div>
       </div>
     </div>
   </div>
@@ -89,4 +122,10 @@ const graphStore = useGraphStore();
   <div v-else class="p-4 flex items-center justify-center h-full">
     <p class="text-gray-600 text-sm">Click a node to see details</p>
   </div>
+
+  <SourceSnippet
+    ref="snippetRef"
+    :show="showSnippet"
+    @close="showSnippet = false"
+  />
 </template>

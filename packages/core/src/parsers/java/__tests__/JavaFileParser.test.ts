@@ -68,6 +68,34 @@ describe('JavaFileParser', () => {
       expect(node!.metadata.fqn).toBe('com.example.mapper.UserMapper');
     });
   });
+
+  describe('Java @Component detection', () => {
+    const content = `
+package com.example.util;
+
+@Component
+public class CacheManager {
+    private final RedisTemplate redisTemplate;
+
+    public CacheManager(RedisTemplate redisTemplate) {
+        this.redisTemplate = redisTemplate;
+    }
+
+    public void evict(String key) {
+        redisTemplate.delete(key);
+    }
+}
+`;
+    const result = parser.parse('/test/CacheManager.java', content, {});
+
+    it('should detect @Component as spring-service', () => {
+      const node = result.nodes.find(n => n.kind === 'spring-service');
+      expect(node).toBeDefined();
+      expect(node!.label).toBe('CacheManager');
+      expect(node!.metadata.isComponent).toBe(true);
+      expect(node!.metadata.fqn).toBe('com.example.util.CacheManager');
+    });
+  });
 });
 
 describe('KotlinFileParser', () => {
@@ -105,5 +133,113 @@ class ProductController(private val productService: ProductService) {
     expect(endpoints).toHaveLength(2);
     expect(endpoints.map(e => (e.metadata as any).path)).toContain('/api/products/list');
     expect(endpoints.map(e => (e.metadata as any).path)).toContain('/api/products/create');
+  });
+
+  it('should detect @Service class as spring-service', () => {
+    const content = `
+package com.example.demo.service
+
+@Service
+class UserService(private val userRepository: UserRepository) {
+    fun findAll(): List<User> = userRepository.findAll()
+}
+`;
+    const result = parser.parse('/test/UserService.kt', content, {});
+
+    const node = result.nodes.find(n => n.kind === 'spring-service');
+    expect(node).toBeDefined();
+    expect(node!.label).toBe('UserService');
+    expect(node!.metadata.fqn).toBe('com.example.demo.service.UserService');
+  });
+
+  it('should detect @Repository interface as spring-service with isRepository', () => {
+    const content = `
+package com.example.demo.repository
+
+@Repository
+interface UserRepository : JpaRepository<User, Long> {
+    fun findByEmail(email: String): User?
+}
+`;
+    const result = parser.parse('/test/UserRepository.kt', content, {});
+
+    const node = result.nodes.find(n => n.kind === 'spring-service');
+    expect(node).toBeDefined();
+    expect(node!.label).toBe('UserRepository');
+    expect(node!.metadata.isRepository).toBe(true);
+    expect(node!.metadata.fqn).toBe('com.example.demo.repository.UserRepository');
+  });
+
+  it('should detect @Component class as spring-service', () => {
+    const content = `
+package com.example.demo.component
+
+@Component
+class EventPublisher(private val appEventPublisher: ApplicationEventPublisher) {
+    fun publish(event: Any) = appEventPublisher.publishEvent(event)
+}
+`;
+    const result = parser.parse('/test/EventPublisher.kt', content, {});
+
+    const node = result.nodes.find(n => n.kind === 'spring-service');
+    expect(node).toBeDefined();
+    expect(node!.label).toBe('EventPublisher');
+    expect(node!.metadata.isComponent).toBe(true);
+  });
+
+  it('should detect @Mapper interface as spring-service with isMapper', () => {
+    const content = `
+package com.example.demo.mapper
+
+@Mapper
+interface UserMapper {
+    fun toDto(user: User): UserDto
+}
+`;
+    const result = parser.parse('/test/UserMapper.kt', content, {});
+
+    const node = result.nodes.find(n => n.kind === 'spring-service');
+    expect(node).toBeDefined();
+    expect(node!.label).toBe('UserMapper');
+    expect(node!.metadata.isMapper).toBe(true);
+    expect(node!.metadata.fqn).toBe('com.example.demo.mapper.UserMapper');
+  });
+
+  it('should detect constructor injection and create spring-injects edges', () => {
+    const content = `
+package com.example.demo.service
+
+@Service
+class OrderService(private val userRepository: UserRepository, private val productService: ProductService) {
+    fun createOrder(userId: Long): Order = TODO()
+}
+`;
+    const result = parser.parse('/test/OrderService.kt', content, {});
+
+    const injectEdges = result.edges.filter(e => e.kind === 'spring-injects');
+    expect(injectEdges).toHaveLength(2);
+    const injectedTypes = injectEdges.map(e => (e.metadata as any).injectedType);
+    expect(injectedTypes).toContain('UserRepository');
+    expect(injectedTypes).toContain('ProductService');
+  });
+
+  it('should detect constructor injection for controllers too', () => {
+    const content = `
+package com.example.demo.controller
+
+@RestController
+@RequestMapping("/api/products")
+class ProductController(private val productService: ProductService) {
+
+    @GetMapping("/list")
+    fun getAll(): List<Product> = productService.findAll()
+}
+`;
+    const result = parser.parse('/test/ProductController.kt', content, {});
+
+    const injectEdges = result.edges.filter(e => e.kind === 'spring-injects');
+    expect(injectEdges).toHaveLength(1);
+    expect(injectEdges[0].metadata.injectedType).toBe('ProductService');
+    expect(injectEdges[0].source).toContain('spring-controller');
   });
 });

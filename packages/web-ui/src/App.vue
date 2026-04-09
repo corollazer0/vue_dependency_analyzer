@@ -12,10 +12,26 @@ import AnalysisProgress from '@/components/AnalysisProgress.vue';
 import OnboardingGuide from '@/components/OnboardingGuide.vue';
 import CommandPalette from '@/components/CommandPalette.vue';
 import ResizeHandle from '@/components/ui/ResizeHandle.vue';
+import PathfinderPanel from '@/components/graph/PathfinderPanel.vue';
+import ParseErrorPanel from '@/components/ParseErrorPanel.vue';
+import DtoConsistencyPanel from '@/components/DtoConsistencyPanel.vue';
 
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
 const activeView = ref<'graph' | 'tree'>('graph');
+const showPathfinder = ref(false);
+const showParseErrors = ref(false);
+const parseErrorCount = ref<number | null>(null);
+
+async function fetchParseErrorCount() {
+  try {
+    const res = await fetch('/api/analysis/parse-errors');
+    const data = await res.json();
+    parseErrorCount.value = (data.errors || []).length;
+  } catch {
+    parseErrorCount.value = null;
+  }
+}
 const sidebarTab = ref<'search' | 'filter'>('search');
 const showSidebar = ref(true);
 
@@ -52,6 +68,7 @@ onMounted(async () => {
   await graphStore.fetchGraph();
   loadHashState();
   connectWebSocket();
+  fetchParseErrorCount();
   document.addEventListener('keydown', handleKeydown);
 });
 
@@ -73,7 +90,7 @@ function connectWebSocket() {
     const msg = JSON.parse(event.data);
     if (msg.type === 'analysis:started') { analyzing.value = true; progress.value = { processed: 0, total: msg.payload.totalFiles, currentFile: '', cachedCount: 0, elapsedMs: 0 }; }
     else if (msg.type === 'analysis:progress') { progress.value = msg.payload; }
-    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); }
+    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); fetchParseErrorCount(); }
     else if (msg.type === 'graph:update') { graphStore.fetchGraph(); }
   };
   ws.onclose = () => { wsStatus.value = 'disconnected'; clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connectWebSocket, 3000); };
@@ -93,6 +110,9 @@ function handleKeydown(e: KeyboardEvent) {
 <template>
   <div class="h-screen w-screen flex flex-col overflow-hidden" style="background: var(--surface-primary); color: var(--text-primary)">
     <CommandPalette />
+    <DtoConsistencyPanel />
+    <PathfinderPanel v-if="showPathfinder" @close="showPathfinder = false" />
+    <ParseErrorPanel v-if="showParseErrors" @close="showParseErrors = false" />
     <AnalysisProgress v-if="analyzing" v-bind="progress" @cancel="cancelAnalysis" />
     <OnboardingGuide v-if="appState === 'ready'" />
 
@@ -172,6 +192,8 @@ function handleKeydown(e: KeyboardEvent) {
             <!-- View switcher -->
             <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
 
+            <button @click="showPathfinder = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Pathfinder</button>
+
             <div class="flex-1"></div>
 
             <span class="text-xs hidden sm:inline" style="color: var(--text-tertiary)"><kbd class="px-1 rounded" style="background: var(--surface-elevated)">⌘K</kbd></span>
@@ -217,6 +239,16 @@ function handleKeydown(e: KeyboardEvent) {
       <!-- Status Bar -->
       <footer class="h-6 flex items-center px-3 text-xs gap-4 flex-shrink-0 border-t" style="background: var(--surface-secondary); border-color: var(--border-subtle); color: var(--text-tertiary)">
         <span v-if="graphStore.graphData">{{ graphStore.graphData.metadata.fileCount }} files</span>
+        <button
+          v-if="parseErrorCount !== null && parseErrorCount > 0"
+          @click="showParseErrors = true"
+          class="flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
+          style="color: var(--accent-danger)"
+          title="View parse errors"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+          {{ parseErrorCount }} error{{ parseErrorCount === 1 ? '' : 's' }}
+        </button>
         <span class="flex-1"></span>
         <span v-if="graphStore.graphData">{{ new Date(graphStore.graphData.metadata.analyzedAt).toLocaleTimeString() }}</span>
       </footer>
