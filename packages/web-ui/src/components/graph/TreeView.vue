@@ -183,6 +183,8 @@ onMounted(() => {
   }
 });
 
+const showLegend = ref(false);
+
 function setRootFromSelection() {
   if (graphStore.selectedNodeId) treeRootId.value = graphStore.selectedNodeId;
 }
@@ -190,6 +192,7 @@ function setRootFromSelection() {
 
 <template>
   <div class="flex flex-col h-full">
+    <!-- Toolbar -->
     <div class="flex items-center gap-3 px-3 py-2 border-b flex-shrink-0" style="background: var(--surface-secondary); border-color: var(--border-subtle)">
       <button v-for="dir in [{id:'dependencies',label:'Dependencies →'},{id:'dependents',label:'← Dependents'}]" :key="dir.id" @click="direction = dir.id as any"
         class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: direction === dir.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: direction === dir.id ? '#fff' : 'var(--text-secondary)' }">{{ dir.label }}</button>
@@ -197,16 +200,93 @@ function setRootFromSelection() {
       <label class="flex items-center gap-2 text-xs" style="color: var(--text-tertiary)">Depth: <input type="range" min="1" max="10" v-model.number="treeDepth" class="w-16 accent-blue-500" /> <span style="color: var(--text-secondary)">{{ treeDepth }}</span></label>
       <div class="flex-1"></div>
       <button v-if="graphStore.selectedNodeId && graphStore.selectedNodeId !== treeRootId" @click="setRootFromSelection" class="px-2 py-1 rounded-md text-xs" style="background: var(--accent-vue); color: var(--text-inverse)" title="Re-root tree on selected node">Focus selected</button>
+      <button @click="showLegend = !showLegend" class="px-2 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Toggle legend">Legend</button>
       <span v-if="treeRootId" class="text-xs" style="color: var(--text-tertiary)">{{ nodeCount }} nodes</span>
     </div>
+
+    <!-- Tree area -->
     <div ref="containerRef" class="flex-1 relative" style="background: var(--surface-primary)">
       <svg ref="svgRef" class="w-full h-full"></svg>
+
+      <!-- Empty state -->
       <div v-if="!treeRootId" class="absolute inset-0 flex items-center justify-center">
         <div class="text-center">
           <p class="text-sm" style="color: var(--text-tertiary)">Select a node in the Graph view first</p>
           <p class="text-xs mt-2" style="color: var(--text-tertiary)">Click = select · Double-click = re-root tree</p>
         </div>
       </div>
+
+      <!-- Legend panel -->
+      <Transition name="fade">
+        <div v-if="showLegend" class="absolute top-3 right-3 z-40 rounded-lg border p-4 min-w-[220px] text-xs backdrop-blur-sm"
+          style="background: var(--surface-elevated); border-color: var(--border-subtle)">
+          <div class="flex items-center justify-between mb-3">
+            <span class="font-semibold" style="color: var(--text-primary)">Tree Legend</span>
+            <button @click="showLegend = false" class="hover:bg-white/10 rounded px-1" style="color: var(--text-tertiary)">×</button>
+          </div>
+
+          <!-- Interactions -->
+          <div class="mb-3 pb-3 border-b" style="border-color: var(--border-subtle)">
+            <div class="font-medium mb-1.5" style="color: var(--text-secondary)">Interactions</div>
+            <div class="space-y-1" style="color: var(--text-tertiary)">
+              <div>Click node → select (detail panel)</div>
+              <div>Double-click → re-root tree</div>
+              <div>Scroll/pinch → zoom</div>
+              <div>Drag → pan</div>
+            </div>
+          </div>
+
+          <!-- Node styles -->
+          <div class="mb-3 pb-3 border-b" style="border-color: var(--border-subtle)">
+            <div class="font-medium mb-1.5" style="color: var(--text-secondary)">Node Styles</div>
+            <div class="space-y-2">
+              <div class="flex items-center gap-2">
+                <svg width="16" height="16"><circle cx="8" cy="8" r="6" fill="#42b883" stroke="#fff" stroke-width="2"/></svg>
+                <span style="color: var(--text-tertiary)">Root node (current focus)</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <svg width="16" height="16"><circle cx="8" cy="8" r="5" fill="#42b883"/></svg>
+                <span style="color: var(--text-tertiary)">Normal node</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <svg width="16" height="16"><circle cx="8" cy="8" r="5" fill="none" stroke="#42b883" stroke-width="1.5" stroke-dasharray="3 2" opacity="0.5"/></svg>
+                <span style="color: var(--text-tertiary)">Already shown in another branch</span>
+              </div>
+              <div class="flex items-center gap-2">
+                <svg width="16" height="16"><circle cx="8" cy="8" r="5" fill="#42b883" stroke="#42b883" stroke-width="3"/></svg>
+                <span style="color: var(--text-tertiary)">Selected node</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Node colors -->
+          <div>
+            <div class="font-medium mb-1.5" style="color: var(--text-secondary)">Node Types</div>
+            <div class="space-y-1">
+              <div v-for="[kind, color] of [
+                ['Vue Component', '#42b883'],
+                ['Composable', '#a78bfa'],
+                ['Pinia Store', '#ffd859'],
+                ['API Call', '#ef4444'],
+                ['Endpoint', '#8bc34a'],
+                ['Controller', '#6db33f'],
+                ['Service', '#4caf50'],
+                ['Repository', '#4caf50'],
+                ['@Mapper', '#e91e63'],
+                ['MyBatis XML', '#e91e63'],
+                ['SQL Statement', '#f06292'],
+                ['DB Table', '#00bcd4'],
+                ['Vue Event', '#f97316'],
+                ['Spring Event', '#f97316'],
+                ['Native Bridge', '#ff7043'],
+              ]" :key="kind" class="flex items-center gap-2">
+                <svg width="12" height="12"><circle cx="6" cy="6" r="5" :fill="color"/></svg>
+                <span style="color: var(--text-tertiary)">{{ kind }}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
     </div>
   </div>
 </template>
