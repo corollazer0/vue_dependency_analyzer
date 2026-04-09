@@ -29,17 +29,17 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const visited = new Set<string>();
   // Edge kinds where the "semantic dependency" direction is reversed from the edge direction.
-  // e.g. api-serves: Controller→Endpoint, but Endpoint "depends on" Controller
-  //      mybatis-maps: Mapper→Statement, but Statement "depends on" Mapper
   const REVERSE_SEMANTIC_KINDS = new Set(['api-serves', 'mybatis-maps']);
+  // Edge kinds to skip in tree traversal (these are cross-cutting analysis results, not dependency chains)
+  const SKIP_IN_TREE = new Set(['dto-flows']);
 
   function traverse(nodeId: string, depth: number): TreeNode {
     const node = nodeMap.get(nodeId);
     visited.add(nodeId);
     const children: TreeNode[] = [];
     if (depth < maxDepth) {
-      // Forward edges: this node is source
-      const forward = edges.filter(e => e.source === nodeId);
+      // Forward edges: this node is source (exclude cross-cutting analysis edges)
+      const forward = edges.filter(e => e.source === nodeId && !SKIP_IN_TREE.has(e.kind));
       // Reverse edges: for certain edge kinds, follow incoming edges as "dependencies"
       const reverse = edges.filter(e => e.target === nodeId && REVERSE_SEMANTIC_KINDS.has(e.kind));
 
@@ -54,8 +54,8 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
           if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
         }
       } else {
-        // Dependents: follow incoming + reverse-semantic outgoing
-        const incoming = edges.filter(e => e.target === nodeId);
+        // Dependents: follow incoming + reverse-semantic outgoing (exclude cross-cutting)
+        const incoming = edges.filter(e => e.target === nodeId && !SKIP_IN_TREE.has(e.kind));
         const reverseOut = edges.filter(e => e.source === nodeId && REVERSE_SEMANTIC_KINDS.has(e.kind));
         for (const edge of incoming) {
           const nextId = edge.source;
