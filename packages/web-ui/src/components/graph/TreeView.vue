@@ -35,35 +35,39 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
 
   function traverse(nodeId: string, depth: number): TreeNode {
     const node = nodeMap.get(nodeId);
+    const alreadyVisited = visited.has(nodeId);
     visited.add(nodeId);
     const children: TreeNode[] = [];
+
+    // If already visited in another branch, show as leaf (label + "(→)") but don't recurse
+    // This prevents infinite loops while still showing the connection exists
+    if (alreadyVisited) {
+      return { id: nodeId, label: (node?.label || nodeId.split(':').pop() || nodeId) + ' →', kind: node?.kind || 'unknown', children: [] };
+    }
+
     if (depth < maxDepth) {
-      // Forward edges: this node is source (exclude cross-cutting analysis edges)
       const forward = edges.filter(e => e.source === nodeId && !SKIP_IN_TREE.has(e.kind));
-      // Reverse edges: for certain edge kinds, follow incoming edges as "dependencies"
       const reverse = edges.filter(e => e.target === nodeId && REVERSE_SEMANTIC_KINDS.has(e.kind));
 
       if (dir === 'dependencies') {
-        // Follow outgoing + reverse-semantic incoming
         for (const edge of forward) {
           const nextId = edge.target;
-          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+          if (nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
         }
         for (const edge of reverse) {
           const nextId = edge.source;
-          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+          if (nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
         }
       } else {
-        // Dependents: follow incoming + reverse-semantic outgoing (exclude cross-cutting)
         const incoming = edges.filter(e => e.target === nodeId && !SKIP_IN_TREE.has(e.kind));
         const reverseOut = edges.filter(e => e.source === nodeId && REVERSE_SEMANTIC_KINDS.has(e.kind));
         for (const edge of incoming) {
           const nextId = edge.source;
-          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+          if (nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
         }
         for (const edge of reverseOut) {
           const nextId = edge.target;
-          if (!visited.has(nextId) && nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
+          if (nodeMap.has(nextId)) children.push(traverse(nextId, depth + 1));
         }
       }
     }
