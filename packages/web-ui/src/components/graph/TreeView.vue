@@ -10,7 +10,7 @@ const graphStore = useGraphStore();
 const svgRef = ref<SVGSVGElement>();
 const containerRef = ref<HTMLElement>();
 const direction = ref<'dependencies' | 'dependents'>('dependencies');
-const treeDepth = ref(5);
+const treeDepth = ref(10);
 // Bug #2: separate tree root from selected node — click selects, double-click re-roots
 const treeRootId = ref<string | null>(null);
 
@@ -197,7 +197,7 @@ function setRootFromSelection() {
       <button v-for="dir in [{id:'dependencies',label:'Dependencies →'},{id:'dependents',label:'← Dependents'}]" :key="dir.id" @click="direction = dir.id as any"
         class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: direction === dir.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: direction === dir.id ? '#fff' : 'var(--text-secondary)' }">{{ dir.label }}</button>
       <div class="w-px h-5" style="background: var(--border-subtle)"></div>
-      <label class="flex items-center gap-2 text-xs" style="color: var(--text-tertiary)">Depth: <input type="range" min="1" max="10" v-model.number="treeDepth" class="w-16 accent-blue-500" /> <span style="color: var(--text-secondary)">{{ treeDepth }}</span></label>
+      <label class="flex items-center gap-2 text-xs" style="color: var(--text-tertiary)">Depth: <input type="range" min="1" max="20" v-model.number="treeDepth" class="w-16 accent-blue-500" /> <span style="color: var(--text-secondary)">{{ treeDepth }}</span></label>
       <div class="flex-1"></div>
       <button v-if="graphStore.selectedNodeId && graphStore.selectedNodeId !== treeRootId" @click="setRootFromSelection" class="px-2 py-1 rounded-md text-xs" style="background: var(--accent-vue); color: var(--text-inverse)" title="Re-root tree on selected node">Focus selected</button>
       <button @click="showLegend = !showLegend" class="px-2 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Toggle legend">Legend</button>
