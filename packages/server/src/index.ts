@@ -28,6 +28,16 @@ export async function startServer(opts: ServerOptions): Promise<void> {
     await fastify.register(fastifyStatic, {
       root: webUiDist,
       prefix: '/',
+      decorateReply: true,
+    });
+
+    // SPA fallback: serve index.html for non-API, non-asset routes
+    fastify.setNotFoundHandler((request, reply) => {
+      if (request.url.startsWith('/api/') || request.url.startsWith('/ws')) {
+        reply.code(404).send({ error: 'Not found' });
+      } else {
+        reply.sendFile('index.html');
+      }
     });
   }
 
