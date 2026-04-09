@@ -42,7 +42,7 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
     // If already visited in another branch, show as leaf (label + "(→)") but don't recurse
     // This prevents infinite loops while still showing the connection exists
     if (alreadyVisited) {
-      return { id: nodeId, label: (node?.label || nodeId.split(':').pop() || nodeId) + ' →', kind: node?.kind || 'unknown', children: [] };
+      return { id: nodeId, label: (node?.label || nodeId.split(':').pop() || nodeId) + ' (see above)', kind: node?.kind || 'unknown', children: [] };
     }
 
     if (depth < maxDepth) {
