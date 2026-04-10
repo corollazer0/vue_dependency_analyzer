@@ -128,6 +128,11 @@ export const useGraphStore = defineStore('graph', () => {
   // Path highlight for Pathfinder
   const highlightedPath = ref<string[]>([]);
 
+  // Change impact overlay
+  const impactNodeIds = ref<{ changed: Set<string>; direct: Set<string>; transitive: Set<string> }>({
+    changed: new Set(), direct: new Set(), transitive: new Set(),
+  });
+
   // focusNodeId: set by double-click from Search or Tree to re-root the tree view
   const focusNodeId = ref<string | null>(null);
 
@@ -315,6 +320,7 @@ export const useGraphStore = defineStore('graph', () => {
     hubNodeIds,
     showOverlays,
     highlightedPath,
+    impactNodeIds,
     fetchGraph,
     fetchOverlays,
     search,

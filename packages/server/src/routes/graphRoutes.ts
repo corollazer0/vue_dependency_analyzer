@@ -75,6 +75,12 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
     return { paths, count: paths.length };
   });
 
+  // Dependency matrix data
+  fastify.get('/api/graph/matrix', async (request, reply) => {
+    const { depth } = request.query as { depth?: string };
+    return engine.getMatrixData(depth ? parseInt(depth, 10) : 3);
+  });
+
   // Analysis overlays (circular, orphan, hub node IDs)
   fastify.get('/api/analysis/overlays', async (request, reply) => {
     return engine.getAnalysisOverlays();

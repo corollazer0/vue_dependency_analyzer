@@ -30,6 +30,11 @@ export { checkDtoConsistency } from './analyzers/DtoConsistencyChecker.js';
 export type { DtoMismatch, FieldDetail } from './analyzers/DtoConsistencyChecker.js';
 export { evaluateRules } from './analyzers/RuleEngine.js';
 
+// Git
+export { parseGitDiff, getUncommittedFiles } from './git/GitDiffParser.js';
+export { analyzeChangeImpact } from './git/ChangeImpactAnalyzer.js';
+export type { ChangeImpact } from './git/ChangeImpactAnalyzer.js';
+
 // Engine
 export { ParallelParser, parseFile } from './engine/ParallelParser.js';
 export type { ProgressInfo, ProgressCallback, ParallelParseResult } from './engine/ParallelParser.js';

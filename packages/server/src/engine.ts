@@ -14,6 +14,7 @@ import {
   analyzeImpact,
   checkDtoConsistency,
   evaluateRules,
+  analyzeChangeImpact as analyzeChangeImpactFn,
   findPaths as findPathsFn,
   toJSON,
   type AnalysisConfig,
@@ -444,6 +445,51 @@ export class AnalysisEngine {
 
   checkDtoConsistency(): DtoMismatch[] {
     return checkDtoConsistency(this.graph);
+  }
+
+  getMatrixData(depth: number = 3): { modules: string[]; matrix: number[][]; edgeDetails: Record<string, string[]> } {
+    const nodes = this.graph.getAllNodes();
+    const edges = this.graph.getAllEdges();
+
+    // Group nodes by directory
+    const groups = new Map<string, Set<string>>(); // dir → set of node IDs
+    for (const node of nodes) {
+      if (!node.filePath) continue;
+      const dir = getDirectoryAtDepth(node.filePath, this.config.projectRoot, depth);
+      if (!dir) continue;
+      if (!groups.has(dir)) groups.set(dir, new Set());
+      groups.get(dir)!.add(node.id);
+    }
+
+    // Build node→module lookup
+    const nodeToModule = new Map<string, string>();
+    for (const [dir, nodeIds] of groups) {
+      for (const id of nodeIds) nodeToModule.set(id, dir);
+    }
+
+    const modules = [...groups.keys()].sort();
+    const moduleIndex = new Map(modules.map((m, i) => [m, i]));
+    const n = modules.length;
+    const matrix: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
+    const edgeDetails: Record<string, string[]> = {};
+
+    for (const edge of edges) {
+      const srcMod = nodeToModule.get(edge.source);
+      const tgtMod = nodeToModule.get(edge.target);
+      if (!srcMod || !tgtMod) continue;
+      const ri = moduleIndex.get(srcMod)!;
+      const ci = moduleIndex.get(tgtMod)!;
+      matrix[ri][ci]++;
+      const key = `${ri}|${ci}`;
+      if (!edgeDetails[key]) edgeDetails[key] = [];
+      if (!edgeDetails[key].includes(edge.kind)) edgeDetails[key].push(edge.kind);
+    }
+
+    return { modules, matrix, edgeDetails };
+  }
+
+  analyzeChangeImpact(files: string[]) {
+    return analyzeChangeImpactFn(this.graph, files, this.config.projectRoot);
   }
 
   checkRuleViolations(): { violations: RuleViolation[]; count: number } {

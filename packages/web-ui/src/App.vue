@@ -4,6 +4,8 @@ import { useGraphStore } from '@/stores/graphStore';
 import { useUiStore } from '@/stores/ui';
 import ForceGraphView from '@/components/graph/ForceGraphView.vue';
 import TreeView from '@/components/graph/TreeView.vue';
+import MatrixView from '@/components/graph/MatrixView.vue';
+import BottomUpView from '@/components/graph/BottomUpView.vue';
 import NodeDetail from '@/components/graph/NodeDetail.vue';
 import GraphLegend from '@/components/graph/GraphLegend.vue';
 import FilterPanel from '@/components/sidebar/FilterPanel.vue';
@@ -17,14 +19,16 @@ import ParseErrorPanel from '@/components/ParseErrorPanel.vue';
 import DtoConsistencyPanel from '@/components/DtoConsistencyPanel.vue';
 import UnresolvedEdgePanel from '@/components/UnresolvedEdgePanel.vue';
 import RuleViolationPanel from '@/components/RuleViolationPanel.vue';
+import ChangeImpactPanel from '@/components/ChangeImpactPanel.vue';
 
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
-const activeView = ref<'graph' | 'tree'>('graph');
+const activeView = ref<'graph' | 'tree' | 'matrix' | 'bottom-up'>('graph');
 const showPathfinder = ref(false);
 const showParseErrors = ref(false);
 const showUnresolvedEdges = ref(false);
 const showRuleViolations = ref(false);
+const showChangeImpact = ref(false);
 const parseErrorCount = ref<number | null>(null);
 const unresolvedEdgeCount = ref<number | null>(null);
 const ruleViolationCount = ref<number | null>(null);
@@ -145,6 +149,7 @@ function handleKeydown(e: KeyboardEvent) {
     <ParseErrorPanel v-if="showParseErrors" @close="showParseErrors = false" />
     <UnresolvedEdgePanel v-if="showUnresolvedEdges" @close="showUnresolvedEdges = false" />
     <RuleViolationPanel v-if="showRuleViolations" @close="showRuleViolations = false" />
+    <ChangeImpactPanel v-if="showChangeImpact" @close="showChangeImpact = false" />
     <AnalysisProgress v-if="analyzing" v-bind="progress" @cancel="cancelAnalysis" />
     <OnboardingGuide v-if="appState === 'ready'" />
 
@@ -222,9 +227,10 @@ function handleKeydown(e: KeyboardEvent) {
             </button>
 
             <!-- View switcher -->
-            <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
+            <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'},{id:'matrix',label:'Matrix'},{id:'bottom-up',label:'Bottom-Up'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
 
             <button @click="showPathfinder = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Pathfinder</button>
+            <button @click="showChangeImpact = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Impact</button>
 
             <!-- Navigation history -->
             <div class="flex gap-0.5">
@@ -250,6 +256,8 @@ function handleKeydown(e: KeyboardEvent) {
               </div>
               <ForceGraphView v-show="activeView === 'graph'" />
               <TreeView v-show="activeView === 'tree'" />
+              <MatrixView v-show="activeView === 'matrix'" />
+              <BottomUpView v-show="activeView === 'bottom-up'" />
               <GraphLegend v-if="activeView === 'graph'" />
             </div>
 

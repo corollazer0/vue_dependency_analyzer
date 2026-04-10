@@ -20,6 +20,23 @@ export function registerAnalysisRoutes(fastify: FastifyInstance, engine: Analysi
     return engine.checkDtoConsistency();
   });
 
+  fastify.post('/api/analysis/change-impact', async (request, reply) => {
+    const { files } = request.body as { files?: string[] };
+    if (!files || !Array.isArray(files) || files.length === 0) {
+      reply.code(400);
+      return { error: '"files" array is required' };
+    }
+    const impact = engine.analyzeChangeImpact(files);
+    return {
+      ...impact,
+      changedNodes: impact.changedNodes.map(n => ({ id: n.id, label: n.label, kind: n.kind })),
+      directImpact: impact.directImpact.map(n => ({ id: n.id, label: n.label, kind: n.kind })),
+      transitiveImpact: impact.transitiveImpact.map(n => ({ id: n.id, label: n.label, kind: n.kind })),
+      affectedEndpoints: impact.affectedEndpoints.map(n => ({ id: n.id, label: n.label })),
+      affectedTables: impact.affectedTables.map(n => ({ id: n.id, label: n.label })),
+    };
+  });
+
   fastify.get('/api/analysis/rule-violations', async (request, reply) => {
     return engine.checkRuleViolations();
   });

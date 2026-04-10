@@ -260,6 +260,19 @@ function buildStylesheet(): any[] {
       selector: 'edge.path-highlight',
       style: { 'line-color': '#3498db', 'target-arrow-color': '#3498db', 'width': 3, 'opacity': 1, 'z-index': 15 },
     },
+    // Change impact styles
+    {
+      selector: 'node.impact-changed',
+      style: { 'border-width': 4, 'border-color': '#ef4444', 'opacity': 1, 'z-index': 30 },
+    },
+    {
+      selector: 'node.impact-direct',
+      style: { 'border-width': 3, 'border-color': '#f97316', 'opacity': 1, 'z-index': 25 },
+    },
+    {
+      selector: 'node.impact-transitive',
+      style: { 'border-width': 2, 'border-color': '#eab308', 'opacity': 1, 'z-index': 20 },
+    },
     ...nodeKindStyles,
     ...edgeKindStyles,
   ];
@@ -442,6 +455,19 @@ watch(() => graphStore.showOverlays, (on) => {
   if (on) applyOverlays();
   else removeOverlays();
 });
+
+watch(() => graphStore.impactNodeIds, (impact) => {
+  if (!cy) return;
+  cy.elements().removeClass('impact-changed impact-direct impact-transitive');
+  if (impact.changed.size > 0 || impact.direct.size > 0 || impact.transitive.size > 0) {
+    cy.nodes().forEach((node: any) => {
+      const id = node.id();
+      if (impact.changed.has(id)) node.addClass('impact-changed');
+      else if (impact.direct.has(id)) node.addClass('impact-direct');
+      else if (impact.transitive.has(id)) node.addClass('impact-transitive');
+    });
+  }
+}, { deep: true });
 
 watch(() => graphStore.highlightedPath, (pathIds) => {
   if (!cy) return;

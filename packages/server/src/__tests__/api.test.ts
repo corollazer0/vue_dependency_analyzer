@@ -283,6 +283,53 @@ describe('Server API', () => {
     });
   });
 
+  // ─── GET /api/graph/matrix ───
+
+  describe('GET /api/graph/matrix', () => {
+    it('should return matrix data with modules and 2D array', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/matrix?depth=2' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('modules');
+      expect(body).toHaveProperty('matrix');
+      expect(body).toHaveProperty('edgeDetails');
+      expect(Array.isArray(body.modules)).toBe(true);
+      expect(Array.isArray(body.matrix)).toBe(true);
+      if (body.modules.length > 0) {
+        expect(body.matrix.length).toBe(body.modules.length);
+        expect(body.matrix[0].length).toBe(body.modules.length);
+      }
+    });
+  });
+
+  // ─── POST /api/analysis/change-impact ───
+
+  describe('POST /api/analysis/change-impact', () => {
+    it('should return impact analysis for given files', async () => {
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/analysis/change-impact',
+        payload: { files: ['useAuth.ts'] },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('summary');
+      expect(body).toHaveProperty('changedNodes');
+      expect(body).toHaveProperty('directImpact');
+      expect(body).toHaveProperty('transitiveImpact');
+      expect(body.summary).toHaveProperty('changed');
+    });
+
+    it('should return 400 when files array is missing', async () => {
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/analysis/change-impact',
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
   // ─── GET /api/analysis/rule-violations ───
 
   describe('GET /api/analysis/rule-violations', () => {
