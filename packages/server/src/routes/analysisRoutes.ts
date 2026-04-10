@@ -19,4 +19,8 @@ export function registerAnalysisRoutes(fastify: FastifyInstance, engine: Analysi
   fastify.get('/api/analysis/dto-consistency', async (request, reply) => {
     return engine.checkDtoConsistency();
   });
+
+  fastify.get('/api/analysis/rule-violations', async (request, reply) => {
+    return engine.checkRuleViolations();
+  });
 }

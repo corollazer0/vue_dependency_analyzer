@@ -16,6 +16,7 @@ import PathfinderPanel from '@/components/graph/PathfinderPanel.vue';
 import ParseErrorPanel from '@/components/ParseErrorPanel.vue';
 import DtoConsistencyPanel from '@/components/DtoConsistencyPanel.vue';
 import UnresolvedEdgePanel from '@/components/UnresolvedEdgePanel.vue';
+import RuleViolationPanel from '@/components/RuleViolationPanel.vue';
 
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
@@ -23,8 +24,10 @@ const activeView = ref<'graph' | 'tree'>('graph');
 const showPathfinder = ref(false);
 const showParseErrors = ref(false);
 const showUnresolvedEdges = ref(false);
+const showRuleViolations = ref(false);
 const parseErrorCount = ref<number | null>(null);
 const unresolvedEdgeCount = ref<number | null>(null);
+const ruleViolationCount = ref<number | null>(null);
 
 async function fetchParseErrorCount() {
   try {
@@ -43,6 +46,16 @@ async function fetchUnresolvedEdgeCount() {
     unresolvedEdgeCount.value = (data.edges || []).length;
   } catch {
     unresolvedEdgeCount.value = null;
+  }
+}
+
+async function fetchRuleViolationCount() {
+  try {
+    const res = await fetch('/api/analysis/rule-violations');
+    const data = await res.json();
+    ruleViolationCount.value = data.count ?? 0;
+  } catch {
+    ruleViolationCount.value = null;
   }
 }
 const sidebarTab = ref<'search' | 'filter'>('search');
@@ -83,6 +96,7 @@ onMounted(async () => {
   connectWebSocket();
   fetchParseErrorCount();
   fetchUnresolvedEdgeCount();
+  fetchRuleViolationCount();
   document.addEventListener('keydown', handleKeydown);
 });
 
@@ -104,8 +118,8 @@ function connectWebSocket() {
     const msg = JSON.parse(event.data);
     if (msg.type === 'analysis:started') { analyzing.value = true; progress.value = { processed: 0, total: msg.payload.totalFiles, currentFile: '', cachedCount: 0, elapsedMs: 0 }; }
     else if (msg.type === 'analysis:progress') { progress.value = msg.payload; }
-    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); }
-    else if (msg.type === 'graph:update') { graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); }
+    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); fetchRuleViolationCount(); }
+    else if (msg.type === 'graph:update') { graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); fetchRuleViolationCount(); }
   };
   ws.onclose = () => { wsStatus.value = 'disconnected'; clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connectWebSocket, 3000); };
   ws.onerror = () => { ws?.close(); };
@@ -130,6 +144,7 @@ function handleKeydown(e: KeyboardEvent) {
     <PathfinderPanel v-if="showPathfinder" @close="showPathfinder = false" />
     <ParseErrorPanel v-if="showParseErrors" @close="showParseErrors = false" />
     <UnresolvedEdgePanel v-if="showUnresolvedEdges" @close="showUnresolvedEdges = false" />
+    <RuleViolationPanel v-if="showRuleViolations" @close="showRuleViolations = false" />
     <AnalysisProgress v-if="analyzing" v-bind="progress" @cancel="cancelAnalysis" />
     <OnboardingGuide v-if="appState === 'ready'" />
 
@@ -281,6 +296,16 @@ function handleKeydown(e: KeyboardEvent) {
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
           {{ unresolvedEdgeCount }} unresolved
+        </button>
+        <button
+          v-if="ruleViolationCount !== null && ruleViolationCount > 0"
+          @click="showRuleViolations = true"
+          class="flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
+          style="color: #ef4444"
+          title="View rule violations"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M3.6 20h16.8a1 1 0 00.87-1.5L12.87 3a1 1 0 00-1.74 0L2.73 18.5A1 1 0 003.6 20z"/></svg>
+          {{ ruleViolationCount }} violation{{ ruleViolationCount === 1 ? '' : 's' }}
         </button>
         <span class="flex-1"></span>
         <span v-if="graphStore.graphData">{{ new Date(graphStore.graphData.metadata.analyzedAt).toLocaleTimeString() }}</span>

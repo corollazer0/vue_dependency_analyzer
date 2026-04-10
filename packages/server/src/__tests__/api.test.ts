@@ -283,6 +283,20 @@ describe('Server API', () => {
     });
   });
 
+  // ─── GET /api/analysis/rule-violations ───
+
+  describe('GET /api/analysis/rule-violations', () => {
+    it('should return violations array with count', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/rule-violations' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('violations');
+      expect(body).toHaveProperty('count');
+      expect(Array.isArray(body.violations)).toBe(true);
+      expect(body.count).toBe(body.violations.length);
+    });
+  });
+
   // ─── POST /api/analyze ───
 
   describe('POST /api/analyze', () => {

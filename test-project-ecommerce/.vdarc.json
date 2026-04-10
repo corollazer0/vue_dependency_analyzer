@@ -25,5 +25,10 @@
       "root": "./backend/order-service/src/main/java",
       "type": "spring-boot"
     }
+  ],
+  "rules": [
+    { "id": "no-circular-imports", "type": "deny-circular", "edgeKinds": ["imports"], "severity": "error" },
+    { "id": "no-vue-to-spring-service", "type": "deny-direct", "from": ["vue-component"], "to": ["spring-service"], "severity": "error", "message": "Vue components must not directly depend on Spring services" },
+    { "id": "hub-limit", "type": "max-dependents", "value": 8, "severity": "warning" }
   ]
 }

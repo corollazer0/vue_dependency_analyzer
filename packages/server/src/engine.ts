@@ -13,6 +13,7 @@ import {
   filterByKind,
   analyzeImpact,
   checkDtoConsistency,
+  evaluateRules,
   findPaths as findPathsFn,
   toJSON,
   type AnalysisConfig,
@@ -22,6 +23,7 @@ import {
   type EdgeKind,
   type GraphNode,
   type DtoMismatch,
+  type RuleViolation,
 } from '@vda/core';
 import type { WebSocket } from 'ws';
 
@@ -442,6 +444,12 @@ export class AnalysisEngine {
 
   checkDtoConsistency(): DtoMismatch[] {
     return checkDtoConsistency(this.graph);
+  }
+
+  checkRuleViolations(): { violations: RuleViolation[]; count: number } {
+    const rules = this.config.rules || [];
+    const violations = evaluateRules(this.graph, rules);
+    return { violations, count: violations.length };
   }
 
   findPaths(from: string, to: string, maxDepth: number = 10, edgeKinds?: string[]) {

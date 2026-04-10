@@ -76,6 +76,27 @@ export interface ServiceConfig {
   type: 'vue' | 'spring-boot';
 }
 
+export interface ArchitectureRule {
+  id?: string;
+  type: 'deny-circular' | 'deny-direct' | 'allow-only' | 'max-depth' | 'max-dependents';
+  edgeKinds?: EdgeKind[];
+  from?: NodeKind | NodeKind[];
+  to?: NodeKind | NodeKind[];
+  allowed?: NodeKind[];
+  value?: number;
+  severity?: 'error' | 'warning';
+  message?: string;
+}
+
+export interface RuleViolation {
+  ruleId: string;
+  ruleType: string;
+  severity: 'error' | 'warning';
+  message: string;
+  nodeIds: string[];
+  edgeIds: string[];
+}
+
 export interface AnalysisConfig {
   vueRoot?: string;
   springBootRoot?: string;
@@ -86,6 +107,7 @@ export interface AnalysisConfig {
   include?: string[];
   exclude?: string[];
   nativeBridges?: string[];
+  rules?: ArchitectureRule[];
 }
 
 export interface GraphMetadata {

@@ -30,6 +30,8 @@ const commands: PaletteItem[] = [
   { id: 'cmd:reset', label: 'Reset all filters', kind: 'Command', type: 'command', icon: '↺', action: () => graphStore.resetFilters() },
   { id: 'cmd:export-png', label: 'Export graph as PNG', kind: 'Command', type: 'command', icon: '📷', action: () => { document.dispatchEvent(new CustomEvent('vda:export-graph-png')); } },
   { id: 'cmd:dto-mismatches', label: 'Show DTO mismatches', kind: 'Command', type: 'command', icon: '🔍', action: () => { document.dispatchEvent(new CustomEvent('vda:show-dto-mismatches')); } },
+  { id: 'cmd:export-mermaid', label: 'Copy as Mermaid', kind: 'Command', type: 'command', icon: '📋', action: () => exportAsDiagram('mermaid') },
+  { id: 'cmd:export-plantuml', label: 'Copy as PlantUML', kind: 'Command', type: 'command', icon: '📋', action: () => exportAsDiagram('plantuml') },
 ];
 
 const recentItems = computed(() => {
@@ -114,6 +116,52 @@ function handleKeydown(e: KeyboardEvent) {
   } else if (e.key === 'Escape') {
     close();
   }
+}
+
+function exportAsDiagram(format: 'mermaid' | 'plantuml') {
+  const nodes = graphStore.filteredNodes;
+  const edges = graphStore.filteredEdges;
+  if (!nodes.length) return;
+
+  let output: string;
+  if (format === 'mermaid') {
+    const lines = ['graph LR'];
+    const usedKinds = new Set<string>();
+    for (const n of nodes) {
+      usedKinds.add(n.kind);
+      const sid = n.id.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 60);
+      lines.push(`  ${sid}["${n.label.replace(/"/g, '')}"]:::${n.kind.replace(/-/g, '_')}`);
+    }
+    lines.push('');
+    const nodeIdSet = new Set(nodes.map(n => n.id));
+    for (const e of edges) {
+      if (!nodeIdSet.has(e.source) || !nodeIdSet.has(e.target)) continue;
+      const src = e.source.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 60);
+      const tgt = e.target.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 60);
+      lines.push(`  ${src} -->|${e.kind}| ${tgt}`);
+    }
+    output = lines.join('\n');
+  } else {
+    const lines = ['@startuml', 'left to right direction', ''];
+    for (const n of nodes) {
+      const sid = n.id.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 60);
+      lines.push(`component "${n.label.replace(/"/g, '')}" as ${sid}`);
+    }
+    lines.push('');
+    const nodeIdSet = new Set(nodes.map(n => n.id));
+    for (const e of edges) {
+      if (!nodeIdSet.has(e.source) || !nodeIdSet.has(e.target)) continue;
+      const src = e.source.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 60);
+      const tgt = e.target.replace(/[^a-zA-Z0-9_]/g, '_').substring(0, 60);
+      lines.push(`${src} --> ${tgt} : ${e.kind}`);
+    }
+    lines.push('', '@enduml');
+    output = lines.join('\n');
+  }
+
+  navigator.clipboard.writeText(output).then(() => {
+    // Brief visual feedback would be nice, but for now just clipboard
+  });
 }
 
 function exportAsJson() {

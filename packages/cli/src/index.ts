@@ -4,6 +4,7 @@ import { analyzeCommand } from './commands/analyze.js';
 import { serveCommand } from './commands/serve.js';
 import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
+import { lintCommand } from './commands/lint.js';
 
 const program = new Command();
 
@@ -41,9 +42,18 @@ program
   .option('--vue-root <path>', 'Vue project root')
   .option('--spring-root <path>', 'Spring Boot project root')
   .option('--config <path>', 'Config file path', '.vdarc.json')
-  .option('-f, --format <format>', 'Output format (json|dot)', 'json')
+  .option('-f, --format <format>', 'Output format (json|dot|mermaid|plantuml)', 'json')
   .option('-o, --output <path>', 'Output file path')
   .action(exportCommand);
+
+program
+  .command('lint')
+  .description('Check architecture rule violations')
+  .argument('[dir]', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--json', 'Output as JSON')
+  .option('--no-cache', 'Disable parse cache')
+  .action(lintCommand);
 
 program
   .command('init')

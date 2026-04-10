@@ -16,6 +16,12 @@ export async function exportCommand(
   if (format === 'dot') {
     const { toDot } = await import('@vda/core');
     output = toDot(graph);
+  } else if (format === 'mermaid') {
+    const { toMermaid } = await import('@vda/core');
+    output = toMermaid(graph);
+  } else if (format === 'plantuml') {
+    const { toPlantUML } = await import('@vda/core');
+    output = toPlantUML(graph);
   } else {
     const { toJSON } = await import('@vda/core');
     output = JSON.stringify(toJSON(graph), null, 2);

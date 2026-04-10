@@ -28,6 +28,7 @@ export { analyzeImpact } from './analyzers/ImpactAnalyzer.js';
 export type { ImpactResult } from './analyzers/ImpactAnalyzer.js';
 export { checkDtoConsistency } from './analyzers/DtoConsistencyChecker.js';
 export type { DtoMismatch, FieldDetail } from './analyzers/DtoConsistencyChecker.js';
+export { evaluateRules } from './analyzers/RuleEngine.js';
 
 // Engine
 export { ParallelParser, parseFile } from './engine/ParallelParser.js';
