@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { useGraphStore } from '@/stores/graphStore';
 
 const emit = defineEmits<{ close: [] }>();
+const graphStore = useGraphStore();
 
 interface ParseError {
   filePath: string;
@@ -33,6 +35,17 @@ function severityColor(severity: string): string {
     case 'error': return 'var(--accent-danger)';
     case 'warning': return 'var(--accent-warning)';
     default: return 'var(--text-tertiary)';
+  }
+}
+
+function navigateToError(err: ParseError) {
+  if (!graphStore.graphData) return;
+  const node = graphStore.graphData.nodes.find(
+    n => n.filePath === err.filePath || n.filePath.endsWith(err.filePath)
+  );
+  if (node) {
+    graphStore.focusNode(node.id);
+    emit('close');
   }
 }
 </script>
@@ -107,7 +120,12 @@ function severityColor(severity: string): string {
                 class="w-2 h-2 rounded-full flex-shrink-0"
                 :style="{ backgroundColor: severityColor(err.severity) }"
               ></span>
-              <span class="text-xs font-medium truncate" style="color: var(--text-primary)">{{ err.filePath }}</span>
+              <button
+                @click="navigateToError(err)"
+                class="text-xs font-medium truncate hover:underline cursor-pointer"
+                style="color: var(--text-primary)"
+                title="Navigate to node"
+              >{{ err.filePath }}</button>
               <span v-if="err.line" class="text-xs flex-shrink-0" style="color: var(--text-tertiary)">:{{ err.line }}</span>
               <span
                 class="text-xs ml-auto flex-shrink-0 px-1.5 py-0.5 rounded"

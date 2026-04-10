@@ -2,11 +2,13 @@
 import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
+import cytoscapeSvg from 'cytoscape-svg';
 import { useGraphStore } from '@/stores/graphStore';
 import { useGraphClustering } from '@/composables/useGraphClustering';
 import { NODE_STYLES, EDGE_STYLES } from '@/types/graph';
 
 cytoscape.use(fcose);
+cytoscape.use(cytoscapeSvg);
 
 const graphStore = useGraphStore();
 const clustering = useGraphClustering();
@@ -249,6 +251,15 @@ function buildStylesheet(): any[] {
       selector: 'node.hub-node',
       style: { 'overlay-opacity': 0.15, 'overlay-color': '#f59e0b' },
     },
+    // Path highlight styles (Pathfinder)
+    {
+      selector: 'node.path-highlight',
+      style: { 'border-width': 3, 'border-color': '#3498db', 'opacity': 1, 'z-index': 25 },
+    },
+    {
+      selector: 'edge.path-highlight',
+      style: { 'line-color': '#3498db', 'target-arrow-color': '#3498db', 'width': 3, 'opacity': 1, 'z-index': 15 },
+    },
     ...nodeKindStyles,
     ...edgeKindStyles,
   ];
@@ -432,6 +443,34 @@ watch(() => graphStore.showOverlays, (on) => {
   else removeOverlays();
 });
 
+watch(() => graphStore.highlightedPath, (pathIds) => {
+  if (!cy) return;
+  // Clear previous path highlight
+  cy.elements().removeClass('path-highlight');
+
+  if (pathIds.length > 0) {
+    const pathSet = new Set(pathIds);
+    // Highlight path nodes
+    cy.nodes().forEach((node: any) => {
+      if (pathSet.has(node.id())) {
+        node.addClass('path-highlight');
+      }
+    });
+    // Highlight edges between consecutive path nodes
+    for (let i = 0; i < pathIds.length - 1; i++) {
+      const edge = cy.edges().filter((e: any) =>
+        (e.source().id() === pathIds[i] && e.target().id() === pathIds[i + 1]) ||
+        (e.source().id() === pathIds[i + 1] && e.target().id() === pathIds[i])
+      );
+      edge.addClass('path-highlight');
+    }
+    // Fade non-path elements
+    cy.elements().not('.path-highlight').addClass('faded');
+  } else {
+    cy.elements().removeClass('faded');
+  }
+});
+
 onMounted(async () => {
   const count = graphStore.filteredNodes.length;
   if (clustering.needsClustering(count)) {
@@ -458,6 +497,15 @@ function exportGraph(format: 'png' | 'svg') {
     link.href = dataUrl;
     link.download = 'vda-graph.png';
     link.click();
+  } else if (format === 'svg') {
+    const svgData = (cy as any).svg({ full: true, scale: 2, bg: '#0f1219' });
+    const blob = new Blob([svgData], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = 'vda-graph.svg';
+    link.click();
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -501,7 +549,8 @@ defineExpose({ fitToView, focusNode, exportGraph });
         class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">
         {{ useClusters ? 'Expand All' : 'Cluster' }}
       </button>
-      <button @click="exportGraph('png')" class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">Export PNG</button>
+      <button @click="exportGraph('png')" class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">PNG</button>
+      <button @click="exportGraph('svg')" class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">SVG</button>
     </div>
   </div>
 </template>

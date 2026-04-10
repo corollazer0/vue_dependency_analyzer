@@ -13,7 +13,9 @@ export type NodeKind =
   | 'native-method'
   | 'mybatis-mapper'
   | 'mybatis-statement'
-  | 'db-table';
+  | 'db-table'
+  | 'vue-event'
+  | 'spring-event';
 
 export type EdgeKind =
   | 'imports'
@@ -35,12 +37,19 @@ export type EdgeKind =
   | 'writes-table'
   | 'dto-flows';
 
+export interface SourceLocation {
+  filePath: string;
+  line: number;
+  column?: number;
+}
+
 export interface GraphNode {
   id: string;
   kind: NodeKind;
   label: string;
   filePath: string;
   metadata: Record<string, unknown>;
+  loc?: SourceLocation;
 }
 
 export interface GraphEdge {
@@ -49,6 +58,7 @@ export interface GraphEdge {
   target: string;
   kind: EdgeKind;
   metadata: Record<string, unknown>;
+  loc?: SourceLocation;
 }
 
 export interface GraphData {
@@ -91,6 +101,8 @@ export const NODE_STYLES: Record<NodeKind, NodeStyle> = {
   'mybatis-mapper':    { color: '#e91e63', shape: 'round-rectangle' },
   'mybatis-statement': { color: '#f06292', shape: 'rectangle' },
   'db-table':          { color: '#00bcd4', shape: 'diamond' },
+  'vue-event':         { color: '#e67e22', shape: 'star' },
+  'spring-event':      { color: '#ff9800', shape: 'star' },
 };
 
 // Backward compat
@@ -114,6 +126,8 @@ export const NODE_LABELS: Record<NodeKind, string> = {
   'mybatis-mapper': 'MyBatis Mapper',
   'mybatis-statement': 'SQL Statement',
   'db-table': 'DB Table',
+  'vue-event': 'Vue Event',
+  'spring-event': 'Spring Event',
 };
 
 export const EDGE_STYLES: Record<EdgeKind, { color: string; dashed: boolean }> = {

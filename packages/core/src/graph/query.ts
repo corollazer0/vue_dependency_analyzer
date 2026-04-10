@@ -89,12 +89,22 @@ export function impactOf(
   return { nodes, edges };
 }
 
+export interface FindPathsOptions {
+  maxDepth?: number;
+  edgeKinds?: string[];
+}
+
 export function findPaths(
   graph: DependencyGraph,
   from: string,
   to: string,
-  maxDepth: number = 10,
+  maxDepthOrOpts: number | FindPathsOptions = 10,
 ): string[][] {
+  const opts = typeof maxDepthOrOpts === 'number'
+    ? { maxDepth: maxDepthOrOpts }
+    : maxDepthOrOpts;
+  const maxDepth = opts.maxDepth ?? 10;
+  const edgeKindSet = opts.edgeKinds ? new Set(opts.edgeKinds) : null;
   const paths: string[][] = [];
 
   function dfs(current: string, path: string[], depth: number): void {
@@ -104,6 +114,7 @@ export function findPaths(
       return;
     }
     for (const edge of graph.getOutEdges(current)) {
+      if (edgeKindSet && !edgeKindSet.has(edge.kind)) continue;
       if (!path.includes(edge.target)) {
         path.push(edge.target);
         dfs(edge.target, path, depth + 1);

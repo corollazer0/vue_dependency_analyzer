@@ -333,4 +333,49 @@ describe('CrossBoundaryResolver', () => {
       expect(eventNodes).toHaveLength(1);
     });
   });
+
+  describe('route-renders resolution', () => {
+    it('should resolve component: prefix route-renders to vue-component nodes', () => {
+      const graph = new DependencyGraph();
+      addNode(graph, 'vue-router-route:/router.ts', 'vue-router-route', '/router.ts');
+      // Label must match componentName exactly — use addNode then override label
+      graph.addNode({ id: 'vue-component:/views/HomeView.vue', kind: 'vue-component', label: 'HomeView', filePath: '/views/HomeView.vue', metadata: {} });
+
+      // Static route-renders edge targeting component:HomeView
+      graph.addEdge({
+        id: 'vue-router-route:/router.ts:route-renders:component:HomeView',
+        source: 'vue-router-route:/router.ts',
+        target: 'component:HomeView',
+        kind: 'route-renders',
+        metadata: { componentName: 'HomeView' },
+      });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      const routeEdges = graph.getAllEdges().filter(e => e.kind === 'route-renders');
+      expect(routeEdges).toHaveLength(1);
+      expect(routeEdges[0].target).toBe('vue-component:/views/HomeView.vue');
+    });
+
+    it('should leave unresolvable route-renders unchanged', () => {
+      const graph = new DependencyGraph();
+      addNode(graph, 'vue-router-route:/router.ts', 'vue-router-route', '/router.ts');
+
+      graph.addEdge({
+        id: 'vue-router-route:/router.ts:route-renders:component:NonExistent',
+        source: 'vue-router-route:/router.ts',
+        target: 'component:NonExistent',
+        kind: 'route-renders',
+        metadata: { componentName: 'NonExistent' },
+      });
+
+      const resolver = new CrossBoundaryResolver({}, '/project');
+      resolver.resolve(graph);
+
+      const routeEdges = graph.getAllEdges().filter(e => e.kind === 'route-renders');
+      expect(routeEdges).toHaveLength(1);
+      expect(routeEdges[0].target).toBe('component:NonExistent');
+    });
+  });
 });

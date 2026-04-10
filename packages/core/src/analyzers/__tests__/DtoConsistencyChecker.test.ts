@@ -217,6 +217,167 @@ describe('DtoConsistencyChecker', () => {
     expect(mismatches).toHaveLength(0);
   });
 
+  it('should dedup by (endpointPath, dtoName) when multiple call sites hit the same endpoint', () => {
+    const graph = buildGraph(
+      [
+        {
+          id: 'spring-service:/dto/UserResponse.java',
+          kind: 'spring-service',
+          label: 'UserResponse',
+          filePath: '/dto/UserResponse.java',
+          metadata: {
+            className: 'UserResponse',
+            isDto: true,
+            fields: [
+              { name: 'id', type: 'Long' },
+              { name: 'name', type: 'String' },
+              { name: 'secret', type: 'String' },
+            ],
+          },
+        },
+        {
+          id: 'spring-endpoint:GET:/api/users',
+          kind: 'spring-endpoint',
+          label: 'GET /api/users',
+          filePath: '/controller/UserController.java',
+          metadata: { httpMethod: 'GET', path: '/api/users', returnType: 'UserResponse', paramTypes: [] },
+        },
+        // Two separate frontend call sites hitting the same endpoint
+        {
+          id: 'api-call-site:/src/pageA.ts:10',
+          kind: 'api-call-site',
+          label: 'GET /api/users',
+          filePath: '/src/pageA.ts',
+          metadata: { url: '/api/users', httpMethod: 'GET' },
+        },
+        {
+          id: 'api-call-site:/src/pageB.ts:20',
+          kind: 'api-call-site',
+          label: 'GET /api/users',
+          filePath: '/src/pageB.ts',
+          metadata: { url: '/api/users', httpMethod: 'GET' },
+        },
+        {
+          id: 'ts-module:/src/types.ts',
+          kind: 'ts-module',
+          label: 'types',
+          filePath: '/src/types.ts',
+          metadata: {
+            interfaces: [{ name: 'UserResponse', fields: ['id', 'name'] }],
+          },
+        },
+      ],
+      [
+        {
+          id: 'api-call-1',
+          source: 'api-call-site:/src/pageA.ts:10',
+          target: 'spring-endpoint:GET:/api/users',
+          kind: 'api-call',
+          metadata: {},
+        },
+        {
+          id: 'api-call-2',
+          source: 'api-call-site:/src/pageB.ts:20',
+          target: 'spring-endpoint:GET:/api/users',
+          kind: 'api-call',
+          metadata: {},
+        },
+      ],
+    );
+
+    const mismatches = checkDtoConsistency(graph);
+
+    // Should be 1, not 2 — dedup by (endpointPath, dtoName)
+    expect(mismatches).toHaveLength(1);
+    expect(mismatches[0].endpointPath).toBe('/api/users');
+    expect(mismatches[0].backendDto).toBe('UserResponse');
+    expect(mismatches[0].missingInFrontend).toEqual(['secret']);
+  });
+
+  it('should include fieldDetails with type info and severity', () => {
+    const graph = buildGraph(
+      [
+        {
+          id: 'spring-service:/dto/ItemDTO.java',
+          kind: 'spring-service',
+          label: 'ItemDTO',
+          filePath: '/dto/ItemDTO.java',
+          metadata: {
+            className: 'ItemDTO',
+            isDto: true,
+            fields: [
+              { name: 'id', type: 'Long' },
+              { name: 'price', type: 'BigDecimal' },
+              { name: 'secret', type: 'String' },
+            ],
+          },
+        },
+        {
+          id: 'spring-endpoint:GET:/api/items',
+          kind: 'spring-endpoint',
+          label: 'GET /api/items',
+          filePath: '/controller/ItemController.java',
+          metadata: { httpMethod: 'GET', path: '/api/items', returnType: 'ItemDTO', paramTypes: [] },
+        },
+        {
+          id: 'api-call-site:/src/api.ts:1',
+          kind: 'api-call-site',
+          label: 'getItems',
+          filePath: '/src/api.ts',
+          metadata: { url: '/api/items', httpMethod: 'GET' },
+        },
+        {
+          id: 'ts-module:/src/types.ts',
+          kind: 'ts-module',
+          label: 'types',
+          filePath: '/src/types.ts',
+          metadata: {
+            interfaces: [{
+              name: 'ItemDTO',
+              fields: ['id', 'price', 'extraField'],
+              fieldTypes: [
+                { name: 'id', type: 'number', optional: false },
+                { name: 'price', type: 'string', optional: false },
+                { name: 'extraField', type: 'string', optional: true },
+              ],
+            }],
+          },
+        },
+      ],
+      [
+        {
+          id: 'api-call',
+          source: 'api-call-site:/src/api.ts:1',
+          target: 'spring-endpoint:GET:/api/items',
+          kind: 'api-call',
+          metadata: {},
+        },
+      ],
+    );
+
+    const mismatches = checkDtoConsistency(graph);
+    expect(mismatches).toHaveLength(1);
+    expect(mismatches[0].fieldDetails).toBeDefined();
+    expect(mismatches[0].fieldDetails.length).toBeGreaterThan(0);
+
+    // 'secret' missing in frontend → critical
+    const secretDetail = mismatches[0].fieldDetails.find(d => d.name === 'secret');
+    expect(secretDetail).toBeDefined();
+    expect(secretDetail!.issue).toBe('missing-frontend');
+    expect(secretDetail!.severity).toBe('critical');
+
+    // 'extraField' missing in backend, optional → info
+    const extraDetail = mismatches[0].fieldDetails.find(d => d.name === 'extraField');
+    expect(extraDetail).toBeDefined();
+    expect(extraDetail!.issue).toBe('missing-backend');
+    expect(extraDetail!.severity).toBe('info');
+
+    // 'price' type mismatch: BigDecimal vs string → compatible (BigDecimal maps to number|string)
+    // So price should NOT appear in fieldDetails as type-mismatch since string is compatible
+    const priceDetail = mismatches[0].fieldDetails.find(d => d.name === 'price');
+    expect(priceDetail).toBeUndefined();
+  });
+
   it('should report when no frontend interface exists', () => {
     const graph = buildGraph(
       [

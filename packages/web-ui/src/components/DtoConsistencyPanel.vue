@@ -4,6 +4,29 @@ import { ref, onMounted, onUnmounted } from 'vue';
 const mismatches = ref<any[]>([]);
 const loading = ref(false);
 const show = ref(false);
+const expandedRows = ref<Set<number>>(new Set());
+
+function toggleRow(i: number) {
+  if (expandedRows.value.has(i)) expandedRows.value.delete(i);
+  else expandedRows.value.add(i);
+}
+
+function severityColor(severity: string): string {
+  switch (severity) {
+    case 'critical': return '#ef4444';
+    case 'warning': return '#f97316';
+    default: return '#6b7280';
+  }
+}
+
+function issueLabel(issue: string): string {
+  switch (issue) {
+    case 'missing-frontend': return 'Missing in frontend';
+    case 'missing-backend': return 'Extra in frontend';
+    case 'type-mismatch': return 'Type mismatch';
+    default: return issue;
+  }
+}
 
 async function loadMismatches() {
   loading.value = true;
@@ -90,39 +113,67 @@ defineExpose({ open, close });
               </tr>
             </thead>
             <tbody>
-              <tr
-                v-for="(item, i) in mismatches"
-                :key="i"
-                class="border-b hover:opacity-90"
-                :style="{
-                  borderColor: 'var(--border-subtle)',
-                  background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
-                }"
-              >
-                <td class="px-3 py-2" style="color: var(--text-primary)">
-                  <span class="font-mono">{{ item.endpointPath }}</span>
-                </td>
-                <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">{{ item.backendDto }}</td>
-                <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">{{ item.frontendInterface }}</td>
-                <td class="px-3 py-2">
-                  <span
-                    v-for="field in (item.missingInFrontend || [])"
-                    :key="field"
-                    class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs"
-                    style="background: rgba(239, 68, 68, 0.15); color: #ef4444"
-                  >{{ field }}</span>
-                  <span v-if="!item.missingInFrontend?.length" style="color: var(--text-tertiary)">-</span>
-                </td>
-                <td class="px-3 py-2">
-                  <span
-                    v-for="field in (item.missingInBackend || [])"
-                    :key="field"
-                    class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs"
-                    style="background: rgba(249, 115, 22, 0.15); color: #f97316"
-                  >{{ field }}</span>
-                  <span v-if="!item.missingInBackend?.length" style="color: var(--text-tertiary)">-</span>
-                </td>
-              </tr>
+              <template v-for="(item, i) in mismatches" :key="i">
+                <tr
+                  class="border-b hover:opacity-90 cursor-pointer"
+                  :style="{
+                    borderColor: 'var(--border-subtle)',
+                    background: i % 2 === 0 ? 'transparent' : 'rgba(255,255,255,0.02)',
+                  }"
+                  @click="toggleRow(i)"
+                >
+                  <td class="px-3 py-2" style="color: var(--text-primary)">
+                    <span class="mr-1">{{ expandedRows.has(i) ? '▾' : '▸' }}</span>
+                    <span class="font-mono">{{ item.endpointPath }}</span>
+                  </td>
+                  <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">{{ item.backendDto }}</td>
+                  <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">{{ item.frontendInterface || '—' }}</td>
+                  <td class="px-3 py-2">
+                    <span
+                      v-for="field in (item.missingInFrontend || [])"
+                      :key="field"
+                      class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs"
+                      style="background: rgba(239, 68, 68, 0.15); color: #ef4444"
+                    >{{ field }}</span>
+                    <span v-if="!item.missingInFrontend?.length" style="color: var(--text-tertiary)">-</span>
+                  </td>
+                  <td class="px-3 py-2">
+                    <span
+                      v-for="field in (item.missingInBackend || [])"
+                      :key="field"
+                      class="inline-block mr-1 mb-1 px-1.5 py-0.5 rounded text-xs"
+                      style="background: rgba(249, 115, 22, 0.15); color: #f97316"
+                    >{{ field }}</span>
+                    <span v-if="!item.missingInBackend?.length" style="color: var(--text-tertiary)">-</span>
+                  </td>
+                </tr>
+                <!-- Field Details (expanded) -->
+                <tr v-if="expandedRows.has(i) && item.fieldDetails?.length > 0">
+                  <td colspan="5" class="px-6 py-2" style="background: rgba(0,0,0,0.15)">
+                    <div class="space-y-1">
+                      <div
+                        v-for="fd in item.fieldDetails"
+                        :key="fd.name"
+                        class="flex items-center gap-3 text-xs py-0.5"
+                      >
+                        <span
+                          class="w-2 h-2 rounded-full flex-shrink-0"
+                          :style="{ backgroundColor: severityColor(fd.severity) }"
+                        ></span>
+                        <span class="font-mono font-medium w-36" style="color: var(--text-primary)">{{ fd.name }}</span>
+                        <span class="w-20 text-right" style="color: var(--text-tertiary)">{{ fd.backendType || '—' }}</span>
+                        <span style="color: var(--text-tertiary)">→</span>
+                        <span class="w-20" style="color: var(--text-tertiary)">{{ fd.frontendType || '—' }}</span>
+                        <span
+                          class="px-1.5 py-0.5 rounded"
+                          :style="{ color: severityColor(fd.severity), background: severityColor(fd.severity) + '20' }"
+                        >{{ issueLabel(fd.issue) }}</span>
+                        <span v-if="fd.optional" class="text-xs" style="color: var(--text-tertiary)">optional</span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
@@ -132,7 +183,7 @@ defineExpose({ open, close });
           class="flex items-center justify-between px-4 py-2 text-xs border-t"
           style="border-color: var(--border-subtle); color: var(--text-tertiary)"
         >
-          <span>{{ mismatches.length }} endpoint(s) with mismatches</span>
+          <span>{{ mismatches.length }} DTO mismatch(es)</span>
           <span>ESC Close</span>
         </div>
       </div>

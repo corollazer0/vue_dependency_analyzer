@@ -41,8 +41,25 @@ export class TsFileParser implements FileParser {
     }
 
     const exportedFunctions: string[] = [];
+    const interfaces: Array<{ name: string; fields: string[]; fieldTypes: Array<{ name: string; type: string; optional: boolean }> }> = [];
+    const exportedTypes: Array<{ name: string; fields: string[]; fieldTypes: Array<{ name: string; type: string; optional: boolean }> }> = [];
     let isBarrel = true;
     let hasNonReExport = false;
+
+    function extractMembers(members: ts.NodeArray<ts.TypeElement>): { fields: string[]; fieldTypes: Array<{ name: string; type: string; optional: boolean }> } {
+      const fields: string[] = [];
+      const fieldTypes: Array<{ name: string; type: string; optional: boolean }> = [];
+      for (const member of members) {
+        if (ts.isPropertySignature(member) && member.name) {
+          const name = member.name.getText(sourceFile);
+          fields.push(name);
+          const typeText = member.type ? member.type.getText(sourceFile) : 'unknown';
+          const optional = !!member.questionToken;
+          fieldTypes.push({ name, type: typeText, optional });
+        }
+      }
+      return { fields, fieldTypes };
+    }
 
     function visit(node: ts.Node): void {
       // Import declarations
@@ -87,6 +104,30 @@ export class TsFileParser implements FileParser {
               exportedFunctions.push(decl.name.text);
               hasNonReExport = true;
             }
+          }
+        }
+      }
+
+      // Interface declarations
+      if (ts.isInterfaceDeclaration(node) && node.name) {
+        const name = node.name.text;
+        const { fields, fieldTypes } = extractMembers(node.members);
+        interfaces.push({ name, fields, fieldTypes });
+        const mods = ts.getCombinedModifierFlags(node);
+        if (mods & ts.ModifierFlags.Export) {
+          exportedTypes.push({ name, fields, fieldTypes });
+        }
+      }
+
+      // Type alias declarations with object literal shape
+      if (ts.isTypeAliasDeclaration(node) && node.name) {
+        if (ts.isTypeLiteralNode(node.type)) {
+          const name = node.name.text;
+          const { fields, fieldTypes } = extractMembers(node.type.members);
+          interfaces.push({ name, fields, fieldTypes });
+          const mods = ts.getCombinedModifierFlags(node);
+          if (mods & ts.ModifierFlags.Export) {
+            exportedTypes.push({ name, fields, fieldTypes });
           }
         }
       }
@@ -138,6 +179,12 @@ export class TsFileParser implements FileParser {
 
     (moduleNode.metadata as Record<string, unknown>).exportedFunctions = exportedFunctions;
     (moduleNode.metadata as Record<string, unknown>).isBarrel = !hasNonReExport && edges.length > 0;
+    if (interfaces.length > 0) {
+      (moduleNode.metadata as Record<string, unknown>).interfaces = interfaces;
+    }
+    if (exportedTypes.length > 0) {
+      (moduleNode.metadata as Record<string, unknown>).exportedTypes = exportedTypes;
+    }
 
     // Route-renders edge generation for vue-router route files
     if (kind === 'vue-router-route') {
@@ -186,17 +233,27 @@ function extractHttpMethod(callText: string): string {
 
 /**
  * Parse route definitions to create route-renders edges.
- * Handles both static component references and lazy-loaded imports.
+ * Handles three patterns:
+ *   1. Inline lazy: component: () => import('...')
+ *   2. Alias lazy:  const XView = () => import('...') then component: XView
+ *   3. Pure static: component: SomeImportedComponent (no alias match)
  */
 function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]): void {
-  // Lazy import pattern: component: () => import('...')
-  const lazyPattern = /component\s*:\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/g;
-  const lazyPaths = new Set<string>();
   let match: RegExpExecArray | null;
 
-  while ((match = lazyPattern.exec(content)) !== null) {
+  // Step 1: Build alias map from "const Xxx = () => import('...')" declarations
+  const aliasToPath = new Map<string, string>();
+  const aliasPattern = /const\s+([A-Z]\w+)\s*=\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/g;
+  while ((match = aliasPattern.exec(content)) !== null) {
+    aliasToPath.set(match[1], match[2]);
+  }
+
+  // Step 2: Inline lazy pattern: component: () => import('...')
+  const inlineLazyPattern = /component\s*:\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/g;
+  const handledPaths = new Set<string>();
+  while ((match = inlineLazyPattern.exec(content)) !== null) {
     const importPath = match[1];
-    lazyPaths.add(importPath);
+    handledPaths.add(importPath);
     edges.push({
       id: `${nodeId}:route-renders:${importPath}`,
       source: nodeId,
@@ -206,18 +263,33 @@ function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]):
     });
   }
 
-  // Static component pattern: component: SomeIdentifier
-  // Must exclude the lazy pattern matches (where identifier would be a '(' or 'import')
+  // Step 3: Static component pattern: component: SomeIdentifier
   const staticPattern = /component\s*:\s*([A-Z]\w+)/g;
   while ((match = staticPattern.exec(content)) !== null) {
     const componentName = match[1];
-    edges.push({
-      id: `${nodeId}:route-renders:component:${componentName}`,
-      source: nodeId,
-      target: `component:${componentName}`,
-      kind: 'route-renders',
-      metadata: { componentName },
-    });
+    const aliasPath = aliasToPath.get(componentName);
+
+    if (aliasPath && !handledPaths.has(aliasPath)) {
+      // Alias resolves to a lazy import — emit as unresolved with the real path
+      handledPaths.add(aliasPath);
+      edges.push({
+        id: `${nodeId}:route-renders:${aliasPath}`,
+        source: nodeId,
+        target: `unresolved:${aliasPath}`,
+        kind: 'route-renders',
+        metadata: { importPath: aliasPath, isLazy: true, alias: componentName },
+      });
+    } else if (!aliasPath) {
+      // Truly static (imported at top level), keep component: prefix
+      edges.push({
+        id: `${nodeId}:route-renders:component:${componentName}`,
+        source: nodeId,
+        target: `component:${componentName}`,
+        kind: 'route-renders',
+        metadata: { componentName },
+      });
+    }
+    // If aliasPath is already handled, skip (dedup)
   }
 }
 

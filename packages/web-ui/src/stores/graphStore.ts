@@ -23,6 +23,7 @@ export const useGraphStore = defineStore('graph', () => {
     'spring-controller', 'spring-endpoint', 'spring-service',
     'native-bridge', 'native-method',
     'mybatis-mapper', 'mybatis-statement', 'db-table',
+    'vue-event', 'spring-event',
   ]));
   const activeEdgeKinds = ref<Set<EdgeKind>>(new Set([
     'imports', 'uses-component', 'uses-store', 'uses-composable',
@@ -124,6 +125,9 @@ export const useGraphStore = defineStore('graph', () => {
     }
   }
 
+  // Path highlight for Pathfinder
+  const highlightedPath = ref<string[]>([]);
+
   // focusNodeId: set by double-click from Search or Tree to re-root the tree view
   const focusNodeId = ref<string | null>(null);
 
@@ -198,6 +202,7 @@ export const useGraphStore = defineStore('graph', () => {
       'spring-controller', 'spring-endpoint', 'spring-service',
       'native-bridge', 'native-method',
       'mybatis-mapper', 'mybatis-statement', 'db-table',
+      'vue-event', 'spring-event',
     ]);
     activeEdgeKinds.value = new Set([
       'imports', 'uses-component', 'uses-store', 'uses-composable',
@@ -219,6 +224,7 @@ export const useGraphStore = defineStore('graph', () => {
         'spring-controller', 'spring-endpoint', 'spring-service',
         'native-bridge', 'native-method',
         'mybatis-mapper', 'mybatis-statement', 'db-table',
+        'vue-event', 'spring-event',
       ],
       edges: [
         'imports', 'uses-component', 'uses-store', 'uses-composable',
@@ -230,11 +236,11 @@ export const useGraphStore = defineStore('graph', () => {
     },
     none: { nodes: [], edges: [] },
     vue: {
-      nodes: ['vue-component', 'vue-composable', 'pinia-store', 'vue-directive', 'vue-router-route', 'ts-module'],
-      edges: ['imports', 'uses-component', 'uses-store', 'uses-composable', 'uses-directive', 'provides', 'injects', 'route-renders'],
+      nodes: ['vue-component', 'vue-composable', 'pinia-store', 'vue-directive', 'vue-router-route', 'ts-module', 'vue-event'],
+      edges: ['imports', 'uses-component', 'uses-store', 'uses-composable', 'uses-directive', 'provides', 'injects', 'route-renders', 'emits-event', 'listens-event'],
     },
     spring: {
-      nodes: ['spring-controller', 'spring-endpoint', 'spring-service'],
+      nodes: ['spring-controller', 'spring-endpoint', 'spring-service', 'spring-event'],
       edges: ['spring-injects', 'api-serves', 'emits-event', 'listens-event'],
     },
     db: {
@@ -251,6 +257,42 @@ export const useGraphStore = defineStore('graph', () => {
     const config = FILTER_PRESETS[preset];
     activeNodeKinds.value = new Set(config.nodes);
     activeEdgeKinds.value = new Set(config.edges);
+    recomputeFiltered();
+  }
+
+  // --- User-saved presets (localStorage) ---
+  interface SavedPreset { nodes: NodeKind[]; edges: EdgeKind[] }
+  const savedPresets = ref<Record<string, SavedPreset>>({});
+
+  // Load from localStorage on init
+  try {
+    const raw = localStorage.getItem('vda-saved-presets');
+    if (raw) savedPresets.value = JSON.parse(raw);
+  } catch { /* ignore corrupt data */ }
+
+  function persistSavedPresets() {
+    localStorage.setItem('vda-saved-presets', JSON.stringify(savedPresets.value));
+  }
+
+  function saveCurrentAsPreset(name: string) {
+    if (!name.trim()) return;
+    savedPresets.value[name.trim()] = {
+      nodes: [...activeNodeKinds.value],
+      edges: [...activeEdgeKinds.value],
+    };
+    persistSavedPresets();
+  }
+
+  function deleteSavedPreset(name: string) {
+    delete savedPresets.value[name];
+    persistSavedPresets();
+  }
+
+  function applySavedPreset(name: string) {
+    const preset = savedPresets.value[name];
+    if (!preset) return;
+    activeNodeKinds.value = new Set(preset.nodes);
+    activeEdgeKinds.value = new Set(preset.edges);
     recomputeFiltered();
   }
 
@@ -272,6 +314,7 @@ export const useGraphStore = defineStore('graph', () => {
     orphanNodeIds,
     hubNodeIds,
     showOverlays,
+    highlightedPath,
     fetchGraph,
     fetchOverlays,
     search,
@@ -286,5 +329,9 @@ export const useGraphStore = defineStore('graph', () => {
     toggleEdgeKind,
     resetFilters,
     applyFilterPreset,
+    savedPresets,
+    saveCurrentAsPreset,
+    deleteSavedPreset,
+    applySavedPreset,
   };
 });

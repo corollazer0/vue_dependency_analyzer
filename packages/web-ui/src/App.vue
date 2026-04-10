@@ -15,13 +15,16 @@ import ResizeHandle from '@/components/ui/ResizeHandle.vue';
 import PathfinderPanel from '@/components/graph/PathfinderPanel.vue';
 import ParseErrorPanel from '@/components/ParseErrorPanel.vue';
 import DtoConsistencyPanel from '@/components/DtoConsistencyPanel.vue';
+import UnresolvedEdgePanel from '@/components/UnresolvedEdgePanel.vue';
 
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
 const activeView = ref<'graph' | 'tree'>('graph');
 const showPathfinder = ref(false);
 const showParseErrors = ref(false);
+const showUnresolvedEdges = ref(false);
 const parseErrorCount = ref<number | null>(null);
+const unresolvedEdgeCount = ref<number | null>(null);
 
 async function fetchParseErrorCount() {
   try {
@@ -30,6 +33,16 @@ async function fetchParseErrorCount() {
     parseErrorCount.value = (data.errors || []).length;
   } catch {
     parseErrorCount.value = null;
+  }
+}
+
+async function fetchUnresolvedEdgeCount() {
+  try {
+    const res = await fetch('/api/analysis/unresolved-edges');
+    const data = await res.json();
+    unresolvedEdgeCount.value = (data.edges || []).length;
+  } catch {
+    unresolvedEdgeCount.value = null;
   }
 }
 const sidebarTab = ref<'search' | 'filter'>('search');
@@ -69,6 +82,7 @@ onMounted(async () => {
   loadHashState();
   connectWebSocket();
   fetchParseErrorCount();
+  fetchUnresolvedEdgeCount();
   document.addEventListener('keydown', handleKeydown);
 });
 
@@ -90,8 +104,8 @@ function connectWebSocket() {
     const msg = JSON.parse(event.data);
     if (msg.type === 'analysis:started') { analyzing.value = true; progress.value = { processed: 0, total: msg.payload.totalFiles, currentFile: '', cachedCount: 0, elapsedMs: 0 }; }
     else if (msg.type === 'analysis:progress') { progress.value = msg.payload; }
-    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); fetchParseErrorCount(); }
-    else if (msg.type === 'graph:update') { graphStore.fetchGraph(); }
+    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); }
+    else if (msg.type === 'graph:update') { graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); }
   };
   ws.onclose = () => { wsStatus.value = 'disconnected'; clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connectWebSocket, 3000); };
   ws.onerror = () => { ws?.close(); };
@@ -115,6 +129,7 @@ function handleKeydown(e: KeyboardEvent) {
     <DtoConsistencyPanel />
     <PathfinderPanel v-if="showPathfinder" @close="showPathfinder = false" />
     <ParseErrorPanel v-if="showParseErrors" @close="showParseErrors = false" />
+    <UnresolvedEdgePanel v-if="showUnresolvedEdges" @close="showUnresolvedEdges = false" />
     <AnalysisProgress v-if="analyzing" v-bind="progress" @cancel="cancelAnalysis" />
     <OnboardingGuide v-if="appState === 'ready'" />
 
@@ -256,6 +271,16 @@ function handleKeydown(e: KeyboardEvent) {
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           {{ parseErrorCount }} error{{ parseErrorCount === 1 ? '' : 's' }}
+        </button>
+        <button
+          v-if="unresolvedEdgeCount !== null && unresolvedEdgeCount > 0"
+          @click="showUnresolvedEdges = true"
+          class="flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
+          style="color: #f97316"
+          title="View unresolved edges"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          {{ unresolvedEdgeCount }} unresolved
         </button>
         <span class="flex-1"></span>
         <span v-if="graphStore.graphData">{{ new Date(graphStore.graphData.metadata.analyzedAt).toLocaleTimeString() }}</span>

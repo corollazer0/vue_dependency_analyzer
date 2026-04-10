@@ -74,6 +74,7 @@ export class CrossBoundaryResolver {
             ...edge,
             id: `${edge.source}:imports:${targetNodes[0].id}`,
             target: targetNodes[0].id,
+            metadata: { ...edge.metadata, confidence: 'high' },
           };
           graph.addEdge(newEdge);
         }
@@ -86,6 +87,8 @@ export class CrossBoundaryResolver {
     this.resolveStoreReferences(graph);
     // Resolve composable references
     this.resolveComposableReferences(graph);
+    // Resolve route-renders targets
+    this.resolveRouteRenders(graph);
   }
 
   private resolveComponentReferences(graph: DependencyGraph): void {
@@ -105,6 +108,7 @@ export class CrossBoundaryResolver {
           ...edge,
           id: `${edge.source}:uses-component:${match.id}`,
           target: match.id,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }
@@ -130,6 +134,7 @@ export class CrossBoundaryResolver {
           ...edge,
           id: `${edge.source}:uses-store:${match.id}`,
           target: match.id,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }
@@ -306,6 +311,7 @@ export class CrossBoundaryResolver {
           ...edge,
           id: `${edge.source}:spring-injects:${realNodeId}`,
           target: realNodeId,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }
@@ -336,7 +342,7 @@ export class CrossBoundaryResolver {
           source: repo.id,
           target: mapper.id,
           kind: 'spring-injects',
-          metadata: { viaDomainMatch: true },
+          metadata: { viaDomainMatch: true, confidence: 'low' },
         });
       }
 
@@ -349,9 +355,64 @@ export class CrossBoundaryResolver {
             source: repo.id,
             target: mbMapper.id,
             kind: 'spring-injects',
-            metadata: { viaDomainMatch: true },
+            metadata: { viaDomainMatch: true, confidence: 'low' },
           });
         }
+      }
+    }
+  }
+
+  /**
+   * Resolve route-renders edges:
+   * - `unresolved:` prefixed targets (lazy imports) → resolve via ImportResolver
+   * - `component:` prefixed targets (static refs) → match by vue-component label
+   */
+  private resolveRouteRenders(graph: DependencyGraph): void {
+    // 1. Resolve lazy route-renders (unresolved: prefix)
+    const unresolvedRouteEdges = graph.getAllEdges().filter(
+      e => e.kind === 'route-renders' && e.target.startsWith('unresolved:')
+    );
+
+    for (const edge of unresolvedRouteEdges) {
+      const importPath = edge.metadata.importPath as string;
+      if (!importPath) continue;
+
+      const sourceNode = graph.getNode(edge.source);
+      if (!sourceNode) continue;
+
+      const resolvedFile = this.importResolver.resolve(importPath, sourceNode.filePath);
+      if (resolvedFile) {
+        const targetNodes = graph.getNodesByFile(resolvedFile);
+        if (targetNodes.length > 0) {
+          graph.removeEdge(edge.id);
+          graph.addEdge({
+            ...edge,
+            id: `${edge.source}:route-renders:${targetNodes[0].id}`,
+            target: targetNodes[0].id,
+            metadata: { ...edge.metadata, confidence: 'high' },
+          });
+        }
+      }
+    }
+
+    // 2. Resolve static route-renders (component: prefix)
+    const staticRouteEdges = graph.getAllEdges().filter(
+      e => e.kind === 'route-renders' && e.target.startsWith('component:')
+    );
+
+    for (const edge of staticRouteEdges) {
+      const componentName = (edge.metadata.componentName as string) || edge.target.replace('component:', '');
+      const match = graph.getAllNodes().find(
+        n => n.kind === 'vue-component' && n.label === componentName
+      );
+      if (match) {
+        graph.removeEdge(edge.id);
+        graph.addEdge({
+          ...edge,
+          id: `${edge.source}:route-renders:${match.id}`,
+          target: match.id,
+          metadata: { ...edge.metadata, confidence: 'medium' },
+        });
       }
     }
   }
@@ -375,6 +436,7 @@ export class CrossBoundaryResolver {
           ...edge,
           id: `${edge.source}:uses-composable:${match.id}`,
           target: match.id,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }

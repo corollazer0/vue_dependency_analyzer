@@ -195,6 +195,94 @@ describe('Server API', () => {
     });
   });
 
+  // ─── GET /api/analysis/unresolved-edges ───
+
+  describe('GET /api/analysis/unresolved-edges', () => {
+    it('should return unresolved edges array', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/unresolved-edges' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.edges).toBeDefined();
+      expect(Array.isArray(body.edges)).toBe(true);
+    });
+
+    it('should exclude external package imports', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/unresolved-edges' });
+      const body = JSON.parse(res.body);
+      // No edge should have an importPath that is a bare specifier (external package)
+      for (const edge of body.edges) {
+        if (edge.importPath) {
+          const isExternal = !edge.importPath.startsWith('.') && !edge.importPath.startsWith('@/') && !edge.importPath.startsWith('~');
+          expect(isExternal).toBe(false);
+        }
+      }
+    });
+
+    it('should include sourceLabel and prefix fields', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/unresolved-edges' });
+      const body = JSON.parse(res.body);
+      if (body.edges.length > 0) {
+        const edge = body.edges[0];
+        expect(edge).toHaveProperty('sourceLabel');
+        expect(edge).toHaveProperty('prefix');
+        expect(edge).toHaveProperty('edgeKind');
+        expect(['unresolved', 'component', 'store', 'composable']).toContain(edge.prefix);
+      }
+    });
+  });
+
+  // ─── GET /api/graph/paths with edgeKinds ───
+
+  describe('GET /api/graph/paths with edgeKinds', () => {
+    it('should accept edgeKinds query parameter', async () => {
+      // First get two nodes to use as from/to
+      const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const graph = JSON.parse(graphRes.body);
+      if (graph.nodes.length < 2) return; // skip if not enough nodes
+
+      const from = encodeURIComponent(graph.nodes[0].id);
+      const to = encodeURIComponent(graph.nodes[1].id);
+
+      const res = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${from}&to=${to}&maxDepth=5&edgeKinds=imports,uses-component`,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('paths');
+      expect(body).toHaveProperty('count');
+      expect(Array.isArray(body.paths)).toBe(true);
+    });
+
+    it('should treat empty edgeKinds query as no allowed edge kinds', async () => {
+      const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const graph = JSON.parse(graphRes.body);
+      if (graph.edges.length === 0) return;
+
+      const from = encodeURIComponent(graph.edges[0].source);
+      const to = encodeURIComponent(graph.edges[0].target);
+
+      const allRes = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${from}&to=${to}&maxDepth=5`,
+      });
+      const emptyRes = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${from}&to=${to}&maxDepth=5&edgeKinds=`,
+      });
+
+      expect(allRes.statusCode).toBe(200);
+      expect(emptyRes.statusCode).toBe(200);
+
+      const allBody = JSON.parse(allRes.body);
+      const emptyBody = JSON.parse(emptyRes.body);
+
+      expect(allBody.count).toBeGreaterThan(0);
+      expect(emptyBody.count).toBe(0);
+      expect(emptyBody.paths).toEqual([]);
+    });
+  });
+
   // ─── POST /api/analyze ───
 
   describe('POST /api/analyze', () => {

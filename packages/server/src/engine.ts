@@ -444,8 +444,8 @@ export class AnalysisEngine {
     return checkDtoConsistency(this.graph);
   }
 
-  findPaths(from: string, to: string, maxDepth: number = 10) {
-    return findPathsFn(this.graph, from, to, maxDepth);
+  findPaths(from: string, to: string, maxDepth: number = 10, edgeKinds?: string[]) {
+    return findPathsFn(this.graph, from, to, { maxDepth, edgeKinds });
   }
 
   getAnalysisOverlays() {
@@ -488,6 +488,35 @@ export class AnalysisEngine {
 
   getParseErrors() {
     return this.graph.metadata.parseErrors;
+  }
+
+  getUnresolvedEdges() {
+    const prefixes = ['unresolved:', 'component:', 'store:', 'composable:'];
+    const json = toJSON(this.graph);
+    return json.edges
+      .filter(e => {
+        if (!prefixes.some(p => e.target.startsWith(p))) return false;
+        // Exclude external package imports (bare specifiers like 'vue', 'axios', 'pinia')
+        const importPath = (e.metadata as Record<string, unknown>).importPath as string | undefined;
+        if (importPath && !importPath.startsWith('.') && !importPath.startsWith('@/') && !importPath.startsWith('~')) {
+          return false; // external dependency, not an analysis issue
+        }
+        return true;
+      })
+      .map(e => {
+        const sourceNode = json.nodes.find(n => n.id === e.source);
+        const prefix = prefixes.find(p => e.target.startsWith(p)) || 'unresolved:';
+        return {
+          edgeId: e.id,
+          sourceId: e.source,
+          sourceLabel: sourceNode?.label || e.source,
+          sourceKind: sourceNode?.kind || 'unknown',
+          edgeKind: e.kind,
+          target: e.target,
+          prefix: prefix.replace(':', ''),
+          importPath: (e.metadata as Record<string, unknown>).importPath as string | undefined,
+        };
+      });
   }
 
   addClient(socket: WebSocket): void {

@@ -59,15 +59,18 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
 
   // Path finding between two nodes
   fastify.get('/api/graph/paths', async (request, reply) => {
-    const { from, to, maxDepth } = request.query as { from?: string; to?: string; maxDepth?: string };
+    const { from, to, maxDepth, edgeKinds } = request.query as { from?: string; to?: string; maxDepth?: string; edgeKinds?: string };
     if (!from || !to) {
       reply.code(400);
       return { error: 'Both "from" and "to" query parameters are required' };
     }
+    // Distinguish omitted edgeKinds from an explicitly empty edgeKinds=
+    const edgeKindList = edgeKinds !== undefined ? edgeKinds.split(',').filter(Boolean) : undefined;
     const paths = engine.findPaths(
       decodeURIComponent(from),
       decodeURIComponent(to),
       maxDepth ? parseInt(maxDepth, 10) : 10,
+      edgeKindList,
     );
     return { paths, count: paths.length };
   });
@@ -99,5 +102,10 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
   // Parse errors
   fastify.get('/api/analysis/parse-errors', async (request, reply) => {
     return { errors: engine.getParseErrors() };
+  });
+
+  // Unresolved edges
+  fastify.get('/api/analysis/unresolved-edges', async (request, reply) => {
+    return { edges: engine.getUnresolvedEdges() };
   });
 }

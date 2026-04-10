@@ -27,7 +27,7 @@ export type { ComplexityScore } from './analyzers/ComplexityScorer.js';
 export { analyzeImpact } from './analyzers/ImpactAnalyzer.js';
 export type { ImpactResult } from './analyzers/ImpactAnalyzer.js';
 export { checkDtoConsistency } from './analyzers/DtoConsistencyChecker.js';
-export type { DtoMismatch } from './analyzers/DtoConsistencyChecker.js';
+export type { DtoMismatch, FieldDetail } from './analyzers/DtoConsistencyChecker.js';
 
 // Engine
 export { ParallelParser, parseFile } from './engine/ParallelParser.js';
