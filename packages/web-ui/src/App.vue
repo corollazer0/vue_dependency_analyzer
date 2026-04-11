@@ -2,6 +2,8 @@
 import { onMounted, ref, watch, computed } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
 import { useUiStore } from '@/stores/ui';
+import { apiFetch, authRequired, checkAuthStatus, logout, createAuthWebSocket } from '@/api/client';
+import LoginPage from '@/components/LoginPage.vue';
 import ForceGraphView from '@/components/graph/ForceGraphView.vue';
 import TreeView from '@/components/graph/TreeView.vue';
 import MatrixView from '@/components/graph/MatrixView.vue';
@@ -35,7 +37,7 @@ const ruleViolationCount = ref<number | null>(null);
 
 async function fetchParseErrorCount() {
   try {
-    const res = await fetch('/api/analysis/parse-errors');
+    const res = await apiFetch('/api/analysis/parse-errors');
     const data = await res.json();
     parseErrorCount.value = (data.errors || []).length;
   } catch {
@@ -45,7 +47,7 @@ async function fetchParseErrorCount() {
 
 async function fetchUnresolvedEdgeCount() {
   try {
-    const res = await fetch('/api/analysis/unresolved-edges');
+    const res = await apiFetch('/api/analysis/unresolved-edges');
     const data = await res.json();
     unresolvedEdgeCount.value = (data.edges || []).length;
   } catch {
@@ -55,7 +57,7 @@ async function fetchUnresolvedEdgeCount() {
 
 async function fetchRuleViolationCount() {
   try {
-    const res = await fetch('/api/analysis/rule-violations');
+    const res = await apiFetch('/api/analysis/rule-violations');
     const data = await res.json();
     ruleViolationCount.value = data.count ?? 0;
   } catch {
@@ -94,7 +96,7 @@ watch(() => graphStore.selectedNodeId, (nodeId) => {
 
 watch(activeView, () => updateHash());
 
-onMounted(async () => {
+async function initApp() {
   await graphStore.fetchGraph();
   loadHashState();
   connectWebSocket();
@@ -102,6 +104,20 @@ onMounted(async () => {
   fetchUnresolvedEdgeCount();
   fetchRuleViolationCount();
   document.addEventListener('keydown', handleKeydown);
+}
+
+onMounted(async () => {
+  const ok = await checkAuthStatus();
+  if (ok) {
+    await initApp();
+  }
+});
+
+// Re-init when auth state changes (after login)
+watch(authRequired, async (required) => {
+  if (!required) {
+    await initApp();
+  }
 });
 
 function loadHashState() {
@@ -115,8 +131,7 @@ function loadHashState() {
 
 function connectWebSocket() {
   wsStatus.value = 'connecting';
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${location.host}/ws`);
+  ws = createAuthWebSocket('/ws');
   ws.onopen = () => { wsStatus.value = 'connected'; };
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
@@ -131,7 +146,7 @@ function connectWebSocket() {
 
 function cancelAnalysis() {
   analyzing.value = false;
-  fetch('/api/analyze/cancel', { method: 'POST' }).catch(() => {});
+  apiFetch('/api/analyze/cancel', { method: 'POST' }).catch(() => {});
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -142,7 +157,10 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="h-screen w-screen flex flex-col overflow-hidden" style="background: var(--surface-primary); color: var(--text-primary)">
+  <!-- Login screen -->
+  <LoginPage v-if="authRequired" />
+
+  <div v-else class="h-screen w-screen flex flex-col overflow-hidden" style="background: var(--surface-primary); color: var(--text-primary)">
     <CommandPalette />
     <DtoConsistencyPanel />
     <PathfinderPanel v-if="showPathfinder" @close="showPathfinder = false" />

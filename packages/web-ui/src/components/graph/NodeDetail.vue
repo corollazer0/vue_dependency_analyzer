@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
+import { apiFetch } from '@/api/client';
 import { NODE_COLORS, NODE_LABELS } from '@/types/graph';
 import type { GraphEdge, GraphNode, NodeKind } from '@/types/graph';
 import SourceSnippet from './SourceSnippet.vue';
@@ -145,7 +146,7 @@ async function loadChainSummary(nodeId: string, kind: NodeKind) {
       const to = direction === 'forward' ? candidate.id : nodeId;
 
       try {
-        const res = await fetch(
+        const res = await apiFetch(
           `/api/graph/paths?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}&maxDepth=8`,
           { signal }
         );

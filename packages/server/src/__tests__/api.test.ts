@@ -4,10 +4,18 @@ import cors from '@fastify/cors';
 import { registerGraphRoutes } from '../routes/graphRoutes.js';
 import { registerAnalysisRoutes } from '../routes/analysisRoutes.js';
 import { registerSearchRoutes } from '../routes/searchRoutes.js';
+import { registerHealthRoutes } from '../routes/healthRoutes.js';
+import { registerAuthRoutes, registerAuthHook } from '../middleware/auth.js';
+import { AuditLog, registerAuditHook } from '../middleware/auditLog.js';
 import { AnalysisEngine } from '../engine.js';
+import { loadEnv } from '../index.js';
 import { resolve } from 'path';
 
 const fixturesDir = resolve(import.meta.dirname, '../../../core/src/__fixtures__');
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Shared setup — no auth, like the original test suite
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 describe('Server API', () => {
   let fastify: ReturnType<typeof Fastify>;
@@ -20,15 +28,55 @@ describe('Server API', () => {
     engine = new AnalysisEngine(fixturesDir, {}, false);
     await engine.initialize();
 
+    const auditLog = new AuditLog();
+    const env = loadEnv({ authEnabled: false });
+
+    registerHealthRoutes(fastify, engine);
+    registerAuthRoutes(fastify, env, auditLog);
+    registerAuditHook(fastify, auditLog);
     registerGraphRoutes(fastify, engine);
     registerAnalysisRoutes(fastify, engine);
     registerSearchRoutes(fastify, engine);
+
+    // Audit log endpoint
+    fastify.get('/api/admin/audit-log', async (request, reply) => {
+      const { limit } = request.query as { limit?: string };
+      return { logs: auditLog.getEntries(limit ? parseInt(limit, 10) : 50) };
+    });
 
     await fastify.ready();
   });
 
   afterAll(async () => {
     await fastify.close();
+  });
+
+  // ─── GET /health ───
+
+  describe('GET /health', () => {
+    it('should return ok status with uptime and version', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/health' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.status).toBe('ok');
+      expect(typeof body.uptime).toBe('number');
+      expect(body.uptime).toBeGreaterThanOrEqual(0);
+      expect(typeof body.version).toBe('string');
+    });
+  });
+
+  // ─── GET /health/ready ───
+
+  describe('GET /health/ready', () => {
+    it('should report ready after initialization', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/health/ready' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.ready).toBe(true);
+      expect(body.nodeCount).toBeGreaterThan(0);
+      expect(body.edgeCount).toBeGreaterThan(0);
+      expect(typeof body.analyzedAt).toBe('string');
+    });
   });
 
   // ─── GET /api/graph ───
@@ -61,7 +109,6 @@ describe('Server API', () => {
     it('should return node detail for any node ID including file paths', async () => {
       const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
       const { nodes } = JSON.parse(graphRes.body);
-      // Test with a node that has file path in ID (slash-containing)
       const fileNode = nodes.find((n: any) => n.id.includes('/')) || nodes[0];
       const id = encodeURIComponent(fileNode.id);
 
@@ -123,7 +170,6 @@ describe('Server API', () => {
 
   describe('GET /api/graph/paths', () => {
     it('should return paths between two connected nodes', async () => {
-      // Get graph to find connected nodes
       const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
       const { edges } = JSON.parse(graphRes.body);
       if (edges.length === 0) return;
@@ -209,7 +255,6 @@ describe('Server API', () => {
     it('should exclude external package imports', async () => {
       const res = await fastify.inject({ method: 'GET', url: '/api/analysis/unresolved-edges' });
       const body = JSON.parse(res.body);
-      // No edge should have an importPath that is a bare specifier (external package)
       for (const edge of body.edges) {
         if (edge.importPath) {
           const isExternal = !edge.importPath.startsWith('.') && !edge.importPath.startsWith('@/') && !edge.importPath.startsWith('~');
@@ -235,10 +280,9 @@ describe('Server API', () => {
 
   describe('GET /api/graph/paths with edgeKinds', () => {
     it('should accept edgeKinds query parameter', async () => {
-      // First get two nodes to use as from/to
       const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
       const graph = JSON.parse(graphRes.body);
-      if (graph.nodes.length < 2) return; // skip if not enough nodes
+      if (graph.nodes.length < 2) return;
 
       const from = encodeURIComponent(graph.nodes[0].id);
       const to = encodeURIComponent(graph.nodes[1].id);
@@ -353,5 +397,249 @@ describe('Server API', () => {
       const body = JSON.parse(res.body);
       expect(body.status).toBe('complete');
     });
+  });
+
+  // ─── POST /api/auth/login (auth disabled) ───
+
+  describe('POST /api/auth/login (auth disabled)', () => {
+    it('should return null token when auth is disabled', async () => {
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'admin', password: 'test' },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.token).toBeNull();
+      expect(body.message).toBe('Authentication is disabled');
+    });
+  });
+
+  // ─── GET /api/auth/me (auth disabled) ───
+
+  describe('GET /api/auth/me (auth disabled)', () => {
+    it('should report auth disabled', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/auth/me' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.authEnabled).toBe(false);
+      expect(body.user).toBeNull();
+    });
+  });
+
+  // ─── GET /api/admin/audit-log ───
+
+  describe('GET /api/admin/audit-log', () => {
+    it('should return audit log entries', async () => {
+      // First trigger some auditable actions
+      await fastify.inject({ method: 'GET', url: '/api/stats' });
+      await fastify.inject({ method: 'GET', url: '/api/graph' });
+
+      const res = await fastify.inject({ method: 'GET', url: '/api/admin/audit-log' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.logs).toBeDefined();
+      expect(Array.isArray(body.logs)).toBe(true);
+      expect(body.logs.length).toBeGreaterThan(0);
+
+      // Verify entry structure
+      const entry = body.logs[0];
+      expect(entry).toHaveProperty('timestamp');
+      expect(entry).toHaveProperty('user');
+      expect(entry).toHaveProperty('action');
+      expect(entry).toHaveProperty('target');
+      expect(entry).toHaveProperty('ip');
+    });
+
+    it('should respect limit parameter', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/admin/audit-log?limit=1' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.logs.length).toBeLessThanOrEqual(1);
+    });
+  });
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Auth-enabled test suite
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('Server API (auth enabled)', () => {
+  let fastify: ReturnType<typeof Fastify>;
+  let engine: AnalysisEngine;
+  const TEST_PASSWORD = 'test-secret-password';
+
+  beforeAll(async () => {
+    fastify = Fastify({ logger: false });
+    await fastify.register(cors);
+
+    engine = new AnalysisEngine(fixturesDir, {}, false);
+    await engine.initialize();
+
+    const auditLog = new AuditLog();
+    const env = loadEnv({
+      authEnabled: true,
+      jwtSecret: 'test-jwt-secret-key',
+      adminUser: 'admin',
+      adminPassword: TEST_PASSWORD,
+    });
+
+    await registerAuthHook(fastify, env);
+    registerAuditHook(fastify, auditLog);
+    registerHealthRoutes(fastify, engine);
+    registerAuthRoutes(fastify, env, auditLog);
+    registerGraphRoutes(fastify, engine);
+    registerAnalysisRoutes(fastify, engine);
+    registerSearchRoutes(fastify, engine);
+
+    fastify.get('/api/admin/audit-log', async (request, reply) => {
+      const { limit } = request.query as { limit?: string };
+      return { logs: auditLog.getEntries(limit ? parseInt(limit, 10) : 50) };
+    });
+
+    await fastify.ready();
+  });
+
+  afterAll(async () => {
+    await fastify.close();
+  });
+
+  // ─── Health endpoints are public ───
+
+  it('GET /health should not require auth', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('ok');
+  });
+
+  it('GET /health/ready should not require auth', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/health/ready' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  // ─── Protected endpoints return 401 without token ───
+
+  it('GET /api/graph should return 401 without token', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/graph' });
+    expect(res.statusCode).toBe(401);
+    const body = JSON.parse(res.body);
+    expect(body.error).toBe('Unauthorized');
+  });
+
+  it('GET /api/stats should return 401 without token', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/stats' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  // ─── Login flow ───
+
+  it('POST /api/auth/login with wrong credentials should return 401', async () => {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: 'wrong' },
+    });
+    expect(res.statusCode).toBe(401);
+    const body = JSON.parse(res.body);
+    expect(body.error).toBe('Invalid credentials');
+  });
+
+  it('POST /api/auth/login with missing fields should return 400', async () => {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('POST /api/auth/login with correct credentials should return JWT', async () => {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(typeof body.token).toBe('string');
+    expect(body.token.length).toBeGreaterThan(0);
+  });
+
+  // ─── Authenticated requests ───
+
+  it('should access protected API with valid token', async () => {
+    // Login first
+    const loginRes = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    const { token } = JSON.parse(loginRes.body);
+
+    // Access protected endpoint
+    const res = await fastify.inject({
+      method: 'GET',
+      url: '/api/graph',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.nodes).toBeDefined();
+    expect(body.nodes.length).toBeGreaterThan(0);
+  });
+
+  it('GET /api/auth/me should return user info with valid token', async () => {
+    const loginRes = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    const { token } = JSON.parse(loginRes.body);
+
+    const res = await fastify.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.authEnabled).toBe(true);
+    expect(body.user.username).toBe('admin');
+    expect(body.user.role).toBe('admin');
+  });
+
+  // ─── Audit log records auth events ───
+
+  it('audit log should record login events', async () => {
+    // Trigger a failed login
+    await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'hacker', password: 'wrong' },
+    });
+
+    // Trigger a successful login
+    const loginRes = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    const { token } = JSON.parse(loginRes.body);
+
+    // Read audit log
+    const res = await fastify.inject({
+      method: 'GET',
+      url: '/api/admin/audit-log',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.logs.length).toBeGreaterThan(0);
+
+    // Should have login:success and login:failed entries
+    const actions = body.logs.map((l: any) => l.action);
+    expect(actions).toContain('login:success');
+    expect(actions).toContain('login:failed');
   });
 });

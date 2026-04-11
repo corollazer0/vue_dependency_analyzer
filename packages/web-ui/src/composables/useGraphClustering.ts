@@ -1,5 +1,6 @@
 import { ref, computed } from 'vue';
 import type { GraphNode, GraphEdge } from '@/types/graph';
+import { apiFetch } from '@/api/client';
 
 const CLUSTER_THRESHOLD = 200;
 
@@ -34,7 +35,7 @@ export function useGraphClustering() {
 
   async function fetchClustered(depth: number = 1): Promise<ClusterData | null> {
     try {
-      const res = await fetch(`/api/graph?cluster=true&depth=${depth}`);
+      const res = await apiFetch(`/api/graph?cluster=true&depth=${depth}`);
       const data = await res.json();
       clusterData.value = data;
       return data;
@@ -50,7 +51,7 @@ export function useGraphClustering() {
     }
 
     try {
-      const res = await fetch(`/api/graph/cluster/${encodeURIComponent(clusterId)}`);
+      const res = await apiFetch(`/api/graph/cluster/${encodeURIComponent(clusterId)}`);
       const data = await res.json();
       expandedNodeCache.value.set(clusterId, data);
       expandedClusters.value.add(clusterId);

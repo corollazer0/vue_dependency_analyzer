@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { apiFetch } from '@/api/client';
 
 const mismatches = ref<any[]>([]);
 const loading = ref(false);
@@ -31,7 +32,7 @@ function issueLabel(issue: string): string {
 async function loadMismatches() {
   loading.value = true;
   try {
-    const res = await fetch('/api/analysis/dto-consistency');
+    const res = await apiFetch('/api/analysis/dto-consistency');
     const data = await res.json();
     mismatches.value = data.mismatches || data || [];
   } catch {

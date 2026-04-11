@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia';
 import { ref, shallowRef, computed, triggerRef } from 'vue';
 import type { GraphData, GraphNode, GraphEdge, NodeKind, EdgeKind, SearchResult } from '@/types/graph';
+import { apiFetch } from '@/api/client';
 
 export const useGraphStore = defineStore('graph', () => {
   const graphData = shallowRef<GraphData | null>(null);
@@ -75,7 +76,7 @@ export const useGraphStore = defineStore('graph', () => {
 
   async function fetchOverlays() {
     try {
-      const res = await fetch('/api/analysis/overlays');
+      const res = await apiFetch('/api/analysis/overlays');
       const data = await res.json();
       circularNodeIds.value = new Set(data.circularNodeIds || []);
       orphanNodeIds.value = new Set(data.orphanNodeIds || []);
@@ -89,7 +90,7 @@ export const useGraphStore = defineStore('graph', () => {
     loading.value = true;
     error.value = null;
     try {
-      const res = await fetch('/api/graph');
+      const res = await apiFetch('/api/graph');
       graphData.value = await res.json();
       triggerRef(graphData);
       recomputeFiltered();
@@ -107,7 +108,7 @@ export const useGraphStore = defineStore('graph', () => {
       return;
     }
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(query)}`);
+      const res = await apiFetch(`/api/search?q=${encodeURIComponent(query)}`);
       const data = await res.json();
       searchResults.value = data.results;
     } catch {
@@ -118,7 +119,7 @@ export const useGraphStore = defineStore('graph', () => {
   async function triggerReanalyze() {
     loading.value = true;
     try {
-      await fetch('/api/analyze', { method: 'POST' });
+      await apiFetch('/api/analyze', { method: 'POST' });
       await fetchGraph();
     } finally {
       loading.value = false;

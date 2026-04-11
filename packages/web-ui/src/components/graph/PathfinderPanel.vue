@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
+import { apiFetch } from '@/api/client';
 import { EDGE_STYLES } from '@/types/graph';
 import type { EdgeKind } from '@/types/graph';
 
@@ -39,7 +40,7 @@ function searchFrom(q: string) {
   fromDebounce = setTimeout(async () => {
     if (!q.trim()) { fromResults.value = []; return; }
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       fromResults.value = data.results || [];
     } catch { fromResults.value = []; }
@@ -54,7 +55,7 @@ function searchTo(q: string) {
   toDebounce = setTimeout(async () => {
     if (!q.trim()) { toResults.value = []; return; }
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       toResults.value = data.results || [];
     } catch { toResults.value = []; }
@@ -85,7 +86,7 @@ async function findPaths() {
     if (activeEdgeKinds.value.size < edgeKindList.length) {
       url += `&edgeKinds=${[...activeEdgeKinds.value].join(',')}`;
     }
-    const res = await fetch(url);
+    const res = await apiFetch(url);
     const data = await res.json();
     let resultPaths: string[][] = data.paths || [];
     if (shortestOnly.value && resultPaths.length > 1) {

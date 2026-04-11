@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
+import { apiFetch } from '@/api/client';
 
 const emit = defineEmits<{ close: [] }>();
 const graphStore = useGraphStore();
@@ -18,7 +19,7 @@ const loading = ref(false);
 async function fetchErrors() {
   loading.value = true;
   try {
-    const res = await fetch('/api/analysis/parse-errors');
+    const res = await apiFetch('/api/analysis/parse-errors');
     const data = await res.json();
     errors.value = data.errors || [];
   } catch {

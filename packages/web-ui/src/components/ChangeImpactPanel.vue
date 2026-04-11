@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
+import { apiFetch } from '@/api/client';
 
 const emit = defineEmits<{ close: [] }>();
 const graphStore = useGraphStore();
@@ -16,9 +17,8 @@ async function analyzeImpact() {
   loading.value = true;
   result.value = null;
   try {
-    const res = await fetch('/api/analysis/change-impact', {
+    const res = await apiFetch('/api/analysis/change-impact', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ files }),
     });
     const data = await res.json();

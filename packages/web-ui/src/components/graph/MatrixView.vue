@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
+import { apiFetch } from '@/api/client';
 
 const modules = ref<string[]>([]);
 const matrix = ref<number[][]>([]);
@@ -11,7 +12,7 @@ const tooltip = ref<{ show: boolean; x: number; y: number; text: string }>({ sho
 async function fetchMatrix() {
   loading.value = true;
   try {
-    const res = await fetch(`/api/graph/matrix?depth=${depth.value}`);
+    const res = await apiFetch(`/api/graph/matrix?depth=${depth.value}`);
     const data = await res.json();
     modules.value = data.modules || [];
     matrix.value = data.matrix || [];

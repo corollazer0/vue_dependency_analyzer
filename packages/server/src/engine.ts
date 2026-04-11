@@ -28,6 +28,26 @@ import {
 } from '@vda/core';
 import type { WebSocket } from 'ws';
 
+/**
+ * Minimal pino-compatible logger interface.
+ * Supports both `log.info(obj, msg)` and `log.info(msg)` signatures
+ * so it works with Fastify's built-in pino logger or a noop stub.
+ */
+export interface EngineLogger {
+  info(msg: string): void;
+  info(obj: object, msg: string): void;
+  warn(msg: string): void;
+  warn(obj: object, msg: string): void;
+  error(msg: string): void;
+  error(obj: object, msg: string): void;
+}
+
+const noopLogger: EngineLogger = {
+  info() {},
+  warn() {},
+  error() {},
+};
+
 export class AnalysisEngine {
   private graph: DependencyGraph = new DependencyGraph();
   private config: AnalysisConfig & { projectRoot: string };
@@ -38,12 +58,15 @@ export class AnalysisEngine {
   private analyzing = false;
   private abortController: AbortController | null = null;
   private lastProgressBroadcast = 0;
+  private initializeTime: string | null = null;
+  private log: EngineLogger;
 
-  constructor(dir: string, options: Record<string, string | undefined>, watch: boolean) {
+  constructor(dir: string, options: Record<string, string | undefined>, watch: boolean, logger?: EngineLogger) {
     const projectRoot = resolve(dir);
     this.config = this.buildConfig(projectRoot, options);
     this.cache = new ParseCache(projectRoot, JSON.stringify(this.config));
     this.watchEnabled = watch;
+    this.log = logger || noopLogger;
   }
 
   private buildConfig(projectRoot: string, options: Record<string, string | undefined>): AnalysisConfig & { projectRoot: string } {
@@ -74,10 +97,13 @@ export class AnalysisEngine {
   }
 
   async initialize(): Promise<void> {
+    this.log.info({ event: 'engine:initialize:start', projectRoot: this.config.projectRoot }, 'Engine initialization started');
     await this.runAnalysis();
+    this.initializeTime = new Date().toISOString();
     if (this.watchEnabled) {
       await this.startWatching();
     }
+    this.log.info({ event: 'engine:initialize:complete', nodeCount: this.graph.getNodeCount(), edgeCount: this.graph.getEdgeCount() }, 'Engine initialization complete');
   }
 
   async runAnalysis(): Promise<void> {
@@ -86,6 +112,7 @@ export class AnalysisEngine {
     this.abortController = new AbortController();
 
     try {
+      this.log.info({ event: 'analysis:start' }, 'Analysis started');
       this.graph = new DependencyGraph();
       this.graph.metadata.projectRoot = this.config.projectRoot;
       this.graph.metadata.analyzedAt = new Date().toISOString();
@@ -161,6 +188,15 @@ export class AnalysisEngine {
       // Cross-boundary resolution
       const resolver = new CrossBoundaryResolver(this.config, this.config.projectRoot);
       resolver.resolve(this.graph);
+
+      this.log.info({
+        event: 'analysis:complete',
+        totalFiles: files.length,
+        totalNodes: this.graph.getNodeCount(),
+        totalEdges: this.graph.getEdgeCount(),
+        durationMs: result.durationMs,
+        cachedCount: result.cachedCount,
+      }, 'Analysis complete');
 
       this.broadcast({
         type: 'analysis:complete',
@@ -293,6 +329,21 @@ export class AnalysisEngine {
   }
 
   // ─── Public API ───
+
+  /** Whether the engine has completed at least one analysis run */
+  isReady(): boolean {
+    return this.initializeTime !== null && !this.analyzing;
+  }
+
+  getHealthInfo(): { ready: boolean; analyzing: boolean; nodeCount: number; edgeCount: number; analyzedAt: string | null } {
+    return {
+      ready: this.initializeTime !== null && !this.analyzing,
+      analyzing: this.analyzing,
+      nodeCount: this.graph.getNodeCount(),
+      edgeCount: this.graph.getEdgeCount(),
+      analyzedAt: this.graph.metadata.analyzedAt || null,
+    };
+  }
 
   getGraph(): SerializedGraph {
     return toJSON(this.graph);

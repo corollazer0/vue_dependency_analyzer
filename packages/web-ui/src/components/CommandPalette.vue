@@ -2,6 +2,7 @@
 import { ref, computed, watch, nextTick, onMounted, onUnmounted } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
 import { useUiStore } from '@/stores/ui';
+import { apiFetch } from '@/api/client';
 import type { SearchResult } from '@/types/graph';
 import { NODE_STYLES } from '@/types/graph';
 
@@ -65,7 +66,7 @@ watch(query, (q) => {
   // Search nodes (debounced)
   searchDebounce = setTimeout(async () => {
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       const nodeResults: PaletteItem[] = (data.results as SearchResult[]).slice(0, 15).map(r => ({
         id: r.nodeId,
