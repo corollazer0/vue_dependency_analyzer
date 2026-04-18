@@ -288,10 +288,12 @@ export class AnalysisEngine {
       this.watcher.on('change', (filePath: string) => this.handleFileChange(filePath, 'changed'));
       this.watcher.on('add', (filePath: string) => this.handleFileChange(filePath, 'added'));
       this.watcher.on('unlink', (filePath: string) => {
-        this.graph.removeByFile(filePath);
+        // Phase 2-7: also invalidate the 1-hop dependents whose cached parse
+        // outputs may carry edges into nodes we are about to drop.
+        const dependents = this.graph.removeByFile(filePath);
         this.cache.invalidate(filePath);
-        this.cache.save();
-        this.broadcast({ type: 'graph:update', payload: { removedFile: filePath } });
+        for (const dep of dependents) this.cache.invalidate(dep);
+        this.broadcast({ type: 'graph:update', payload: { removedFile: filePath, invalidatedDependents: dependents.length } });
       });
     } catch {
       console.warn('Warning: chokidar not available, watch mode disabled');
@@ -299,9 +301,12 @@ export class AnalysisEngine {
   }
 
   private handleFileChange(filePath: string, action: string): void {
-    // Incremental: only re-parse the changed file
-    this.graph.removeByFile(filePath);
+    // Incremental: only re-parse the changed file. Phase 2-7 — also drop the
+    // cache entries of files that previously imported this one, since their
+    // resolved cross-file edges may now point at recreated node ids.
+    const dependents = this.graph.removeByFile(filePath);
     this.cache.invalidate(filePath);
+    for (const dep of dependents) this.cache.invalidate(dep);
 
     try {
       const content = readFileSync(filePath, 'utf-8');

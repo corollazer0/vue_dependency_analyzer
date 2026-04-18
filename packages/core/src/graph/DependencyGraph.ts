@@ -235,13 +235,43 @@ export class DependencyGraph {
     return Array.from(ids).map(id => this.nodes.get(id)!).filter(Boolean);
   }
 
-  removeByFile(filePath: string): void {
+  /**
+   * Remove every node belonging to `filePath` (and their incident edges) and
+   * return the file paths of the *other* files whose nodes had outgoing
+   * edges into the removed nodes — i.e. the 1-hop reverse-dependency set.
+   *
+   * Phase 2-7 — callers (e.g. server file-watcher) use this list to
+   * invalidate cached parse outputs of dependents whose resolved edges now
+   * point at nodes that no longer exist. Without this, a warm-cache restart
+   * after a file deletion would reattach stale cross-file edges.
+   *
+   * Returning an empty array on miss keeps the previous void contract
+   * compatible — callers that ignore the result see no behavior change.
+   */
+  removeByFile(filePath: string): string[] {
     const ids = this.fileIndex.get(filePath);
-    if (!ids) return;
+    if (!ids) return [];
+
+    const dependents = new Set<string>();
+    for (const id of ids) {
+      const inEdgeIds = this.reverseAdjacency.get(id);
+      if (!inEdgeIds) continue;
+      for (const edgeId of inEdgeIds) {
+        const edge = this.edges.get(edgeId);
+        if (!edge) continue;
+        const sourceNode = this.nodes.get(edge.source);
+        if (!sourceNode) continue;
+        if (sourceNode.filePath && sourceNode.filePath !== filePath) {
+          dependents.add(sourceNode.filePath);
+        }
+      }
+    }
+
     for (const id of [...ids]) {
       this.removeNode(id);
     }
     this.fileIndex.delete(filePath);
+    return [...dependents];
   }
 
   // ─── Merge ───
