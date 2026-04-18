@@ -160,16 +160,16 @@ export class AnalysisEngine {
       // these files and parsed them, so reuse the content + per-file
       // attribution it returned (avoids a second readFileSync per file and
       // the prior O(files * (nodes + edges * fileNodeCount)) filter pattern).
-      for (const entry of result.parsedFileEntries) {
-        if (entry.nodes.length > 0) {
-          this.cache.set(entry.filePath, entry.content, {
-            nodes: entry.nodes,
-            edges: entry.edges,
-            errors: entry.errors,
-          });
-        }
-      }
-      this.cache.save();
+      // Bulk-write in a single SQLite transaction.
+      this.cache.setMany(
+        result.parsedFileEntries
+          .filter((e) => e.nodes.length > 0)
+          .map((e) => ({
+            filePath: e.filePath,
+            content: e.content,
+            result: { nodes: e.nodes, edges: e.edges, errors: e.errors },
+          }))
+      );
 
       // Tag nodes with serviceId based on which service root they fall under.
       // Uses nodesIter() (Phase 1-6) to avoid materializing a full array copy —

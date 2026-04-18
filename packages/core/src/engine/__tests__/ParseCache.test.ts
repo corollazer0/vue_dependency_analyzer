@@ -85,13 +85,66 @@ describe('ParseCache', () => {
     expect(cache2.size).toBe(0);
   });
 
-  it('should handle corrupted cache file gracefully', () => {
+  it('should handle a corrupted legacy json cache file gracefully', () => {
     const cacheDir = join(testDir, '.vda-cache');
     mkdirSync(cacheDir, { recursive: true });
     require('fs').writeFileSync(join(cacheDir, 'parse-cache.json'), 'NOT VALID JSON', 'utf-8');
 
     const cache = new ParseCache(testDir);
-    expect(cache.size).toBe(0); // Should not crash
+    expect(cache.size).toBe(0); // Should not crash; legacy file is dropped silently
+  });
+
+  it('should migrate a legacy json cache file into sqlite (matching config)', () => {
+    const cacheDir = join(testDir, '.vda-cache');
+    mkdirSync(cacheDir, { recursive: true });
+    const legacy = {
+      version: 1,
+      configHash: require('crypto').createHash('sha256').update('cfg-legacy').digest('hex').slice(0, 16),
+      entries: {
+        '/legacy.vue': {
+          contentHash: require('crypto').createHash('sha256').update('legacy-body').digest('hex').slice(0, 16),
+          nodes: [{ id: 'l1', kind: 'vue-component' as const, label: 'L', filePath: '/legacy.vue', metadata: {} }],
+          edges: [],
+          errors: [],
+          timestamp: Date.now(),
+        },
+      },
+    };
+    require('fs').writeFileSync(join(cacheDir, 'parse-cache.json'), JSON.stringify(legacy), 'utf-8');
+
+    const cache = new ParseCache(testDir, 'cfg-legacy');
+    const cached = cache.get('/legacy.vue', 'legacy-body');
+    expect(cached).not.toBeNull();
+    expect(cached!.nodes[0].id).toBe('l1');
+    // Legacy file should have been removed
+    expect(existsSync(join(cacheDir, 'parse-cache.json'))).toBe(false);
+  });
+
+  it('should support setMany() bulk insertion in a single transaction', () => {
+    const cache = new ParseCache(testDir);
+    const entries = Array.from({ length: 50 }, (_, i) => ({
+      filePath: `/f${i}.vue`,
+      content: `c${i}`,
+      result: { nodes: [], edges: [], errors: [] },
+    }));
+    cache.setMany(entries);
+    expect(cache.size).toBe(50);
+    expect(cache.get('/f10.vue', 'c10')).not.toBeNull();
+  });
+
+  it('readonly cache should reject writes silently', () => {
+    // First create the db with a writer
+    const writer = new ParseCache(testDir, 'cfg-ro');
+    writer.set('/a.vue', 'a', { nodes: [], edges: [], errors: [] });
+    writer.close();
+
+    const reader = new ParseCache(testDir, 'cfg-ro', { readonly: true });
+    expect(reader.get('/a.vue', 'a')).not.toBeNull();
+    // Writes are no-ops in readonly mode
+    reader.set('/b.vue', 'b', { nodes: [], edges: [], errors: [] });
+    reader.invalidate('/a.vue');
+    reader.clear();
+    expect(reader.size).toBe(1);
   });
 
   it('should report correct size', () => {
