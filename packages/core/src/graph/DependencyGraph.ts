@@ -1,4 +1,4 @@
-import type { GraphNode, GraphEdge, GraphMetadata, ParseError, AnalysisConfig } from './types.js';
+import type { GraphNode, GraphEdge, GraphMetadata, ParseError, AnalysisConfig, EdgeKind } from './types.js';
 
 export class DependencyGraph {
   private nodes = new Map<string, GraphNode>();
@@ -6,6 +6,10 @@ export class DependencyGraph {
   private adjacency = new Map<string, Set<string>>();
   private reverseAdjacency = new Map<string, Set<string>>();
   private fileIndex = new Map<string, Set<string>>();
+  // Phase 2-4: edge-kind index. Built incrementally on add/remove so callers
+  // can avoid scanning every edge to filter by kind. Backs CrossBoundary
+  // resolution (2-5) and any analyzer that operates on a single edge kind.
+  private edgesByKind = new Map<EdgeKind, Set<string>>();
   // Monotonic mutation counter used by transport-layer dirty caches (ETag, toJSON cache).
   // Bumped on every add/remove — callers treat it as an opaque revision id.
   private version = 0;
@@ -48,26 +52,26 @@ export class DependencyGraph {
     const node = this.nodes.get(id);
     if (!node) return;
 
-    // Remove all edges connected to this node
+    // Remove all edges connected to this node (keeps every secondary index in sync)
+    const dropEdge = (edgeId: string) => {
+      const edge = this.edges.get(edgeId);
+      if (!edge) return;
+      this.adjacency.get(edge.source)?.delete(edgeId);
+      this.reverseAdjacency.get(edge.target)?.delete(edgeId);
+      const bucket = this.edgesByKind.get(edge.kind);
+      if (bucket) {
+        bucket.delete(edgeId);
+        if (bucket.size === 0) this.edgesByKind.delete(edge.kind);
+      }
+      this.edges.delete(edgeId);
+    };
     const outEdges = this.adjacency.get(id);
     if (outEdges) {
-      for (const edgeId of outEdges) {
-        const edge = this.edges.get(edgeId);
-        if (edge) {
-          this.reverseAdjacency.get(edge.target)?.delete(edgeId);
-          this.edges.delete(edgeId);
-        }
-      }
+      for (const edgeId of [...outEdges]) dropEdge(edgeId);
     }
     const inEdges = this.reverseAdjacency.get(id);
     if (inEdges) {
-      for (const edgeId of inEdges) {
-        const edge = this.edges.get(edgeId);
-        if (edge) {
-          this.adjacency.get(edge.source)?.delete(edgeId);
-          this.edges.delete(edgeId);
-        }
-      }
+      for (const edgeId of [...inEdges]) dropEdge(edgeId);
     }
 
     this.adjacency.delete(id);
@@ -103,6 +107,8 @@ export class DependencyGraph {
   // ─── Edge Operations ───
 
   addEdge(edge: GraphEdge): void {
+    // Idempotent on edge id — re-adding the same edge must not double-index.
+    const existed = this.edges.has(edge.id);
     this.edges.set(edge.id, edge);
     if (!this.adjacency.has(edge.source)) {
       this.adjacency.set(edge.source, new Set());
@@ -113,6 +119,12 @@ export class DependencyGraph {
       this.reverseAdjacency.set(edge.target, new Set());
     }
     this.reverseAdjacency.get(edge.target)!.add(edge.id);
+
+    if (!existed) {
+      let bucket = this.edgesByKind.get(edge.kind);
+      if (!bucket) { bucket = new Set(); this.edgesByKind.set(edge.kind, bucket); }
+      bucket.add(edge.id);
+    }
     this.version++;
   }
 
@@ -125,6 +137,11 @@ export class DependencyGraph {
     if (!edge) return;
     this.adjacency.get(edge.source)?.delete(id);
     this.reverseAdjacency.get(edge.target)?.delete(id);
+    const bucket = this.edgesByKind.get(edge.kind);
+    if (bucket) {
+      bucket.delete(id);
+      if (bucket.size === 0) this.edgesByKind.delete(edge.kind);
+    }
     this.edges.delete(id);
     this.version++;
   }
@@ -139,6 +156,46 @@ export class DependencyGraph {
 
   getEdgeCount(): number {
     return this.edges.size;
+  }
+
+  /**
+   * Phase 2-4 — return every edge of the given kind, backed by an
+   * incremental index. O(k) where k is the number of edges of that kind,
+   * vs. the prior `getAllEdges().filter(e => e.kind === k)` pattern which
+   * was O(|E|). Hot-path consumers: CrossBoundaryResolver, analyzers.
+   */
+  getEdgesByKind(kind: EdgeKind): GraphEdge[] {
+    const ids = this.edgesByKind.get(kind);
+    if (!ids || ids.size === 0) return [];
+    const out: GraphEdge[] = [];
+    for (const id of ids) {
+      const e = this.edges.get(id);
+      if (e) out.push(e);
+    }
+    return out;
+  }
+
+  edgesByKindIter(kind: EdgeKind): IterableIterator<GraphEdge> {
+    const ids = this.edgesByKind.get(kind);
+    const edges = this.edges;
+    function* gen() {
+      if (!ids) return;
+      for (const id of ids) {
+        const e = edges.get(id);
+        if (e) yield e;
+      }
+    }
+    return gen();
+  }
+
+  /** O(1) in-degree (number of edges where this node is the target). */
+  getInDegree(nodeId: string): number {
+    return this.reverseAdjacency.get(nodeId)?.size ?? 0;
+  }
+
+  /** O(1) out-degree (number of edges where this node is the source). */
+  getOutDegree(nodeId: string): number {
+    return this.adjacency.get(nodeId)?.size ?? 0;
   }
 
   // ─── Adjacency Queries ───

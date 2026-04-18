@@ -102,6 +102,57 @@ describe('DependencyGraph', () => {
     expect(graph.getEdgeCount()).toBe(1);
   });
 
+  // Phase 2-4
+  it('should index edges by kind and keep the index in sync on remove', () => {
+    graph.addNode(makeNode('A'));
+    graph.addNode(makeNode('B'));
+    graph.addNode(makeNode('C'));
+    graph.addEdge(makeEdge('A', 'B', 'imports'));
+    graph.addEdge(makeEdge('A', 'C', 'imports'));
+    graph.addEdge(makeEdge('B', 'C', 'uses-store'));
+
+    expect(graph.getEdgesByKind('imports')).toHaveLength(2);
+    expect(graph.getEdgesByKind('uses-store')).toHaveLength(1);
+    expect(graph.getEdgesByKind('api-call')).toHaveLength(0);
+
+    // Remove a node and confirm the index drops both endpoint-bearing edges
+    graph.removeNode('A');
+    expect(graph.getEdgesByKind('imports')).toHaveLength(0);
+    expect(graph.getEdgesByKind('uses-store')).toHaveLength(1);
+
+    // Direct edge removal also keeps the index honest
+    const remaining = graph.getEdgesByKind('uses-store')[0];
+    graph.removeEdge(remaining.id);
+    expect(graph.getEdgesByKind('uses-store')).toHaveLength(0);
+  });
+
+  it('should expose O(1) in/out-degree counts', () => {
+    graph.addNode(makeNode('A'));
+    graph.addNode(makeNode('B'));
+    graph.addNode(makeNode('C'));
+    graph.addEdge(makeEdge('A', 'B'));
+    graph.addEdge(makeEdge('A', 'C'));
+    graph.addEdge(makeEdge('C', 'B'));
+
+    expect(graph.getOutDegree('A')).toBe(2);
+    expect(graph.getOutDegree('B')).toBe(0);
+    expect(graph.getInDegree('B')).toBe(2);
+    expect(graph.getInDegree('A')).toBe(0);
+    expect(graph.getInDegree('missing')).toBe(0);
+    expect(graph.getOutDegree('missing')).toBe(0);
+  });
+
+  it('re-adding the same edge id should not double-count in the kind index', () => {
+    graph.addNode(makeNode('A'));
+    graph.addNode(makeNode('B'));
+    const e = makeEdge('A', 'B', 'imports');
+    graph.addEdge(e);
+    graph.addEdge(e);
+    graph.addEdge(e);
+    expect(graph.getEdgesByKind('imports')).toHaveLength(1);
+    expect(graph.getEdgeCount()).toBe(1);
+  });
+
   it('should get stats', () => {
     graph.addNode(makeNode('A', 'vue-component'));
     graph.addNode(makeNode('B', 'pinia-store'));
