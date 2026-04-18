@@ -1,15 +1,34 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { apiFetch } from '@/api/client';
+import SourceSnippet from './graph/SourceSnippet.vue';
 
 const mismatches = ref<any[]>([]);
 const loading = ref(false);
 const show = ref(false);
 const expandedRows = ref<Set<number>>(new Set());
+const showSnippet = ref(false);
+const snippetRef = ref<InstanceType<typeof SourceSnippet>>();
 
 function toggleRow(i: number) {
   if (expandedRows.value.has(i)) expandedRows.value.delete(i);
   else expandedRows.value.add(i);
+}
+
+function shortPath(p?: string): string {
+  if (!p) return '';
+  const parts = p.split('/');
+  return parts.length <= 3 ? p : `…/${parts.slice(-2).join('/')}`;
+}
+
+function openSource(ref: { filePath?: string; line?: number } | undefined, e?: Event) {
+  if (e) {
+    e.stopPropagation();
+    e.preventDefault();
+  }
+  if (!ref?.filePath) return;
+  showSnippet.value = true;
+  snippetRef.value?.loadSnippet(ref.filePath, ref.line ?? 1);
 }
 
 function severityColor(severity: string): string {
@@ -127,8 +146,28 @@ defineExpose({ open, close });
                     <span class="mr-1">{{ expandedRows.has(i) ? '▾' : '▸' }}</span>
                     <span class="font-mono">{{ item.endpointPath }}</span>
                   </td>
-                  <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">{{ item.backendDto }}</td>
-                  <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">{{ item.frontendInterface || '—' }}</td>
+                  <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">
+                    <div>{{ item.backendDto }}</div>
+                    <button
+                      v-if="item.backendSource?.filePath"
+                      type="button"
+                      class="text-[10px] font-mono underline decoration-dotted hover:opacity-80"
+                      style="color: var(--text-tertiary)"
+                      :title="`Open ${item.backendSource.filePath}${item.backendSource.line ? ':' + item.backendSource.line : ''}`"
+                      @click="openSource(item.backendSource, $event)"
+                    >{{ shortPath(item.backendSource.filePath) }}<span v-if="item.backendSource.line">:{{ item.backendSource.line }}</span></button>
+                  </td>
+                  <td class="px-3 py-2" style="color: var(--text-secondary, #a0a8b8)">
+                    <div>{{ item.frontendInterface || '—' }}</div>
+                    <button
+                      v-if="item.frontendSource?.filePath"
+                      type="button"
+                      class="text-[10px] font-mono underline decoration-dotted hover:opacity-80"
+                      style="color: var(--text-tertiary)"
+                      :title="`Open ${item.frontendSource.filePath}${item.frontendSource.line ? ':' + item.frontendSource.line : ''}`"
+                      @click="openSource(item.frontendSource, $event)"
+                    >{{ shortPath(item.frontendSource.filePath) }}<span v-if="item.frontendSource.line">:{{ item.frontendSource.line }}</span></button>
+                  </td>
                   <td class="px-3 py-2">
                     <span
                       v-for="field in (item.missingInFrontend || [])"
@@ -190,4 +229,6 @@ defineExpose({ open, close });
       </div>
     </div>
   </Transition>
+
+  <SourceSnippet ref="snippetRef" :show="showSnippet" @close="showSnippet = false" />
 </template>
