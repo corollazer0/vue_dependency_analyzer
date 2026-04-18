@@ -1,4 +1,4 @@
-import { defineStore } from 'pinia';
+import { defineStore, storeToRefs } from 'pinia';
 import { useGraphDataStore } from './graph/dataStore';
 import { useGraphFilterStore } from './graph/filterStore';
 import { useGraphInteractionStore } from './graph/interactionStore';
@@ -31,6 +31,16 @@ export const useGraphStore = defineStore('graph', () => {
   const interaction = useGraphInteractionStore();
   const overlay = useGraphOverlayStore();
 
+  // Pinia auto-unwraps refs at property access on a store instance, so
+  // `data.graphData` here is the *current value*, not the live ref. Feeding
+  // those values into the facade's return literal would freeze them at
+  // facade-init time (graphData: null). `storeToRefs` pulls the live refs
+  // out so the facade stays reactive across sub-stores.
+  const dataRefs = storeToRefs(data);
+  const filterRefs = storeToRefs(filter);
+  const interactionRefs = storeToRefs(interaction);
+  const overlayRefs = storeToRefs(overlay);
+
   // Compose the post-fetch overlay fetch the original store did inline.
   async function fetchGraph(): Promise<void> {
     await data.fetchGraph();
@@ -47,48 +57,48 @@ export const useGraphStore = defineStore('graph', () => {
 
   return {
     // ── data slice ──
-    graphData: data.graphData,
-    loading: data.loading,
-    error: data.error,
+    graphData: dataRefs.graphData,
+    loading: dataRefs.loading,
+    error: dataRefs.error,
     fetchGraph,
     triggerReanalyze,
 
     // ── filter slice ──
-    activeNodeKinds: filter.activeNodeKinds,
-    activeEdgeKinds: filter.activeEdgeKinds,
-    filteredNodes: filter.filteredNodes,
-    filteredEdges: filter.filteredEdges,
+    activeNodeKinds: filterRefs.activeNodeKinds,
+    activeEdgeKinds: filterRefs.activeEdgeKinds,
+    filteredNodes: filterRefs.filteredNodes,
+    filteredEdges: filterRefs.filteredEdges,
     toggleNodeKind: filter.toggleNodeKind,
     toggleEdgeKind: filter.toggleEdgeKind,
     resetFilters: filter.resetFilters,
     applyFilterPreset: filter.applyFilterPreset,
-    savedPresets: filter.savedPresets,
+    savedPresets: filterRefs.savedPresets,
     saveCurrentAsPreset: filter.saveCurrentAsPreset,
     deleteSavedPreset: filter.deleteSavedPreset,
     applySavedPreset: filter.applySavedPreset,
 
     // ── interaction slice ──
-    selectedNodeId: interaction.selectedNodeId,
-    focusNodeId: interaction.focusNodeId,
-    selectedNode: interaction.selectedNode,
-    selectedNodeEdges: interaction.selectedNodeEdges,
-    searchQuery: interaction.searchQuery,
-    searchResults: interaction.searchResults,
+    selectedNodeId: interactionRefs.selectedNodeId,
+    focusNodeId: interactionRefs.focusNodeId,
+    selectedNode: interactionRefs.selectedNode,
+    selectedNodeEdges: interactionRefs.selectedNodeEdges,
+    searchQuery: interactionRefs.searchQuery,
+    searchResults: interactionRefs.searchResults,
     selectNode: interaction.selectNode,
     focusNode: interaction.focusNode,
     navBack: interaction.navBack,
     navForward: interaction.navForward,
-    canNavBack: interaction.canNavBack,
-    canNavForward: interaction.canNavForward,
+    canNavBack: interactionRefs.canNavBack,
+    canNavForward: interactionRefs.canNavForward,
     search: interaction.search,
 
     // ── overlay slice ──
-    circularNodeIds: overlay.circularNodeIds,
-    orphanNodeIds: overlay.orphanNodeIds,
-    hubNodeIds: overlay.hubNodeIds,
-    showOverlays: overlay.showOverlays,
-    highlightedPath: overlay.highlightedPath,
-    impactNodeIds: overlay.impactNodeIds,
+    circularNodeIds: overlayRefs.circularNodeIds,
+    orphanNodeIds: overlayRefs.orphanNodeIds,
+    hubNodeIds: overlayRefs.hubNodeIds,
+    showOverlays: overlayRefs.showOverlays,
+    highlightedPath: overlayRefs.highlightedPath,
+    impactNodeIds: overlayRefs.impactNodeIds,
     fetchOverlays: overlay.fetchOverlays,
   };
 });
