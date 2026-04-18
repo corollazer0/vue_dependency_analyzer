@@ -51,8 +51,8 @@ export class CrossBoundaryResolver {
   }
 
   private resolveImports(graph: DependencyGraph): void {
-    const unresolvedEdges = graph.getAllEdges().filter(
-      e => e.kind === 'imports' && e.target.startsWith('unresolved:')
+    const unresolvedEdges = graph.getEdgesByKind('imports').filter(
+      e => e.target.startsWith('unresolved:')
     );
 
     for (const edge of unresolvedEdges) {
@@ -92,8 +92,8 @@ export class CrossBoundaryResolver {
   }
 
   private resolveComponentReferences(graph: DependencyGraph): void {
-    const componentEdges = graph.getAllEdges().filter(
-      e => e.kind === 'uses-component' && e.target.startsWith('component:')
+    const componentEdges = graph.getEdgesByKind('uses-component').filter(
+      e => e.target.startsWith('component:')
     );
 
     for (const edge of componentEdges) {
@@ -115,8 +115,8 @@ export class CrossBoundaryResolver {
   }
 
   private resolveStoreReferences(graph: DependencyGraph): void {
-    const storeEdges = graph.getAllEdges().filter(
-      e => e.kind === 'uses-store' && e.target.startsWith('store:')
+    const storeEdges = graph.getEdgesByKind('uses-store').filter(
+      e => e.target.startsWith('store:')
     );
 
     for (const edge of storeEdges) {
@@ -150,7 +150,7 @@ export class CrossBoundaryResolver {
    *   - Re-target the parent's `listens-event` edge to the event node
    */
   private resolveEmitListeners(graph: DependencyGraph): void {
-    const listenEdges = graph.getAllEdges().filter(e => e.kind === 'listens-event' && e.target.startsWith('component:'));
+    const listenEdges = graph.getEdgesByKind('listens-event').filter(e => e.target.startsWith('component:'));
 
     // Build a map: resolved child component id -> set of emitted event names
     const childEmitsMap = new Map<string, Set<string>>();
@@ -173,18 +173,16 @@ export class CrossBoundaryResolver {
 
     // Also build from resolved uses-component edges
     const parentToChildren = new Map<string, Map<string, string>>(); // parent -> (componentName -> childNodeId)
-    for (const edge of graph.getAllEdges()) {
-      if (edge.kind === 'uses-component') {
-        const childNodeId = edge.target.startsWith('component:')
-          ? labelToNodeId.get(edge.target.replace('component:', ''))
-          : edge.target;
-        if (childNodeId) {
-          if (!parentToChildren.has(edge.source)) {
-            parentToChildren.set(edge.source, new Map());
-          }
-          const componentName = edge.metadata.componentName as string;
-          parentToChildren.get(edge.source)!.set(componentName, childNodeId);
+    for (const edge of graph.edgesByKindIter('uses-component')) {
+      const childNodeId = edge.target.startsWith('component:')
+        ? labelToNodeId.get(edge.target.replace('component:', ''))
+        : edge.target;
+      if (childNodeId) {
+        if (!parentToChildren.has(edge.source)) {
+          parentToChildren.set(edge.source, new Map());
         }
+        const componentName = edge.metadata.componentName as string;
+        parentToChildren.get(edge.source)!.set(componentName, childNodeId);
       }
     }
 
@@ -296,8 +294,8 @@ export class CrossBoundaryResolver {
       }
     }
 
-    const edgesToResolve = graph.getAllEdges().filter(e =>
-      e.kind === 'spring-injects' && !graph.hasNode(e.target)
+    const edgesToResolve = graph.getEdgesByKind('spring-injects').filter(
+      e => !graph.hasNode(e.target)
     );
 
     for (const edge of edgesToResolve) {
@@ -334,9 +332,12 @@ export class CrossBoundaryResolver {
     for (const repo of repositories) {
       const domain = repo.label.replace('Repository', '');
 
+      // O(out-degree) edge-existence check vs. the prior O(|E|) full scan.
+      const repoOutTargets = new Set(graph.getOutEdges(repo.id).map((e) => e.target));
+
       // Find matching @Mapper interface
       const mapper = mappers.find(m => m.label === domain + 'Mapper');
-      if (mapper && !graph.getAllEdges().some(e => e.source === repo.id && e.target === mapper.id)) {
+      if (mapper && !repoOutTargets.has(mapper.id)) {
         graph.addEdge({
           id: `${repo.id}:spring-injects:${mapper.id}`,
           source: repo.id,
@@ -349,7 +350,7 @@ export class CrossBoundaryResolver {
       // Also link directly to mybatis-mapper if no @Mapper interface exists
       if (!mapper) {
         const mbMapper = mybatisMappers.find(m => m.label === domain + 'Mapper');
-        if (mbMapper && !graph.getAllEdges().some(e => e.source === repo.id && e.target === mbMapper.id)) {
+        if (mbMapper && !repoOutTargets.has(mbMapper.id)) {
           graph.addEdge({
             id: `${repo.id}:spring-injects:${mbMapper.id}`,
             source: repo.id,
@@ -369,8 +370,8 @@ export class CrossBoundaryResolver {
    */
   private resolveRouteRenders(graph: DependencyGraph): void {
     // 1. Resolve lazy route-renders (unresolved: prefix)
-    const unresolvedRouteEdges = graph.getAllEdges().filter(
-      e => e.kind === 'route-renders' && e.target.startsWith('unresolved:')
+    const unresolvedRouteEdges = graph.getEdgesByKind('route-renders').filter(
+      e => e.target.startsWith('unresolved:')
     );
 
     for (const edge of unresolvedRouteEdges) {
@@ -395,9 +396,10 @@ export class CrossBoundaryResolver {
       }
     }
 
-    // 2. Resolve static route-renders (component: prefix)
-    const staticRouteEdges = graph.getAllEdges().filter(
-      e => e.kind === 'route-renders' && e.target.startsWith('component:')
+    // 2. Resolve static route-renders (component: prefix). Re-fetch the kind
+    // bucket — pass 1 may have rewritten edge ids, so the earlier snapshot is stale.
+    const staticRouteEdges = graph.getEdgesByKind('route-renders').filter(
+      e => e.target.startsWith('component:')
     );
 
     for (const edge of staticRouteEdges) {
@@ -418,8 +420,8 @@ export class CrossBoundaryResolver {
   }
 
   private resolveComposableReferences(graph: DependencyGraph): void {
-    const composableEdges = graph.getAllEdges().filter(
-      e => e.kind === 'uses-composable' && e.target.startsWith('composable:')
+    const composableEdges = graph.getEdgesByKind('uses-composable').filter(
+      e => e.target.startsWith('composable:')
     );
 
     for (const edge of composableEdges) {
