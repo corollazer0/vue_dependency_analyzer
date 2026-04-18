@@ -76,10 +76,15 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
   return traverse(rootId, 0);
 }
 
+// Phase 1-5 — D3 join() pattern: persist <g>, <g.links>, <g.nodes>, <text.root-label>
+// across renders. Re-render only diffs selections with a stable key. Avoids the
+// full svg.selectAll('*').remove() teardown + re-creation (which was rebuilding the
+// zoom behavior + every node group on every filter tick).
+let zoomBehavior: d3Zoom.ZoomBehavior<SVGSVGElement, unknown> | null = null;
+
 function renderTree() {
   if (!svgRef.value || !treeRootId.value) return;
   const svg = d3Selection.select(svgRef.value);
-  svg.selectAll('*').remove();
 
   // Bug #6,#7: ensure container has real dimensions
   const width = svgRef.value.clientWidth || 800;
@@ -91,48 +96,74 @@ function renderTree() {
 
   const rootData = buildTree(treeRootId.value, direction.value, treeDepth.value);
   const root = d3Hierarchy.hierarchy(rootData);
-  if (!root.descendants().length) return;
+  if (!root.descendants().length) {
+    // Empty state — wipe any stale render
+    svg.selectAll('g.tree-root').remove();
+    return;
+  }
 
   d3Hierarchy.tree<TreeNode>().nodeSize([32, 180])(root);
 
   let minX = Infinity, maxX = -Infinity;
   root.each((d: any) => { if (d.x < minX) minX = d.x; if (d.x > maxX) maxX = d.x; });
 
-  // Bug #6: proper centering
   const treeH = (maxX - minX) || 100;
   const scale = Math.min(1.2, (height - 60) / (treeH + 60));
   const centerX = 80;
   const centerY = height / 2 - ((minX + maxX) / 2) * scale;
 
-  const g = svg.append('g');
-  const zoom = d3Zoom.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 4]).on('zoom', e => g.attr('transform', e.transform));
-  svg.call(zoom);
-  svg.call(zoom.transform, d3Zoom.zoomIdentity.translate(centerX, centerY).scale(scale));
+  // Root <g> persists across renders; zoom behavior attaches once.
+  let g = svg.select<SVGGElement>('g.tree-root');
+  if (g.empty()) {
+    g = svg.append('g').attr('class', 'tree-root');
+    g.append('g').attr('class', 'links');
+    g.append('g').attr('class', 'nodes');
+    zoomBehavior = d3Zoom.zoom<SVGSVGElement, unknown>().scaleExtent([0.1, 4]).on('zoom', e => g.attr('transform', e.transform));
+    svg.call(zoomBehavior);
+  }
+  if (zoomBehavior) {
+    svg.call(zoomBehavior.transform, d3Zoom.zoomIdentity.translate(centerX, centerY).scale(scale));
+  }
 
-  // Links
-  g.selectAll('.link').data(root.links()).join('path')
-    .attr('d', (d: any) => `M${d.source.y},${d.source.x} C${(d.source.y+d.target.y)/2},${d.source.x} ${(d.source.y+d.target.y)/2},${d.target.x} ${d.target.y},${d.target.x}`)
-    .attr('fill', 'none').attr('stroke', '#3a4050').attr('stroke-width', 1.5);
+  // Links — keyed by source.id→target.id so moves update in place.
+  g.select<SVGGElement>('g.links').selectAll<SVGPathElement, d3Hierarchy.HierarchyPointLink<TreeNode>>('path')
+    .data(root.links(), (d: any) => `${d.source.data.id}→${d.target.data.id}:${d.source.depth}`)
+    .join(
+      (enter) => enter.append('path').attr('fill', 'none').attr('stroke', '#3a4050').attr('stroke-width', 1.5),
+      (update) => update,
+      (exit) => exit.remove(),
+    )
+    .attr('d', (d: any) => `M${d.source.y},${d.source.x} C${(d.source.y+d.target.y)/2},${d.source.x} ${(d.source.y+d.target.y)/2},${d.target.x} ${d.target.y},${d.target.x}`);
 
-  // Nodes
-  const nodeGroups = g.selectAll('.node').data(root.descendants()).join('g')
-    .attr('transform', (d: any) => `translate(${d.y},${d.x})`).style('cursor', 'pointer');
+  // Nodes — keyed by node id+depth (same id may repeat at different depths, marked duplicate).
+  const nodeGroups = g.select<SVGGElement>('g.nodes').selectAll<SVGGElement, d3Hierarchy.HierarchyPointNode<TreeNode>>('g.node')
+    .data(root.descendants(), (d: any) => `${d.data.id}@${d.depth}`)
+    .join(
+      (enter) => {
+        const ge = enter.append('g').attr('class', 'node').style('cursor', 'pointer');
+        ge.append('circle');
+        ge.append('text');
+        return ge;
+      },
+      (update) => update,
+      (exit) => exit.remove(),
+    )
+    .attr('transform', (d: any) => `translate(${d.y},${d.x})`);
 
-  // Single click = select (detail panel only)
-  // Double click = re-root tree on clicked node
   nodeGroups.on('click', (_e: any, d: any) => {
-    internalClick = true; // Prevent watcher from re-rooting on internal tree click
+    internalClick = true;
     graphStore.selectNode(d.data.id);
-    // Visual highlight
-    g.selectAll('circle').attr('stroke', (dd: any) => dd.depth === 0 ? '#fff' : 'none').attr('stroke-width', (dd: any) => dd.depth === 0 ? 2 : 0);
+    g.selectAll<SVGCircleElement, d3Hierarchy.HierarchyPointNode<TreeNode>>('g.node circle')
+      .attr('stroke', (dd: any) => dd.depth === 0 ? '#fff' : 'none')
+      .attr('stroke-width', (dd: any) => dd.depth === 0 ? 2 : 0);
     d3Selection.select(_e.currentTarget).select('circle').attr('stroke', '#42b883').attr('stroke-width', 3);
   });
   nodeGroups.on('dblclick', (_e: any, d: any) => {
     _e.stopPropagation();
-    graphStore.focusNode(d.data.id); // Sets both selectedNodeId and focusNodeId → triggers tree re-root
+    graphStore.focusNode(d.data.id);
   });
 
-  nodeGroups.append('circle')
+  nodeGroups.select<SVGCircleElement>('circle')
     .attr('r', (d: any) => d.depth === 0 ? 10 : 7)
     .attr('fill', (d: any) => d.data.duplicate ? 'none' : (NODE_COLORS[d.data.kind as keyof typeof NODE_COLORS] || '#666'))
     .attr('stroke', (d: any) => d.data.duplicate ? (NODE_COLORS[d.data.kind as keyof typeof NODE_COLORS] || '#666') : (d.depth === 0 ? '#fff' : 'none'))
@@ -140,7 +171,7 @@ function renderTree() {
     .attr('stroke-dasharray', (d: any) => d.data.duplicate ? '3 2' : 'none')
     .attr('opacity', (d: any) => d.data.duplicate ? 0.5 : 1);
 
-  nodeGroups.append('text')
+  nodeGroups.select<SVGTextElement>('text')
     .attr('x', (d: any) => d.children ? -12 : 12).attr('dy', 4)
     .attr('text-anchor', (d: any) => d.children ? 'end' : 'start')
     .attr('font-size', '11px')
@@ -148,13 +179,19 @@ function renderTree() {
     .attr('font-style', (d: any) => d.data.duplicate ? 'italic' : 'normal')
     .text((d: any) => { const l = d.data.label; return l.length > 35 ? l.slice(0, 32) + '...' : l; });
 
-  // Root label
+  // Root label — single element with a class, not appended fresh each time.
   const r0 = root.descendants()[0];
-  if (r0) {
-    g.append('text').attr('x', (r0 as any).y).attr('y', (r0 as any).x - 18)
-      .attr('text-anchor', 'middle').attr('font-size', '13px').attr('font-weight', 'bold')
-      .attr('fill', '#42b883').text(r0.data.label);
-  }
+  g.selectAll<SVGTextElement, d3Hierarchy.HierarchyPointNode<TreeNode>>('text.root-label')
+    .data(r0 ? [r0] : [], (d: any) => d.data.id)
+    .join(
+      (enter) => enter.append('text').attr('class', 'root-label')
+        .attr('text-anchor', 'middle').attr('font-size', '13px').attr('font-weight', 'bold').attr('fill', '#42b883'),
+      (update) => update,
+      (exit) => exit.remove(),
+    )
+    .attr('x', (d: any) => d.y)
+    .attr('y', (d: any) => d.x - 18)
+    .text((d: any) => d.data.label);
 }
 
 // focusNodeId: set by double-click — always re-roots tree
