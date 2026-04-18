@@ -1,0 +1,122 @@
+# Phase 5-4 — render-time regression gate.
+#
+# Runs the @vda/bench harness on every PR: builds the web-ui, fires a 5K
+# synthetic fixture through headless Chromium, and posts the measured G1 /
+# G2 numbers as a PR comment. Warn-only: the job fails only if the harness
+# itself errors, *not* on a budget breach. A follow-up (tracked in Phase 5
+# §7 of FINAL-PLAN) will flip it to blocking after three consecutive
+# regressions are observed in production.
+
+name: bench-render-gate
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+    inputs:
+      strict:
+        description: "Fail the job on a budget breach (overrides warn-only default)"
+        required: false
+        default: "false"
+
+concurrency:
+  group: bench-render-gate-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  bench:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Cache Playwright browsers
+        id: playwright-cache
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/ms-playwright
+          key: playwright-chromium-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+
+      - name: Install Playwright chromium
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        run: npx -w @vda/bench playwright install --with-deps chromium
+
+      - name: Build @vda/core (workspace dep of @vda/bench)
+        run: npx -w @vda/core run build
+
+      - name: Build @vda/web-ui
+        run: npx -w @vda/web-ui run build
+
+      - name: Run render-time harness
+        id: harness
+        run: |
+          npx -w @vda/bench tsx src/cli/harness.ts \
+            --nodes 5000 \
+            --filter-kind vue-component \
+            --out-json bench-report.json
+
+      - name: Parse report + format PR comment body
+        id: report
+        run: node scripts/format-bench-report.mjs bench-report.json >> "$GITHUB_OUTPUT"
+
+      - name: Post / update PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        env:
+          BODY: ${{ steps.report.outputs.body }}
+          MARKER: ${{ steps.report.outputs.marker }}
+        with:
+          script: |
+            const marker = process.env.MARKER;
+            const body   = process.env.BODY;
+            const { data: existing } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              per_page: 100,
+            });
+            const prev = existing.find(c => c.body?.startsWith(marker));
+            if (prev) {
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: prev.id,
+                body,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body,
+              });
+            }
+
+      - name: Strict-mode gate (workflow_dispatch only)
+        if: github.event_name == 'workflow_dispatch' && inputs.strict == 'true'
+        run: |
+          node -e "
+            const r = require('./bench-report.json');
+            const bad = r.gate.G1_verdict !== 'MET' || r.gate.G2_verdict !== 'MET';
+            if (bad) {
+              console.error('FAIL: ' + JSON.stringify(r.gate));
+              process.exit(1);
+            }
+          "
+
+      - name: Upload bench report artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-report-${{ github.run_id }}
+          path: bench-report.json
