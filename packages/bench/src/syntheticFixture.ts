@@ -103,17 +103,43 @@ function resolveKindCounts(nodeCount: number, ratios: Partial<Record<NodeKind, n
   const declared = Object.entries(ratios).filter(([, v]) => (v ?? 0) > 0) as [NodeKind, number][];
   const total = declared.reduce((s, [, v]) => s + v, 0);
   if (total === 0) throw new Error('kindRatios: no kind has a positive ratio');
+  if (nodeCount < declared.length) {
+    throw new Error(`nodeCount=${nodeCount} is smaller than the declared kind count (${declared.length})`);
+  }
+
+  // Largest-remainder allocation: every kind gets at least 1, remaining budget
+  // distributed by fractional remainder so final total equals nodeCount exactly.
+  const exactCounts: [NodeKind, number, number][] = declared.map(([kind, ratio]) => {
+    const exact = (ratio / total) * nodeCount;
+    return [kind, Math.max(1, Math.floor(exact)), exact - Math.floor(exact)];
+  });
 
   const counts = new Map<NodeKind, number>();
   let allocated = 0;
-  // Largest first so rounding remainders land on the dominant kinds — stable.
-  const sorted = [...declared].sort((a, b) => b[1] - a[1]);
-  for (let i = 0; i < sorted.length; i++) {
-    const [kind, ratio] = sorted[i];
-    const isLast = i === sorted.length - 1;
-    const count = isLast ? nodeCount - allocated : Math.round((ratio / total) * nodeCount);
-    counts.set(kind, Math.max(1, count));
-    allocated += counts.get(kind)!;
+  for (const [kind, base] of exactCounts) {
+    counts.set(kind, base);
+    allocated += base;
+  }
+
+  let diff = nodeCount - allocated;
+  if (diff > 0) {
+    // Budget left — hand out to the highest fractional remainders.
+    const byRem = [...exactCounts].sort((a, b) => b[2] - a[2]);
+    let i = 0;
+    while (diff > 0) {
+      const [kind] = byRem[i % byRem.length];
+      counts.set(kind, counts.get(kind)! + 1);
+      diff--; i++;
+    }
+  } else if (diff < 0) {
+    // Over-budget (Math.max(1) floor on tiny-ratio kinds). Trim from the
+    // largest allocation until we hit the target, never going below 1.
+    while (diff < 0) {
+      const largest = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (largest[1] <= 1) break;
+      counts.set(largest[0], largest[1] - 1);
+      diff++;
+    }
   }
   return counts;
 }

@@ -361,6 +361,30 @@ function initCytoscape() {
 
   cy.on('zoom', () => updateLOD());
 
+  // Phase 5-2 harness hook. When the page was loaded with `?harness=1`, expose
+  // the Cytoscape instance + a filter helper on `window.__vdaHarness` so a
+  // Playwright bench script can measure G1 (first render) and G2 (filter repaint).
+  // Guarded by URL param so production builds carry the check but no behavior.
+  if (typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('harness')) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const w = window as any;
+    w.__vdaHarness = w.__vdaHarness ?? { firstPaintAt: null, renderCount: 0 };
+    w.__vdaHarness.cy = cy;
+    cy.on('render', () => {
+      w.__vdaHarness.renderCount++;
+      if (w.__vdaHarness.firstPaintAt === null) {
+        w.__vdaHarness.firstPaintAt = performance.now();
+      }
+    });
+    w.__vdaHarness.toggleFilter = (kind: string): Promise<number> => {
+      return new Promise((resolve) => {
+        const start = performance.now();
+        cy!.one('render', () => resolve(performance.now() - start));
+        graphStore.toggleNodeKind(kind);
+      });
+    };
+  }
+
   // Overlay canvas layer — drawn above the graph, repainted automatically on pan/zoom/layout.
   overlayLayer = (cy as any).cyCanvas({ zIndex: 1 });
   overlayRedraw = () => {
