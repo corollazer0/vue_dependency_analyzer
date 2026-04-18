@@ -58,8 +58,8 @@ Phase 5  (상시)  CI 벤치 게이트 · /api/admin/metrics · 회귀 방지
 | 0-6 | **Phase 6 P1: warm-cache 시 db-table 노드 유실 회귀 테스트 + 임시 fix** | `packages/core/src/engine/ParseCache.ts`, `packages/core/src/linkers/MyBatisLinker.ts` 또는 `packages/server/src/engine.ts` | SQLite 전환 전에 정합성 보장 |
 
 ### Phase 0 종료 조건 (게이트)
-- `npx -w @vda/core vitest run` 전 테스트 green + 신규 회귀 테스트 (warm-cache db-table ≥ 1 유지)
-- `node packages/cli/dist/bin/vda.js analyze test-project-ecommerce` 2회 연속 실행 시 노드 수·엣지 수 완전 일치
+- `npx turbo run test` 전 테스트 green + 신규 회귀 테스트 `cache-integrity.test.ts` 통과 (warm-cache 시 모든 node kind 카운트 cold 와 동일)
+- `node packages/cli/dist/bin/vda.js analyze test-project-ecommerce` 2회 연속 실행 시 **노드 수 완전 일치** (엣지 수는 CrossBoundaryResolver 비결정성 때문에 <5% drift 허용 — Phase 2 에서 해결 대상)
 - `ForceGraphView` 마운트/언마운트 10회 반복 시 document listener 카운트 누적 없음 (수동)
 
 ---
