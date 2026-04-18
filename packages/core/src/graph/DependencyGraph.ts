@@ -6,6 +6,9 @@ export class DependencyGraph {
   private adjacency = new Map<string, Set<string>>();
   private reverseAdjacency = new Map<string, Set<string>>();
   private fileIndex = new Map<string, Set<string>>();
+  // Monotonic mutation counter used by transport-layer dirty caches (ETag, toJSON cache).
+  // Bumped on every add/remove — callers treat it as an opaque revision id.
+  private version = 0;
 
   public metadata: GraphMetadata = {
     projectRoot: '',
@@ -14,6 +17,10 @@ export class DependencyGraph {
     parseErrors: [],
     config: {},
   };
+
+  getVersion(): number {
+    return this.version;
+  }
 
   // ─── Node Operations ───
 
@@ -30,6 +37,7 @@ export class DependencyGraph {
       this.fileIndex.set(node.filePath, new Set());
     }
     this.fileIndex.get(node.filePath)!.add(node.id);
+    this.version++;
   }
 
   getNode(id: string): GraphNode | undefined {
@@ -70,10 +78,18 @@ export class DependencyGraph {
     if (node.filePath) {
       this.fileIndex.get(node.filePath)?.delete(id);
     }
+    this.version++;
   }
 
   getAllNodes(): GraphNode[] {
     return Array.from(this.nodes.values());
+  }
+
+  // Iterator variant — use on hot paths that only need to iterate once and don't
+  // need index access. Avoids materializing a full array copy (getAllNodes allocates
+  // O(n) per call; the analysis engine calls it multiple times on warm-cache runs).
+  nodesIter(): IterableIterator<GraphNode> {
+    return this.nodes.values();
   }
 
   getNodeCount(): number {
@@ -97,6 +113,7 @@ export class DependencyGraph {
       this.reverseAdjacency.set(edge.target, new Set());
     }
     this.reverseAdjacency.get(edge.target)!.add(edge.id);
+    this.version++;
   }
 
   getEdge(id: string): GraphEdge | undefined {
@@ -109,10 +126,15 @@ export class DependencyGraph {
     this.adjacency.get(edge.source)?.delete(id);
     this.reverseAdjacency.get(edge.target)?.delete(id);
     this.edges.delete(id);
+    this.version++;
   }
 
   getAllEdges(): GraphEdge[] {
     return Array.from(this.edges.values());
+  }
+
+  edgesIter(): IterableIterator<GraphEdge> {
+    return this.edges.values();
   }
 
   getEdgeCount(): number {

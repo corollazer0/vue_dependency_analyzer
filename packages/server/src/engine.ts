@@ -171,12 +171,17 @@ export class AnalysisEngine {
       }
       this.cache.save();
 
-      // Tag nodes with serviceId based on which service root they fall under
+      // Tag nodes with serviceId based on which service root they fall under.
+      // Uses nodesIter() (Phase 1-6) to avoid materializing a full array copy —
+      // single-pass tagging on potentially 20K+ nodes.
       if (this.config.services && this.config.services.length > 0) {
-        for (const node of this.graph.getAllNodes()) {
-          for (const service of this.config.services) {
-            const serviceRoot = resolve(this.config.projectRoot, service.root);
-            if (node.filePath.startsWith(serviceRoot)) {
+        const resolvedServiceRoots = this.config.services.map(s => ({
+          id: s.id,
+          root: resolve(this.config.projectRoot, s.root),
+        }));
+        for (const node of this.graph.nodesIter()) {
+          for (const service of resolvedServiceRoots) {
+            if (node.filePath.startsWith(service.root)) {
               node.metadata.serviceId = service.id;
               break;
             }
@@ -346,6 +351,12 @@ export class AnalysisEngine {
 
   getGraph(): SerializedGraph {
     return toJSON(this.graph);
+  }
+
+  // Phase 1-3 — opaque revision id combining analyzedAt (swapped on new runs) with the
+  // graph's mutation counter. Transport caches use this as the invalidation key.
+  getGraphRevision(): string {
+    return `${this.graph.metadata.analyzedAt}:${this.graph.getVersion()}`;
   }
 
   getGraphFiltered(nodeKinds?: string[], edgeKinds?: string[]): SerializedGraph {
