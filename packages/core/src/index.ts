@@ -29,6 +29,8 @@ export type { ImpactResult } from './analyzers/ImpactAnalyzer.js';
 export { checkDtoConsistency } from './analyzers/DtoConsistencyChecker.js';
 export type { DtoMismatch, FieldDetail } from './analyzers/DtoConsistencyChecker.js';
 export { evaluateRules } from './analyzers/RuleEngine.js';
+export { detectCommunities, groupNodesByCommunity } from './analyzers/CommunityDetector.js';
+export type { CommunityDetectionOptions, CommunityResult } from './analyzers/CommunityDetector.js';
 
 // Git
 export { parseGitDiff, getUncommittedFiles } from './git/GitDiffParser.js';

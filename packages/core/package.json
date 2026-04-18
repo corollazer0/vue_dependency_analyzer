@@ -21,6 +21,8 @@
   "dependencies": {
     "@vue/compiler-sfc": "^3.5.0",
     "better-sqlite3": "^12.9.0",
+    "graphology": "^0.26.0",
+    "graphology-communities-louvain": "^2.0.2",
     "typescript": "^5.7.0"
   },
   "devDependencies": {
