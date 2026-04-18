@@ -17,14 +17,17 @@ import {
   analyzeChangeImpact as analyzeChangeImpactFn,
   findPaths as findPathsFn,
   toJSON,
+  detectCommunities,
   type AnalysisConfig,
   type SerializedGraph,
   type ProgressInfo,
   type NodeKind,
   type EdgeKind,
   type GraphNode,
+  type GraphEdge,
   type DtoMismatch,
   type RuleViolation,
+  type CommunityResult,
 } from '@vda/core';
 import type { WebSocket } from 'ws';
 
@@ -67,6 +70,15 @@ export class AnalysisEngine {
   private peakHeapMB = 0;
   private peakRssMB = 0;
   private lastAnalysisDurationMs = 0;
+  // Phase 3-2 — Louvain partition cached per (graph version + resolution). Both the
+  // initial cluster-graph response and the follow-up expandCluster() call read from
+  // this snapshot so the cluster ids the client received remain valid until the next
+  // analysis bumps the graph version.
+  private clusterCache: {
+    key: string;
+    result: CommunityResult;
+    clusterIdToNodes: Map<string, GraphNode[]>;
+  } | null = null;
 
   constructor(dir: string, options: Record<string, string | undefined>, watch: boolean, logger?: EngineLogger) {
     const projectRoot = resolve(dir);
@@ -410,93 +422,137 @@ export class AnalysisEngine {
     return toJSON(filtered);
   }
 
-  getGraphClustered(depth: number = 3): { clusters: ClusterNode[]; edges: ClusterEdge[] } {
-    const nodes = this.graph.getAllNodes();
-    const edges = this.graph.getAllEdges();
-
-    // Group nodes by directory path segments
-    const groups = new Map<string, GraphNode[]>();
-    for (const node of nodes) {
-      const dir = getDirectoryAtDepth(node.filePath, this.config.projectRoot, depth);
-      if (!groups.has(dir)) groups.set(dir, []);
-      groups.get(dir)!.push(node);
-    }
+  /**
+   * Phase 3-2 — Louvain-based mid-zoom clustering.
+   *
+   * The previous depth-based directory grouping ignored cross-tree coupling
+   * (Vue ↔ Spring services connected by api-call edges always landed in
+   * separate clusters because their directories don't share a prefix). The
+   * Louvain partition uses actual graph topology, so coupled directories
+   * collapse into one community while a folder spanning unrelated concerns
+   * splits into several.
+   *
+   * `depth` is reinterpreted as the Louvain *resolution*: 1 = default,
+   * higher = more, smaller communities. This preserves the legacy "raise depth
+   * for finer grouping" intent of the API.
+   */
+  getGraphClustered(depth: number = 1): { clusters: ClusterNode[]; edges: ClusterEdge[] } {
+    const resolution = Math.max(0.5, depth);
+    const { clusterIdToNodes } = this.getOrComputeClusters(resolution);
 
     const clusters: ClusterNode[] = [];
-    const clusterEdges: ClusterEdge[] = [];
     const nodeToCluster = new Map<string, string>();
 
-    // Small groups (< 5 nodes) get their own individual nodes, not clusters
+    // Singleton/tiny communities (< MIN_CLUSTER_SIZE) are surfaced as raw nodes;
+    // collapsing them into a "cluster of 2" wastes a compound and adds visual
+    // noise. The threshold matches the legacy directory-clustering behaviour so
+    // existing UX expectations carry over.
     const MIN_CLUSTER_SIZE = 5;
 
-    for (const [dir, groupNodes] of groups) {
+    for (const [clusterId, groupNodes] of clusterIdToNodes) {
       if (groupNodes.length < MIN_CLUSTER_SIZE) {
-        // Too small to cluster — add as individual nodes
         for (const n of groupNodes) {
-          nodeToCluster.set(n.id, n.id); // self-cluster
+          nodeToCluster.set(n.id, n.id);
           clusters.push({
             id: n.id,
             label: n.label,
-            childCount: 0, // signals it's an individual node
+            childCount: 0,
             childKinds: { [n.kind]: 1 },
           });
         }
-      } else {
-        const clusterId = `cluster:${dir}`;
-        const kindCounts: Record<string, number> = {};
-        for (const n of groupNodes) {
-          kindCounts[n.kind] = (kindCounts[n.kind] || 0) + 1;
-          nodeToCluster.set(n.id, clusterId);
-        }
-
-        clusters.push({
-          id: clusterId,
-          label: dir || '(root)',
-          childCount: groupNodes.length,
-          childKinds: kindCounts,
-        });
+        continue;
       }
+      const kindCounts: Record<string, number> = {};
+      const dirCounts = new Map<string, number>();
+      for (const n of groupNodes) {
+        kindCounts[n.kind] = (kindCounts[n.kind] || 0) + 1;
+        const dir = getDirectoryAtDepth(n.filePath, this.config.projectRoot, 2);
+        if (dir) dirCounts.set(dir, (dirCounts.get(dir) ?? 0) + 1);
+        nodeToCluster.set(n.id, clusterId);
+      }
+      const dominantDir = [...dirCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+      const idx = clusterId.replace(/^cluster:c/, '');
+      const label = dominantDir ? `${dominantDir} #${idx}` : `Community ${idx}`;
+      clusters.push({
+        id: clusterId,
+        label,
+        childCount: groupNodes.length,
+        childKinds: kindCounts,
+      });
     }
 
-    // Aggregate edges between clusters
+    // Inter-community edge aggregation — single sweep over the full edge set.
     const edgeMap = new Map<string, { source: string; target: string; weight: number; kinds: Set<string> }>();
-    for (const edge of edges) {
+    for (const edge of this.graph.edgesIter()) {
       const sc = nodeToCluster.get(edge.source);
       const tc = nodeToCluster.get(edge.target);
       if (!sc || !tc || sc === tc) continue;
       const key = `${sc}→${tc}`;
-      if (!edgeMap.has(key)) {
-        edgeMap.set(key, { source: sc, target: tc, weight: 0, kinds: new Set() });
-      }
-      const e = edgeMap.get(key)!;
-      e.weight++;
-      e.kinds.add(edge.kind);
+      let agg = edgeMap.get(key);
+      if (!agg) { agg = { source: sc, target: tc, weight: 0, kinds: new Set() }; edgeMap.set(key, agg); }
+      agg.weight++;
+      agg.kinds.add(edge.kind);
     }
 
-    for (const [, e] of edgeMap) {
+    const clusterEdges: ClusterEdge[] = [];
+    for (const e of edgeMap.values()) {
       clusterEdges.push({
         id: `${e.source}:edge:${e.target}`,
         source: e.source,
         target: e.target,
         weight: e.weight,
-        kinds: Array.from(e.kinds),
+        kinds: [...e.kinds],
       });
     }
 
     return { clusters, edges: clusterEdges };
   }
 
-  expandCluster(clusterId: string): { nodes: GraphNode[]; edges: any[] } {
-    const dir = clusterId.replace(/^cluster:/, '');
-    const nodes = this.graph.getAllNodes().filter(n => {
-      const nodeDir = getDirectoryAtDepth(n.filePath, this.config.projectRoot, 999);
-      return nodeDir.startsWith(dir);
-    });
+  /**
+   * Resolve a Louvain cluster id (`cluster:c<idx>`) back to the member nodes
+   * and every edge incident to one of them. The partition lookup uses the most
+   * recently computed cluster cache, so callers must hit getGraphClustered()
+   * before requesting an expansion (the UI flow does this naturally).
+   */
+  expandCluster(clusterId: string): { nodes: GraphNode[]; edges: GraphEdge[] } {
+    if (!this.clusterCache) {
+      this.getOrComputeClusters(1);
+    }
+    const cache = this.clusterCache!;
+    const nodes = cache.clusterIdToNodes.get(clusterId) ?? [];
+    if (nodes.length === 0) return { nodes: [], edges: [] };
     const nodeIds = new Set(nodes.map(n => n.id));
-    const edges = this.graph.getAllEdges().filter(
-      e => nodeIds.has(e.source) || nodeIds.has(e.target)
-    );
+    const edges: GraphEdge[] = [];
+    for (const e of this.graph.edgesIter()) {
+      if (nodeIds.has(e.source) || nodeIds.has(e.target)) edges.push(e);
+    }
     return { nodes, edges };
+  }
+
+  private getOrComputeClusters(resolution: number): {
+    result: CommunityResult;
+    clusterIdToNodes: Map<string, GraphNode[]>;
+  } {
+    const key = `${this.graph.metadata.analyzedAt}:${this.graph.getVersion()}:${resolution}`;
+    if (this.clusterCache && this.clusterCache.key === key) {
+      return this.clusterCache;
+    }
+    // Seeded RNG — Louvain's local-move order is randomised, so without a fixed
+    // seed two consecutive cluster requests on the same graph would shuffle
+    // community indices and invalidate any client-side cluster id the user just
+    // received.
+    const result = detectCommunities(this.graph, { resolution, rng: mulberry32(0x9E3779B9) });
+    const clusterIdToNodes = new Map<string, GraphNode[]>();
+    for (const [nodeId, communityIdx] of result.communities) {
+      const node = this.graph.getNode(nodeId);
+      if (!node) continue;
+      const cid = `cluster:c${communityIdx}`;
+      let bucket = clusterIdToNodes.get(cid);
+      if (!bucket) { bucket = []; clusterIdToNodes.set(cid, bucket); }
+      bucket.push(node);
+    }
+    this.clusterCache = { key, result, clusterIdToNodes };
+    return this.clusterCache;
   }
 
   getNode(nodeId: string) {
@@ -863,6 +919,19 @@ interface ClusterEdge {
   target: string;
   weight: number;
   kinds: string[];
+}
+
+// Tiny seeded PRNG. Louvain accepts an rng() so we can stabilise community ids
+// across calls — same graph + same seed = same partition. Fast and dependency-free.
+function mulberry32(seed: number): () => number {
+  let s = seed >>> 0;
+  return () => {
+    s = (s + 0x6D2B79F5) >>> 0;
+    let t = s;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
 function getDirectoryAtDepth(filePath: string, projectRoot: string, depth: number): string {

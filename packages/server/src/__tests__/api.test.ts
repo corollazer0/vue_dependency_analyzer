@@ -114,6 +114,32 @@ describe('Server API', () => {
       expect(body.clusters.length).toBeGreaterThan(0);
     });
 
+    // Phase 3-2 — Louvain cluster ids must be stable across calls (seeded RNG)
+    // and expandCluster must resolve them back to the member nodes.
+    it('clusters use Louvain community ids and round-trip through /api/graph/cluster/:id', async () => {
+      const first = await fastify.inject({ method: 'GET', url: '/api/graph?cluster=true&depth=1' });
+      expect(first.statusCode).toBe(200);
+      const body = JSON.parse(first.body);
+      const compound = body.clusters.find((c: { id: string; childCount: number }) =>
+        c.id.startsWith('cluster:c') && c.childCount >= 5,
+      );
+      expect(compound, 'expected at least one Louvain compound cluster').toBeTruthy();
+
+      // ID stability: a second call on the same graph yields the same cluster set.
+      const second = await fastify.inject({ method: 'GET', url: '/api/graph?cluster=true&depth=1' });
+      const secondIds = JSON.parse(second.body).clusters.map((c: { id: string }) => c.id).sort();
+      const firstIds = body.clusters.map((c: { id: string }) => c.id).sort();
+      expect(secondIds).toEqual(firstIds);
+
+      const expanded = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/cluster/${encodeURIComponent(compound.id)}`,
+      });
+      expect(expanded.statusCode).toBe(200);
+      const expandedBody = JSON.parse(expanded.body);
+      expect(expandedBody.nodes.length).toBe(compound.childCount);
+    });
+
     // Phase 1-1 — brotli compression on large JSON payloads
     it('should serve /api/graph compressed when Accept-Encoding advertises br', async () => {
       const raw = await fastify.inject({ method: 'GET', url: '/api/graph' });
