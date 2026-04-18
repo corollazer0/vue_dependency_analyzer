@@ -117,8 +117,9 @@ export async function runAnalysis(
   const files = await glob(patterns, excludePatterns);
   graph.metadata.fileCount = files.length;
 
-  // Parallel parsing with cache
-  const parser = new ParallelParser(config);
+  // Parallel parsing with cache. Parser tags serviceId at parse time
+  // (Phase 2-6) so the post-hoc node sweep below is no longer needed.
+  const parser = new ParallelParser(config, undefined, config.projectRoot);
   const result = await parser.parseAll(
     files,
     options?.onProgress,
@@ -151,19 +152,6 @@ export async function runAnalysis(
       }
     }
     cache.save();
-  }
-
-  // Tag nodes with serviceId based on which service root they fall under
-  if (config.services && config.services.length > 0) {
-    for (const node of graph.getAllNodes()) {
-      for (const service of config.services) {
-        const serviceRoot = resolve(config.projectRoot, service.root);
-        if (node.filePath.startsWith(serviceRoot)) {
-          node.metadata.serviceId = service.id;
-          break;
-        }
-      }
-    }
   }
 
   // Cross-boundary resolution

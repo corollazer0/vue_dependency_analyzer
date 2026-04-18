@@ -69,7 +69,9 @@ export class AnalysisEngine {
     // Phase 2-2: long-lived parser owns a persistent worker pool. Workers
     // receive the AnalysisConfig once during init and are reused across
     // every runAnalysis() call (initial load + every file-watcher trigger).
-    this.parser = new ParallelParser(this.config);
+    // Phase 2-6: parser also tags every node with serviceId at parse time —
+    // engine no longer needs a post-hoc nodesIter() sweep.
+    this.parser = new ParallelParser(this.config, undefined, this.config.projectRoot);
     this.watchEnabled = watch;
     this.log = logger || noopLogger;
   }
@@ -175,23 +177,8 @@ export class AnalysisEngine {
           }))
       );
 
-      // Tag nodes with serviceId based on which service root they fall under.
-      // Uses nodesIter() (Phase 1-6) to avoid materializing a full array copy —
-      // single-pass tagging on potentially 20K+ nodes.
-      if (this.config.services && this.config.services.length > 0) {
-        const resolvedServiceRoots = this.config.services.map(s => ({
-          id: s.id,
-          root: resolve(this.config.projectRoot, s.root),
-        }));
-        for (const node of this.graph.nodesIter()) {
-          for (const service of resolvedServiceRoots) {
-            if (node.filePath.startsWith(service.root)) {
-              node.metadata.serviceId = service.id;
-              break;
-            }
-          }
-        }
-      }
+      // Phase 2-6: serviceId tagging now happens inside ParallelParser at
+      // parse time — no post-hoc sweep required here.
 
       // Cross-boundary resolution
       const resolver = new CrossBoundaryResolver(this.config, this.config.projectRoot);
@@ -319,12 +306,25 @@ export class AnalysisEngine {
     try {
       const content = readFileSync(filePath, 'utf-8');
       const result = parseFile(filePath, content, this.config);
+      // Phase 2-6: tag serviceId on the incremental re-parse path too,
+      // mirroring what ParallelParser does on full runs.
+      if (this.config.services && this.config.services.length > 0) {
+        for (const node of result.nodes) {
+          if (node.metadata.serviceId !== undefined) continue;
+          for (const service of this.config.services) {
+            const sroot = resolve(this.config.projectRoot, service.root);
+            if (node.filePath.startsWith(sroot)) {
+              node.metadata.serviceId = service.id;
+              break;
+            }
+          }
+        }
+      }
       for (const node of result.nodes) this.graph.addNode(node);
       for (const edge of result.edges) this.graph.addEdge(edge);
 
       // Update cache
       this.cache.set(filePath, content, result);
-      this.cache.save();
     } catch {
       // File may have been deleted between event and read
     }

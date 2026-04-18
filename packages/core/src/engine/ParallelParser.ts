@@ -1,6 +1,7 @@
 import { Worker } from 'worker_threads';
 import { cpus } from 'os';
 import { readFileSync } from 'fs';
+import { resolve as resolvePath } from 'path';
 import type { GraphNode, GraphEdge, ParseError, AnalysisConfig, ParseResult } from '../graph/types.js';
 import { VueSfcParser } from '../parsers/vue/VueSfcParser.js';
 import { TsFileParser } from '../parsers/typescript/TsFileParser.js';
@@ -336,10 +337,35 @@ export class ParallelParser {
   private concurrency: number;
   private config: AnalysisConfig;
   private pool: WorkerPool | null = null;
+  /**
+   * Phase 2-6: precomputed (serviceId, absolute root) pairs. Used to tag
+   * every parsed node with its owning service in O(services) per file
+   * instead of an O(nodes * services) post-hoc sweep done by callers.
+   * Empty when no services are configured (single-project mode).
+   */
+  private serviceRoots: { id: string; root: string }[] = [];
 
-  constructor(config: AnalysisConfig, concurrency?: number) {
+  constructor(config: AnalysisConfig, concurrency?: number, projectRoot?: string) {
     this.config = config;
     this.concurrency = concurrency || Math.max(1, Math.min(8, cpus().length - 1));
+    if (config.services && config.services.length > 0) {
+      const root = projectRoot ?? '';
+      this.serviceRoots = config.services.map((s) => ({
+        id: s.id,
+        root: root ? resolvePath(root, s.root) : s.root,
+      }));
+    }
+  }
+
+  private tagServiceId(node: GraphNode): void {
+    if (this.serviceRoots.length === 0) return;
+    if (node.metadata.serviceId !== undefined) return;
+    for (const sr of this.serviceRoots) {
+      if (node.filePath.startsWith(sr.root)) {
+        node.metadata.serviceId = sr.id;
+        return;
+      }
+    }
   }
 
   async parseAll(
@@ -386,6 +412,9 @@ export class ParallelParser {
       if (cacheCheck) {
         const cached = cacheCheck(filePath, content);
         if (cached) {
+          // Re-tag defensively: cached entries written before 2-6 won't carry
+          // serviceId. tagServiceId is a no-op when already set.
+          for (const n of cached.nodes) this.tagServiceId(n);
           allNodes.push(...cached.nodes);
           allEdges.push(...cached.edges);
           allErrors.push(...cached.errors);
@@ -429,6 +458,7 @@ export class ParallelParser {
                 severity: 'error',
               });
             } else {
+              for (const n of s.result.nodes) this.tagServiceId(n);
               allNodes.push(...s.result.nodes);
               allEdges.push(...s.result.edges);
               allErrors.push(...s.result.errors);
@@ -454,6 +484,7 @@ export class ParallelParser {
       if (!workerSucceeded) {
         for (const task of uncachedTasks) {
           const result = parseFile(task.filePath, task.content, this.config);
+          for (const n of result.nodes) this.tagServiceId(n);
           allNodes.push(...result.nodes);
           allEdges.push(...result.edges);
           allErrors.push(...result.errors);
