@@ -497,6 +497,9 @@ watch(() => graphStore.highlightedPath, (pathIds) => {
   }
 });
 
+const onFitGraph = () => fitToView();
+const onExportGraphPng = () => exportGraph('png');
+
 onMounted(async () => {
   const count = graphStore.filteredNodes.length;
   if (clustering.needsClustering(count)) {
@@ -506,9 +509,9 @@ onMounted(async () => {
   await nextTick();
   if (graphStore.filteredNodes.length > 0 || clustering.clusterData.value) initCytoscape();
 
-  // Listen for Command Palette events
-  document.addEventListener('vda:fit-graph', () => fitToView());
-  document.addEventListener('vda:export-graph-png', () => exportGraph('png'));
+  // Listen for Command Palette events (cleaned up in onUnmounted)
+  document.addEventListener('vda:fit-graph', onFitGraph);
+  document.addEventListener('vda:export-graph-png', onExportGraphPng);
 });
 
 watch(() => graphStore.filteredNodes.length, (count) => {
@@ -535,7 +538,11 @@ function exportGraph(format: 'png' | 'svg') {
   }
 }
 
-onUnmounted(() => { cy?.destroy(); });
+onUnmounted(() => {
+  document.removeEventListener('vda:fit-graph', onFitGraph);
+  document.removeEventListener('vda:export-graph-png', onExportGraphPng);
+  cy?.destroy();
+});
 defineExpose({ fitToView, focusNode, exportGraph });
 </script>
 
