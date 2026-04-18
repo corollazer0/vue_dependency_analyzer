@@ -55,6 +55,88 @@ describe('extractDtoFields', () => {
     const fields = extractDtoFields(content);
     expect(fields).toEqual([]);
   });
+
+  it('should parse Java 17 record components', () => {
+    const content = `
+      package com.example.dto;
+      public record UserDTO(
+        Long id,
+        String name,
+        @JsonProperty("email_addr") String email
+      ) {}
+    `;
+    const fields = extractDtoFields(content);
+    expect(fields).toEqual([
+      { type: 'Long', name: 'id' },
+      { type: 'String', name: 'name' },
+      { type: 'String', name: 'email', jsonName: 'email_addr' },
+    ]);
+  });
+
+  it('should mark fields as non-nullable when @NotNull/@NotBlank/@NotEmpty is present', () => {
+    const content = `
+      public class UserDTO {
+        @NotNull
+        private Long id;
+
+        @NotBlank
+        private String name;
+
+        @NotEmpty
+        private List<String> tags;
+
+        private String comment;
+      }
+    `;
+    const fields = extractDtoFields(content);
+    expect(fields.find(f => f.name === 'id')).toMatchObject({ type: 'Long', nullable: false });
+    expect(fields.find(f => f.name === 'name')).toMatchObject({ type: 'String', nullable: false });
+    expect(fields.find(f => f.name === 'tags')).toMatchObject({ type: 'List<String>', nullable: false });
+    expect(fields.find(f => f.name === 'comment')?.nullable).toBeUndefined();
+  });
+
+  it('should mark fields as nullable when @Nullable is present', () => {
+    const content = `
+      public class UserDTO {
+        @Nullable
+        private String comment;
+      }
+    `;
+    const fields = extractDtoFields(content);
+    expect(fields).toEqual([
+      { type: 'String', name: 'comment', nullable: true },
+    ]);
+  });
+
+  it('should unwrap Optional<T> and mark nullable', () => {
+    const content = `
+      public class UserDTO {
+        private Optional<String> nickname;
+        private Long id;
+      }
+    `;
+    const fields = extractDtoFields(content);
+    expect(fields).toEqual([
+      { type: 'String', name: 'nickname', nullable: true },
+      { type: 'Long', name: 'id' },
+    ]);
+  });
+
+  it('should capture @JsonProperty rename for class fields', () => {
+    const content = `
+      public class UserDTO {
+        @JsonProperty("user_id")
+        private Long id;
+
+        @JsonProperty(value = "full_name")
+        @NotNull
+        private String name;
+      }
+    `;
+    const fields = extractDtoFields(content);
+    expect(fields[0]).toMatchObject({ name: 'id', type: 'Long', jsonName: 'user_id' });
+    expect(fields[1]).toMatchObject({ name: 'name', type: 'String', jsonName: 'full_name', nullable: false });
+  });
 });
 
 describe('JavaFileParser DTO detection', () => {

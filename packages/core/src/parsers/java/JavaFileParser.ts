@@ -322,14 +322,83 @@ function extractBeanMethods(content: string, filePath: string): GraphEdge[] {
   return edges;
 }
 
-export function extractDtoFields(content: string): { name: string; type: string }[] {
-  const fields: { name: string; type: string }[] = [];
-  const pattern = /private\s+(\w+(?:<[^>]+>)?)\s+(\w+)\s*;/g;
+export interface DtoField {
+  name: string;
+  type: string;
+  nullable?: boolean;
+  jsonName?: string;
+}
+
+export function extractDtoFields(content: string): DtoField[] {
+  // Java 17 record: record Name(Type a, @Anno Type b) { }
+  const recordMatch = content.match(/\brecord\s+\w+\s*\(([\s\S]*?)\)\s*(?:implements\s+[\w.<>,\s]+)?\s*\{/);
+  if (recordMatch) {
+    const components = extractRecordComponents(recordMatch[1]);
+    if (components.length > 0) return components;
+  }
+
+  const fields: DtoField[] = [];
+  // Capture leading annotations (may span multiple lines) + private [final] Type name;
+  const pattern = /((?:@\w+(?:\s*\([^)]*\))?\s*)*)\bprivate\s+(?:final\s+|static\s+)*((?:\w+(?:\.\w+)*)(?:<[^<>]*(?:<[^<>]*>[^<>]*)*>)?)\s+(\w+)\s*[;=]/g;
   let match;
   while ((match = pattern.exec(content)) !== null) {
-    fields.push({ type: match[1], name: match[2] });
+    const annotations = match[1] || '';
+    const type = match[2];
+    const name = match[3];
+    fields.push(buildDtoField(type, name, annotations));
   }
   return fields;
+}
+
+function extractRecordComponents(paramList: string): DtoField[] {
+  const parts = splitTopLevelRecord(paramList);
+  const out: DtoField[] = [];
+  for (const raw of parts) {
+    const trimmed = raw.trim();
+    if (!trimmed) continue;
+    const m = trimmed.match(/^((?:@\w+(?:\s*\([^)]*\))?\s*)*)((?:\w+(?:\.\w+)*)(?:<[^<>]*(?:<[^<>]*>[^<>]*)*>)?)\s+(\w+)\s*$/);
+    if (!m) continue;
+    out.push(buildDtoField(m[2], m[3], m[1] || ''));
+  }
+  return out;
+}
+
+function splitTopLevelRecord(s: string): string[] {
+  const parts: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < s.length; i++) {
+    const ch = s[i];
+    if (ch === '<' || ch === '(') depth++;
+    else if (ch === '>' || ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      parts.push(s.slice(start, i));
+      start = i + 1;
+    }
+  }
+  parts.push(s.slice(start));
+  return parts;
+}
+
+function buildDtoField(rawType: string, name: string, annotations: string): DtoField {
+  const field: DtoField = { type: rawType, name };
+
+  const jsonMatch = annotations.match(/@JsonProperty\s*\(\s*(?:value\s*=\s*)?["']([^"']+)["']/);
+  if (jsonMatch) field.jsonName = jsonMatch[1];
+
+  if (/@(NotNull|NotBlank|NotEmpty|NonNull)\b/.test(annotations)) {
+    field.nullable = false;
+  } else if (/@Nullable\b/.test(annotations)) {
+    field.nullable = true;
+  }
+
+  const optionalMatch = rawType.match(/^Optional<(.+)>$/);
+  if (optionalMatch) {
+    field.type = optionalMatch[1].trim();
+    field.nullable = true;
+  }
+
+  return field;
 }
 
 function extractSpringEvents(content: string, filePath: string, sourceNodeId: string): GraphEdge[] {
