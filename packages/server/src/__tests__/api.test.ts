@@ -91,6 +91,86 @@ describe('Server API', () => {
     });
   });
 
+  // ─── GET /api/admin/metrics (Phase 5-6) ───
+
+  describe('GET /api/admin/metrics', () => {
+    it('returns the full metrics shape with non-negative numbers', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/admin/metrics' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+
+      // Top-level keys
+      expect(typeof body.uptime).toBe('number');
+      expect(body.uptime).toBeGreaterThanOrEqual(0);
+
+      // Memory block
+      for (const k of ['heapUsedMB', 'heapTotalMB', 'rssMB', 'externalMB', 'arrayBuffersMB']) {
+        expect(typeof body.memory[k]).toBe('number');
+        expect(body.memory[k]).toBeGreaterThanOrEqual(0);
+      }
+
+      // Peaks block — recorded at end of every runAnalysis().
+      expect(typeof body.peaks.heapPeakMB).toBe('number');
+      expect(typeof body.peaks.rssPeakMB).toBe('number');
+      expect(typeof body.peaks.lastAnalysisMs).toBe('number');
+      expect(body.peaks.heapPeakMB).toBeGreaterThan(0);
+      expect(body.peaks.lastAnalysisMs).toBeGreaterThanOrEqual(0);
+
+      // CPU block
+      expect(typeof body.cpu.userMs).toBe('number');
+      expect(typeof body.cpu.systemMs).toBe('number');
+      expect(body.cpu.userMs).toBeGreaterThanOrEqual(0);
+
+      // Graph block — nodeCount/edgeCount mirror engine.getHealthInfo().
+      expect(body.graph.nodeCount).toBeGreaterThan(0);
+      expect(body.graph.edgeCount).toBeGreaterThanOrEqual(0);
+      expect(typeof body.graph.analyzedAt).toBe('string');
+    });
+
+    it('nodeCount / edgeCount agree with /health/ready and /api/stats', async () => {
+      const metricsRes = await fastify.inject({ method: 'GET', url: '/api/admin/metrics' });
+      const healthRes = await fastify.inject({ method: 'GET', url: '/health/ready' });
+      const statsRes = await fastify.inject({ method: 'GET', url: '/api/stats' });
+
+      const m = JSON.parse(metricsRes.body);
+      const h = JSON.parse(healthRes.body);
+      const s = JSON.parse(statsRes.body);
+
+      expect(m.graph.nodeCount).toBe(h.nodeCount);
+      expect(m.graph.edgeCount).toBe(h.edgeCount);
+      expect(m.graph.nodeCount).toBe(s.totalNodes);
+      expect(m.graph.edgeCount).toBe(s.totalEdges);
+    });
+
+    it('heap peak is monotonically non-decreasing across reads', async () => {
+      // The endpoint exposes a high-water mark — two consecutive reads
+      // without an intervening analysis must not regress.
+      const first = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+      const second = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+      expect(second.peaks.heapPeakMB).toBeGreaterThanOrEqual(first.peaks.heapPeakMB);
+      expect(second.peaks.rssPeakMB).toBeGreaterThanOrEqual(first.peaks.rssPeakMB);
+      // lastAnalysisMs reflects the *most recent* analysis, which is the
+      // same one in both reads (no re-analysis happened in between).
+      expect(second.peaks.lastAnalysisMs).toBe(first.peaks.lastAnalysisMs);
+    });
+
+    it('re-analysis updates lastAnalysisMs and preserves the heap high-water mark', async () => {
+      const before = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+      // Drive a fresh analysis on the same project — duration is expected to
+      // differ but the peak must not regress below the prior observation.
+      await engine.runAnalysis();
+      const after = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+
+      expect(after.peaks.heapPeakMB).toBeGreaterThanOrEqual(before.peaks.heapPeakMB);
+      expect(after.peaks.rssPeakMB).toBeGreaterThanOrEqual(before.peaks.rssPeakMB);
+      // lastAnalysisMs reflects the new run, which could be slower or faster
+      // but must be a sane positive duration.
+      expect(after.peaks.lastAnalysisMs).toBeGreaterThanOrEqual(0);
+      expect(after.graph.nodeCount).toBe(before.graph.nodeCount);
+      expect(after.graph.edgeCount).toBe(before.graph.edgeCount);
+    });
+  });
+
   // ─── GET /api/graph ───
 
   describe('GET /api/graph', () => {
