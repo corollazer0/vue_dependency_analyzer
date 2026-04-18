@@ -1,8 +1,10 @@
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
 import websocket from '@fastify/websocket';
 import fastifyStatic from '@fastify/static';
 import crypto from 'crypto';
+import { constants as zlibConstants } from 'zlib';
 import { resolve } from 'path';
 import { existsSync } from 'fs';
 import { registerGraphRoutes } from './routes/graphRoutes.js';
@@ -71,6 +73,21 @@ export async function startServer(opts: ServerOptions): Promise<void> {
   // CORS
   const corsOrigin = env.corsOrigin === '*' ? true : env.corsOrigin.split(',').map(s => s.trim());
   await fastify.register(cors, { origin: corsOrigin });
+
+  // Compression: brotli q=4 (fallback gzip → deflate), skip payloads < 1KB.
+  // Phase 1-1 — /api/graph and other JSON payloads dominate transfer; brotli-4 trims ~80%
+  // on the 500-file benchmark while staying under 20ms encode on warm path.
+  await fastify.register(compress, {
+    encodings: ['br', 'gzip', 'deflate'],
+    threshold: 1024,
+    brotliOptions: {
+      params: {
+        [zlibConstants.BROTLI_PARAM_QUALITY]: 4,
+        [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
+      },
+    },
+  });
+
   await fastify.register(websocket);
 
   // Audit log (in-memory)
