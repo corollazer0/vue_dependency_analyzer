@@ -27,6 +27,11 @@ let cy: cytoscape.Core | null = null;
 let overlayLayer: { getCanvas: () => HTMLCanvasElement; clear: (ctx: CanvasRenderingContext2D) => void; setTransform: (ctx: CanvasRenderingContext2D) => void; resetTransform: (ctx: CanvasRenderingContext2D) => void } | null = null;
 let overlayRedraw: (() => void) | null = null;
 const useClusters = ref(false);
+// Phase 3-3 — staged layout state. We track the active fcose run so a fresh
+// pipeline (or unmount) can `.stop()` mid-iteration; without this, two overlapping
+// layout requests would fight over node positions and never settle.
+let activeLayout: cytoscape.Layouts | null = null;
+let layoutGen = 0; // bumps on every cancel — stale stages compare against this and bail.
 
 // ─── Element Builders ───
 
@@ -286,11 +291,14 @@ function initCytoscape() {
     container: container.value,
     elements,
     style: buildStylesheet(),
-    layout: { name: 'fcose', animate: false, quality: 'default', nodeSeparation: 80, idealEdgeLength: 120, nodeRepulsion: () => 8000 } as any,
+    // Phase 3-3 — start with a no-op preset; the staged pipeline below seeds and
+    // refines positions. Using a real fcose layout here would race the staged run.
+    layout: { name: 'preset', fit: false } as any,
     minZoom: 0.05,
     maxZoom: 5,
     wheelSensitivity: 0.3,
   });
+  void runStagedLayout({ preserve: false, fit: true });
 
   // Hover
   cy.on('mouseover', 'node', (evt) => {
@@ -467,9 +475,85 @@ function refreshGraph() {
   });
 
   if (topologyChanged) {
-    cy.layout({ name: 'fcose', animate: true, animationDuration: 400, quality: 'default', nodeSeparation: 80, idealEdgeLength: 120, randomize: false } as any).run();
+    void runStagedLayout({ preserve: true, fit: false });
   }
   applyOverlays();
+}
+
+// Phase 3-3 — 3-stage layout pipeline.
+//   Stage 1 (Spectral seed): fcose `quality: 'draft'` runs only the spectral
+//     layout — gives us a structured initial placement in milliseconds.
+//   Stage 2 (Coarse incremental): fcose `quality: 'proof'` with `randomize: false`
+//     and a low `numIter` — refines on top of the seed without animating.
+//   Stage 3 (Fine incremental): same but with full numIter and an animated
+//     transition to the final position. The user sees the polished result.
+// `preserve: true` skips the spectral seed so positions persist across filter
+// changes (only the incremental refinements re-run). The whole pipeline is
+// cancellable: every stage early-bails if `layoutGen` was bumped while it slept.
+async function runStagedLayout(opts: { preserve: boolean; fit: boolean }): Promise<void> {
+  if (!cy || cy.nodes().length === 0) return;
+  cancelLayout();
+  const myGen = ++layoutGen;
+
+  if (!opts.preserve) {
+    await runLayoutStage({
+      name: 'fcose',
+      quality: 'draft',
+      randomize: true,
+      animate: false,
+      fit: false,
+      nodeSeparation: 80,
+      idealEdgeLength: 120,
+    } as any, myGen);
+    if (myGen !== layoutGen) return;
+  }
+
+  await runLayoutStage({
+    name: 'fcose',
+    quality: 'proof',
+    randomize: false,
+    animate: false,
+    fit: false,
+    nodeSeparation: 80,
+    idealEdgeLength: 120,
+    nodeRepulsion: () => 8000,
+    numIter: 800,
+    initialEnergyOnIncremental: 0.5,
+  } as any, myGen);
+  if (myGen !== layoutGen) return;
+
+  await runLayoutStage({
+    name: 'fcose',
+    quality: 'proof',
+    randomize: false,
+    animate: 'end',
+    animationDuration: 400,
+    fit: opts.fit,
+    nodeSeparation: 80,
+    idealEdgeLength: 120,
+    nodeRepulsion: () => 8000,
+    numIter: 2500,
+    initialEnergyOnIncremental: 0.3,
+  } as any, myGen);
+}
+
+function runLayoutStage(options: cytoscape.LayoutOptions, gen: number): Promise<void> {
+  return new Promise((resolve) => {
+    if (!cy || gen !== layoutGen) { resolve(); return; }
+    const layout = cy.layout(options);
+    activeLayout = layout;
+    layout.one('layoutstop', () => {
+      if (activeLayout === layout) activeLayout = null;
+      resolve();
+    });
+    layout.run();
+  });
+}
+
+function cancelLayout(): void {
+  layoutGen++;
+  try { activeLayout?.stop(); } catch { /* layout already finished */ }
+  activeLayout = null;
 }
 
 function fitToView() {
@@ -604,6 +688,7 @@ function exportGraph(format: 'png' | 'svg') {
 onUnmounted(() => {
   document.removeEventListener('vda:fit-graph', onFitGraph);
   document.removeEventListener('vda:export-graph-png', onExportGraphPng);
+  cancelLayout();
   cy?.destroy();
 });
 defineExpose({ fitToView, focusNode, exportGraph });
