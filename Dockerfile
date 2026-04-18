@@ -63,6 +63,11 @@ ENV NODE_ENV=production
 ENV PORT=3333
 ENV VDA_AUTH_ENABLED=false
 ENV VDA_LOG_LEVEL=info
+# Raise V8 heap ceiling to 2GB. Large projects (15K-20K files) generate
+# ~200MB+ of graph nodes/edges in V8 heap; the default ~1.7GB still fits
+# but leaves no headroom for worker threads + parse cache. Pair with a
+# container memory limit of at least 3GB (see docker-compose.yml).
+ENV NODE_OPTIONS="--max-old-space-size=2048"
 
 # The analysis target is mounted as a volume at /data
 VOLUME ["/data"]
