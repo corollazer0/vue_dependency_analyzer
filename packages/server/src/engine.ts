@@ -156,19 +156,18 @@ export class AnalysisEngine {
       for (const edge of result.edges) this.graph.addEdge(edge);
       this.graph.metadata.parseErrors = result.errors;
 
-      // Populate cache with parsed results for files that weren't cached
-      for (const filePath of files) {
-        try {
-          const content = readFileSync(filePath, 'utf-8');
-          if (!this.cache.get(filePath, content)) {
-            const fileNodes = result.nodes.filter(n => n.filePath === filePath);
-            const fileEdges = result.edges.filter(e => fileNodes.some(n => n.id === e.source));
-            const fileErrors = result.errors.filter(e => e.filePath === filePath);
-            if (fileNodes.length > 0) {
-              this.cache.set(filePath, content, { nodes: fileNodes, edges: fileEdges, errors: fileErrors });
-            }
-          }
-        } catch { /* file may have been removed */ }
+      // Persist freshly-parsed files to cache. ParallelParser already read
+      // these files and parsed them, so reuse the content + per-file
+      // attribution it returned (avoids a second readFileSync per file and
+      // the prior O(files * (nodes + edges * fileNodeCount)) filter pattern).
+      for (const entry of result.parsedFileEntries) {
+        if (entry.nodes.length > 0) {
+          this.cache.set(entry.filePath, entry.content, {
+            nodes: entry.nodes,
+            edges: entry.edges,
+            errors: entry.errors,
+          });
+        }
       }
       this.cache.save();
 

@@ -25,6 +25,20 @@ export interface ParallelParseResult {
   errors: ParseError[];
   durationMs: number;
   cachedCount: number;
+  /**
+   * Per-file parse output for freshly-parsed (uncached) files only.
+   * Carries the already-read content so callers can persist to cache
+   * without a second readFileSync. Cached files are omitted.
+   */
+  parsedFileEntries: ParsedFileEntry[];
+}
+
+export interface ParsedFileEntry {
+  filePath: string;
+  content: string;
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  errors: ParseError[];
 }
 
 interface FileTask {
@@ -166,6 +180,8 @@ export class ParallelParser {
       uncachedTasks.push({ filePath, content });
     }
 
+    const parsedFileEntries: ParsedFileEntry[] = [];
+
     // Phase 2: Parse uncached files
     if (uncachedTasks.length > 0) {
       let workerResults: WorkerResult[] | null = null;
@@ -176,6 +192,10 @@ export class ParallelParser {
       }
 
       if (workerResults) {
+        // Index uncached tasks by filePath for O(1) content lookup
+        const taskByPath = new Map<string, FileTask>();
+        for (const t of uncachedTasks) taskByPath.set(t.filePath, t);
+
         // Collect results from workers
         for (const wr of workerResults) {
           if (wr.error || !wr.result) {
@@ -188,6 +208,16 @@ export class ParallelParser {
             allNodes.push(...wr.result.nodes);
             allEdges.push(...wr.result.edges);
             allErrors.push(...wr.result.errors);
+            const task = taskByPath.get(wr.filePath);
+            if (task) {
+              parsedFileEntries.push({
+                filePath: wr.filePath,
+                content: task.content,
+                nodes: wr.result.nodes,
+                edges: wr.result.edges,
+                errors: wr.result.errors,
+              });
+            }
           }
           processed++;
           reportProgress(wr.filePath);
@@ -199,6 +229,13 @@ export class ParallelParser {
           allNodes.push(...result.nodes);
           allEdges.push(...result.edges);
           allErrors.push(...result.errors);
+          parsedFileEntries.push({
+            filePath: task.filePath,
+            content: task.content,
+            nodes: result.nodes,
+            edges: result.edges,
+            errors: result.errors,
+          });
           processed++;
           reportProgress(task.filePath);
         }
@@ -211,6 +248,7 @@ export class ParallelParser {
       errors: allErrors,
       durationMs: Date.now() - startTime,
       cachedCount,
+      parsedFileEntries,
     };
   }
 

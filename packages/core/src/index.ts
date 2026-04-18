@@ -37,5 +37,5 @@ export type { ChangeImpact } from './git/ChangeImpactAnalyzer.js';
 
 // Engine
 export { ParallelParser, parseFile } from './engine/ParallelParser.js';
-export type { ProgressInfo, ProgressCallback, ParallelParseResult } from './engine/ParallelParser.js';
+export type { ProgressInfo, ProgressCallback, ParallelParseResult, ParsedFileEntry } from './engine/ParallelParser.js';
 export { ParseCache } from './engine/ParseCache.js';
