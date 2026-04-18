@@ -95,13 +95,18 @@ export class CrossBoundaryResolver {
     const componentEdges = graph.getEdgesByKind('uses-component').filter(
       e => e.target.startsWith('component:')
     );
+    if (componentEdges.length === 0) return;
+
+    // Pre-index vue-components by label once — the prior pattern rescanned
+    // every node on every edge (O(edges × nodes)).
+    const componentsByLabel = new Map<string, GraphNode>();
+    for (const node of graph.nodesIter()) {
+      if (node.kind === 'vue-component') componentsByLabel.set(node.label, node);
+    }
 
     for (const edge of componentEdges) {
       const componentName = (edge.metadata.componentName as string) || '';
-      // Find a vue-component node whose label matches
-      const match = graph.getAllNodes().find(
-        n => n.kind === 'vue-component' && n.label === componentName
-      );
+      const match = componentsByLabel.get(componentName);
       if (match) {
         graph.removeEdge(edge.id);
         graph.addEdge({
@@ -118,16 +123,28 @@ export class CrossBoundaryResolver {
     const storeEdges = graph.getEdgesByKind('uses-store').filter(
       e => e.target.startsWith('store:')
     );
+    if (storeEdges.length === 0) return;
+
+    // Single sweep over nodes: bucket by exported function name + by label,
+    // so the inner loop becomes O(1) lookups.
+    const storeByExportedName = new Map<string, GraphNode>();
+    const piniaStores: GraphNode[] = [];
+    for (const node of graph.nodesIter()) {
+      if (node.kind !== 'pinia-store') continue;
+      piniaStores.push(node);
+      const exports = (node.metadata.exportedFunctions as string[] | undefined) ?? [];
+      for (const name of exports) storeByExportedName.set(name, node);
+    }
 
     for (const edge of storeEdges) {
       const storeName = (edge.metadata.storeName as string) || '';
-      // Find a pinia-store node whose exported functions include this store name
-      const match = graph.getAllNodes().find(
-        n => n.kind === 'pinia-store' && (
-          (n.metadata.exportedFunctions as string[] || []).includes(storeName) ||
-          n.label.toLowerCase().includes(storeName.replace(/^use/, '').replace(/Store$/, '').toLowerCase())
-        )
-      );
+      let match = storeByExportedName.get(storeName);
+      if (!match) {
+        const needle = storeName.replace(/^use/, '').replace(/Store$/, '').toLowerCase();
+        // Fallback label-substring match preserves the legacy heuristic for
+        // stores that don't export a useXxx function by that exact name.
+        match = piniaStores.find(n => n.label.toLowerCase().includes(needle));
+      }
       if (match) {
         graph.removeEdge(edge.id);
         graph.addEdge({
@@ -402,19 +419,25 @@ export class CrossBoundaryResolver {
       e => e.target.startsWith('component:')
     );
 
-    for (const edge of staticRouteEdges) {
-      const componentName = (edge.metadata.componentName as string) || edge.target.replace('component:', '');
-      const match = graph.getAllNodes().find(
-        n => n.kind === 'vue-component' && n.label === componentName
-      );
-      if (match) {
-        graph.removeEdge(edge.id);
-        graph.addEdge({
-          ...edge,
-          id: `${edge.source}:route-renders:${match.id}`,
-          target: match.id,
-          metadata: { ...edge.metadata, confidence: 'medium' },
-        });
+    if (staticRouteEdges.length > 0) {
+      // Reuse the component label index — same vue-component pool as the
+      // uses-component resolver.
+      const componentsByLabel = new Map<string, GraphNode>();
+      for (const node of graph.nodesIter()) {
+        if (node.kind === 'vue-component') componentsByLabel.set(node.label, node);
+      }
+      for (const edge of staticRouteEdges) {
+        const componentName = (edge.metadata.componentName as string) || edge.target.replace('component:', '');
+        const match = componentsByLabel.get(componentName);
+        if (match) {
+          graph.removeEdge(edge.id);
+          graph.addEdge({
+            ...edge,
+            id: `${edge.source}:route-renders:${match.id}`,
+            target: match.id,
+            metadata: { ...edge.metadata, confidence: 'medium' },
+          });
+        }
       }
     }
   }
@@ -423,15 +446,25 @@ export class CrossBoundaryResolver {
     const composableEdges = graph.getEdgesByKind('uses-composable').filter(
       e => e.target.startsWith('composable:')
     );
+    if (composableEdges.length === 0) return;
+
+    const composableByExportedName = new Map<string, GraphNode>();
+    const composableByLabel = new Map<string, GraphNode>();
+    for (const node of graph.nodesIter()) {
+      if (node.kind !== 'vue-composable') continue;
+      composableByLabel.set(node.label, node);
+      const exports = (node.metadata.exportedFunctions as string[] | undefined) ?? [];
+      for (const name of exports) composableByExportedName.set(name, node);
+    }
 
     for (const edge of composableEdges) {
       const composableName = (edge.metadata.composableName as string) || '';
-      const match = graph.getAllNodes().find(
-        n => n.kind === 'vue-composable' && (
-          (n.metadata.exportedFunctions as string[] || []).includes(composableName) ||
-          n.label === composableName.replace(/^use/, '').charAt(0).toLowerCase() + composableName.replace(/^use/, '').slice(1)
-        )
-      );
+      let match = composableByExportedName.get(composableName);
+      if (!match) {
+        const stripped = composableName.replace(/^use/, '');
+        const normalised = stripped.charAt(0).toLowerCase() + stripped.slice(1);
+        match = composableByLabel.get(normalised);
+      }
       if (match) {
         graph.removeEdge(edge.id);
         graph.addEdge({
