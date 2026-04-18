@@ -18,6 +18,8 @@ export { NativeBridgeLinker } from './linkers/NativeBridgeLinker.js';
 export { CrossBoundaryResolver } from './linkers/CrossBoundaryResolver.js';
 export { MyBatisLinker } from './linkers/MyBatisLinker.js';
 export { DtoFlowLinker } from './linkers/DtoFlowLinker.js';
+export type { DtoFieldChain, DtoFieldChainEntry } from './linkers/DtoFlowLinker.js';
+export type { ResultMap, ResultMapping } from './parsers/java/MyBatisXmlParser.js';
 
 // Analyzers
 export { findCircularDependencies } from './analyzers/CircularDependencyAnalyzer.js';

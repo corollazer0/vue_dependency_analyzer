@@ -94,7 +94,63 @@ export class DtoFlowLinker {
       }
     }
 
+    // 3-tier chain edges: frontend TS interface ↔ backend DTO ↔ MyBatis statement
+    const chains = this.buildFieldChains(graph);
+    for (const chain of chains) {
+      const entriesMeta = chain.entries;
+
+      if (chain.frontendNode && chain.backendNode) {
+        const edge = this.makeChainEdge(
+          chain.frontendNode.id,
+          chain.backendNode.id,
+          { dtoName: chain.dtoName, tier: 'frontend-backend', entries: entriesMeta },
+        );
+        if (edge && !graph.getEdge(edge.id)) {
+          graph.addEdge(edge);
+          newEdges.push(edge);
+        }
+      }
+
+      if (chain.backendNode) {
+        for (const stmt of chain.statementNodes) {
+          const edge = this.makeChainEdge(
+            chain.backendNode.id,
+            stmt.id,
+            { dtoName: chain.dtoName, tier: 'backend-mapper', entries: entriesMeta },
+          );
+          if (edge && !graph.getEdge(edge.id)) {
+            graph.addEdge(edge);
+            newEdges.push(edge);
+          }
+        }
+      } else if (chain.frontendNode) {
+        // Frontend-only DTO still wants to reach the mapper if one matches by name
+        for (const stmt of chain.statementNodes) {
+          const edge = this.makeChainEdge(
+            chain.frontendNode.id,
+            stmt.id,
+            { dtoName: chain.dtoName, tier: 'frontend-mapper', entries: entriesMeta },
+          );
+          if (edge && !graph.getEdge(edge.id)) {
+            graph.addEdge(edge);
+            newEdges.push(edge);
+          }
+        }
+      }
+    }
+
     return newEdges;
+  }
+
+  private makeChainEdge(sourceId: string, targetId: string, metadata: Record<string, unknown>): GraphEdge | null {
+    if (sourceId === targetId) return null;
+    return {
+      id: `${sourceId}:dto-flows:${targetId}`,
+      source: sourceId,
+      target: targetId,
+      kind: 'dto-flows',
+      metadata,
+    };
   }
 
   /**
