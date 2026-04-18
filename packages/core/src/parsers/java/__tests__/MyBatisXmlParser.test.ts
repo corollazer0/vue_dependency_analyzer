@@ -66,4 +66,51 @@ describe('MyBatisXmlParser', () => {
       expect(result.errors).toHaveLength(0);
     });
   });
+
+  describe('OrderMapper.xml — resultMap + resultType', () => {
+    const content = readFileSync(resolve(fixturesDir, 'OrderMapper.xml'), 'utf-8');
+    const result = parser.parse('/test/OrderMapper.xml', content, {});
+
+    it('should expose resultMaps on the mapper node metadata', () => {
+      const mapper = result.nodes.find(n => n.kind === 'mybatis-mapper')!;
+      const resultMaps = (mapper.metadata as any).resultMaps;
+      expect(Array.isArray(resultMaps)).toBe(true);
+      expect(resultMaps).toHaveLength(1);
+      const rm = resultMaps[0];
+      expect(rm.id).toBe('OrderResultMap');
+      expect(rm.type).toBe('com.example.dto.OrderResponse');
+      expect(rm.typeSimple).toBe('OrderResponse');
+      expect(rm.mappings).toEqual([
+        { property: 'orderId', column: 'order_id', javaType: 'Long' },
+        { property: 'customerName', column: 'customer_name', javaType: 'String' },
+        { property: 'total', column: 'total_amount', javaType: 'BigDecimal', jdbcType: 'DECIMAL' },
+        { property: 'createdAt', column: 'created_at', javaType: 'LocalDateTime' },
+      ]);
+    });
+
+    it('should attach resultMapType + fieldMappings to statement using resultMap=', () => {
+      const stmt = result.nodes.find(n => (n.metadata as any).statementId === 'findById')!;
+      expect((stmt.metadata as any).resultMapType).toBe('com.example.dto.OrderResponse');
+      expect((stmt.metadata as any).resultMapTypeSimple).toBe('OrderResponse');
+      const fm = (stmt.metadata as any).fieldMappings;
+      expect(fm).toHaveLength(4);
+      expect(fm[0]).toMatchObject({ property: 'orderId', column: 'order_id' });
+    });
+
+    it('should synthesize column mappings for inline resultType=', () => {
+      const stmt = result.nodes.find(n => (n.metadata as any).statementId === 'findShort')!;
+      expect((stmt.metadata as any).resultMapTypeSimple).toBe('OrderSummary');
+      const fm = (stmt.metadata as any).fieldMappings;
+      expect(fm).toEqual([
+        { property: 'orderId', column: 'order_id' },
+        { property: 'total', column: 'total_amount' },
+      ]);
+    });
+
+    it('should record parameterType on insert/update statements', () => {
+      const stmt = result.nodes.find(n => (n.metadata as any).statementId === 'insert')!;
+      expect((stmt.metadata as any).parameterType).toBe('com.example.dto.CreateOrderRequest');
+      expect((stmt.metadata as any).parameterTypeSimple).toBe('CreateOrderRequest');
+    });
+  });
 });

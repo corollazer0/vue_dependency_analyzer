@@ -170,3 +170,135 @@ describe('DtoFlowLinker', () => {
     expect(newEdges.every(e => e.kind === 'dto-flows')).toBe(true);
   });
 });
+
+describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
+  const linker = new DtoFlowLinker();
+
+  it('should chain TS interface ↔ DTO ↔ ResultMap ↔ table at field granularity', () => {
+    const graph = buildGraph(
+      [
+        // Backend DTO
+        {
+          id: 'spring-service:/dto/OrderResponse.java',
+          kind: 'spring-service',
+          label: 'OrderResponse',
+          filePath: '/dto/OrderResponse.java',
+          metadata: {
+            className: 'OrderResponse',
+            isDto: true,
+            fields: [
+              { name: 'orderId', type: 'Long' },
+              { name: 'customerName', type: 'String' },
+              { name: 'total', type: 'BigDecimal' },
+            ],
+          },
+        },
+        // Frontend TS interface (missing `total`)
+        {
+          id: 'ts-module:/src/types/order.ts',
+          kind: 'ts-module',
+          label: 'order',
+          filePath: '/src/types/order.ts',
+          metadata: {
+            interfaces: [{
+              name: 'OrderResponse',
+              fields: ['orderId', 'customerName', 'orphanFront'],
+              fieldTypes: [
+                { name: 'orderId', type: 'number', optional: false },
+                { name: 'customerName', type: 'string', optional: false },
+                { name: 'orphanFront', type: 'string', optional: true },
+              ],
+            }],
+          },
+        },
+        // MyBatis statement with resultMap mapping
+        {
+          id: 'mybatis-statement:com.example.mapper.OrderMapper.findById',
+          kind: 'mybatis-statement',
+          label: 'OrderMapper.findById',
+          filePath: '/mapper/OrderMapper.xml',
+          metadata: {
+            statementType: 'select',
+            statementId: 'findById',
+            namespace: 'com.example.mapper.OrderMapper',
+            resultMapType: 'com.example.dto.OrderResponse',
+            resultMapTypeSimple: 'OrderResponse',
+            fieldMappings: [
+              { property: 'orderId', column: 'order_id', javaType: 'Long' },
+              { property: 'customerName', column: 'customer_name' },
+              { property: 'total', column: 'total_amount', javaType: 'BigDecimal', jdbcType: 'DECIMAL' },
+            ],
+          },
+        },
+        // DB table
+        {
+          id: 'db-table:orders',
+          kind: 'db-table',
+          label: 'orders',
+          filePath: '/mapper/OrderMapper.xml',
+          metadata: { tableName: 'orders' },
+        },
+      ],
+      [
+        {
+          id: 'stmt:reads-table:orders',
+          source: 'mybatis-statement:com.example.mapper.OrderMapper.findById',
+          target: 'db-table:orders',
+          kind: 'reads-table',
+          metadata: { tableName: 'orders' },
+        },
+      ],
+    );
+
+    const chains = linker.buildFieldChains(graph);
+    const chain = chains.find(c => c.dtoName === 'OrderResponse')!;
+    expect(chain).toBeDefined();
+    expect(chain.backendNode?.label).toBe('OrderResponse');
+    expect(chain.frontendNode?.id).toBe('ts-module:/src/types/order.ts');
+    expect(chain.statementNodes.map(s => s.label)).toContain('OrderMapper.findById');
+    expect(chain.tableNodes.map(t => t.label)).toContain('orders');
+
+    // Entries: 3 backend fields + 1 frontend-only leftover
+    expect(chain.entries).toHaveLength(4);
+
+    const orderIdEntry = chain.entries.find(e => e.fieldName === 'orderId')!;
+    expect(orderIdEntry.backendType).toBe('Long');
+    expect(orderIdEntry.frontendType).toBe('number');
+    expect(orderIdEntry.column).toBe('order_id');
+
+    const totalEntry = chain.entries.find(e => e.fieldName === 'total')!;
+    expect(totalEntry.frontendType).toBeUndefined(); // missing in TS
+    expect(totalEntry.column).toBe('total_amount');
+    expect(totalEntry.jdbcType).toBe('DECIMAL');
+
+    const orphan = chain.entries.find(e => e.fieldName === 'orphanFront')!;
+    expect(orphan.sourceTier).toBe('frontend');
+    expect(orphan.backendType).toBeUndefined();
+  });
+
+  it('should emit an empty statements list when no MyBatis mapping exists', () => {
+    const graph = buildGraph(
+      [
+        {
+          id: 'spring-service:/dto/PingDTO.java',
+          kind: 'spring-service',
+          label: 'PingDTO',
+          filePath: '/dto/PingDTO.java',
+          metadata: {
+            className: 'PingDTO',
+            isDto: true,
+            fields: [{ name: 'msg', type: 'String' }],
+          },
+        },
+      ],
+      [],
+    );
+
+    const chains = linker.buildFieldChains(graph);
+    const chain = chains.find(c => c.dtoName === 'PingDTO')!;
+    expect(chain.statementNodes).toEqual([]);
+    expect(chain.tableNodes).toEqual([]);
+    expect(chain.entries).toHaveLength(1);
+    expect(chain.entries[0].column).toBeUndefined();
+  });
+});
