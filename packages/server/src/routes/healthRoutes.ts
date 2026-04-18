@@ -41,4 +41,32 @@ export function registerHealthRoutes(fastify: FastifyInstance, engine: AnalysisE
       analyzedAt: info.analyzedAt,
     };
   });
+
+  // Phase 2 (5-) — process-level metrics. Lets the benchmark harness assert
+  // the heap-peak gate and gives ops a quick read of current memory pressure.
+  // Exposes the most recent peak observed since boot — sampled implicitly
+  // by every /api/graph hit (engine bumps the high-water on each run).
+  fastify.get('/api/admin/metrics', async (_request, _reply) => {
+    const mem = process.memoryUsage();
+    const cpu = process.cpuUsage();
+    const info = engine.getHealthInfo();
+    const peaks = engine.getMemoryPeaks();
+    return {
+      uptime: Math.floor((Date.now() - startTime) / 1000),
+      memory: {
+        heapUsedMB: +(mem.heapUsed / 1024 / 1024).toFixed(1),
+        heapTotalMB: +(mem.heapTotal / 1024 / 1024).toFixed(1),
+        rssMB: +(mem.rss / 1024 / 1024).toFixed(1),
+        externalMB: +(mem.external / 1024 / 1024).toFixed(1),
+        arrayBuffersMB: +(mem.arrayBuffers / 1024 / 1024).toFixed(1),
+      },
+      peaks,
+      cpu: { userMs: cpu.user / 1000, systemMs: cpu.system / 1000 },
+      graph: {
+        nodeCount: info.nodeCount,
+        edgeCount: info.edgeCount,
+        analyzedAt: info.analyzedAt,
+      },
+    };
+  });
 }

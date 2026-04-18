@@ -61,6 +61,12 @@ export class AnalysisEngine {
   private lastProgressBroadcast = 0;
   private initializeTime: string | null = null;
   private log: EngineLogger;
+  // Phase 2 gate measurement: high-water marks recorded at the end of every
+  // runAnalysis(). Surfaces the actual analysis peak instead of an arbitrary
+  // sample window that /api/admin/metrics happens to land on.
+  private peakHeapMB = 0;
+  private peakRssMB = 0;
+  private lastAnalysisDurationMs = 0;
 
   constructor(dir: string, options: Record<string, string | undefined>, watch: boolean, logger?: EngineLogger) {
     const projectRoot = resolve(dir);
@@ -192,6 +198,14 @@ export class AnalysisEngine {
         durationMs: result.durationMs,
         cachedCount: result.cachedCount,
       }, 'Analysis complete');
+
+      // Capture process memory after full analysis (peak observed for the run).
+      const mem = process.memoryUsage();
+      const heapMB = mem.heapUsed / 1024 / 1024;
+      const rssMB = mem.rss / 1024 / 1024;
+      if (heapMB > this.peakHeapMB) this.peakHeapMB = heapMB;
+      if (rssMB > this.peakRssMB) this.peakRssMB = rssMB;
+      this.lastAnalysisDurationMs = result.durationMs;
 
       this.broadcast({
         type: 'analysis:complete',
@@ -351,6 +365,15 @@ export class AnalysisEngine {
       try { this.watcher.close(); } catch { /* ignore */ }
       this.watcher = null;
     }
+  }
+
+  /** Phase 2 gate measurement: peak heap/rss observed at the end of any analysis. */
+  getMemoryPeaks(): { heapPeakMB: number; rssPeakMB: number; lastAnalysisMs: number } {
+    return {
+      heapPeakMB: +this.peakHeapMB.toFixed(1),
+      rssPeakMB: +this.peakRssMB.toFixed(1),
+      lastAnalysisMs: this.lastAnalysisDurationMs,
+    };
   }
 
   /** Whether the engine has completed at least one analysis run */
