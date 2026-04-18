@@ -43,12 +43,51 @@ export interface SourceLocation {
   column?: number;
 }
 
+/**
+ * Phase 2-9 — fixed-shape metadata.
+ *
+ * Every known-on-the-server-side metadata field is enumerated below as an
+ * explicit optional. Unknown keys remain reachable via the index signature
+ * so back-end additions don't break the type. The store's `normalizeNode`
+ * (dataStore.ts) walks this exact key order on every fetched node so V8
+ * settles on a single hidden class for the metadata object — every
+ * downstream property access (filter checks, template renders) then
+ * traverses a monomorphic IC instead of paying polymorphic lookup.
+ */
+export interface NodeMetadata {
+  serviceId?: string;
+  className?: string;
+  basePath?: string;
+  isRepository?: boolean;
+  isMapper?: boolean;
+  emits?: string[];
+  imports?: string[];
+  exportedFunctions?: string[];
+  resultType?: string;
+  componentId?: string;
+  eventName?: string;
+  eventClass?: string;
+  virtual?: boolean;
+  [key: string]: unknown;
+}
+
+export interface EdgeMetadata {
+  importPath?: string;
+  componentName?: string;
+  storeName?: string;
+  composableName?: string;
+  eventName?: string;
+  confidence?: 'high' | 'medium' | 'low';
+  viaDomainMatch?: boolean;
+  [key: string]: unknown;
+}
+
 export interface GraphNode {
   id: string;
   kind: NodeKind;
   label: string;
   filePath: string;
-  metadata: Record<string, unknown>;
+  metadata: NodeMetadata;
   loc?: SourceLocation;
 }
 
@@ -57,7 +96,7 @@ export interface GraphEdge {
   source: string;
   target: string;
   kind: EdgeKind;
-  metadata: Record<string, unknown>;
+  metadata: EdgeMetadata;
   loc?: SourceLocation;
 }
 

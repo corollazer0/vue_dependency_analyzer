@@ -2,6 +2,7 @@ import { defineStore } from 'pinia';
 import { ref, shallowRef, triggerRef } from 'vue';
 import type { GraphData } from '@/types/graph';
 import { apiFetch } from '@/api/client';
+import { normalizeGraphData } from './normalize';
 
 /**
  * Phase 2-8 (data slice).
@@ -20,7 +21,10 @@ export const useGraphDataStore = defineStore('graph-data', () => {
     error.value = null;
     try {
       const res = await apiFetch('/api/graph');
-      graphData.value = await res.json();
+      const raw = (await res.json()) as GraphData;
+      // Phase 2-9: stabilize hidden classes for every node/edge metadata
+      // shape before consumers start reading from them.
+      graphData.value = normalizeGraphData(raw);
       triggerRef(graphData);
     } catch (e) {
       error.value = `Failed to fetch graph: ${e}`;
