@@ -3,12 +3,15 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import cytoscape from 'cytoscape';
 import fcose from 'cytoscape-fcose';
 import cytoscapeSvg from 'cytoscape-svg';
+// @ts-expect-error — cytoscape-canvas ships no types; the module is a function that takes `cytoscape`.
+import cytoscapeCanvas from 'cytoscape-canvas';
 import { useGraphStore } from '@/stores/graphStore';
 import { useGraphClustering } from '@/composables/useGraphClustering';
 import { NODE_STYLES, EDGE_STYLES } from '@/types/graph';
 
 cytoscape.use(fcose);
 cytoscape.use(cytoscapeSvg);
+cytoscape.use(cytoscapeCanvas);
 
 const graphStore = useGraphStore();
 const clustering = useGraphClustering();
@@ -17,6 +20,12 @@ const tooltip = ref<{ show: boolean; x: number; y: number; text: string; kind: s
   show: false, x: 0, y: 0, text: '', kind: '', degree: 0,
 });
 let cy: cytoscape.Core | null = null;
+// Phase 1-7 — cytoscape-canvas overlay layer. Circular/orphan/hub rings are drawn
+// on a dedicated canvas above the graph instead of toggling node classes (which
+// forces Cytoscape style recomputation over potentially thousands of nodes every
+// time the overlay set changes). Canvas redraws auto-sync with pan/zoom/layout.
+let overlayLayer: { getCanvas: () => HTMLCanvasElement; clear: (ctx: CanvasRenderingContext2D) => void; setTransform: (ctx: CanvasRenderingContext2D) => void; resetTransform: (ctx: CanvasRenderingContext2D) => void } | null = null;
+let overlayRedraw: (() => void) | null = null;
 const useClusters = ref(false);
 
 // ─── Element Builders ───
@@ -238,19 +247,8 @@ function buildStylesheet(): any[] {
       selector: 'edge[weight]',
       style: { 'width': (ele: any) => Math.min(6, 1 + Math.log2(ele.data('weight') || 1)) },
     },
-    // Overlay styles
-    {
-      selector: 'node.circular',
-      style: { 'border-width': 3, 'border-color': '#ef4444', 'border-style': 'solid' },
-    },
-    {
-      selector: 'node.orphan-node',
-      style: { 'opacity': 0.35, 'border-width': 1, 'border-color': '#666', 'border-style': 'dashed' },
-    },
-    {
-      selector: 'node.hub-node',
-      style: { 'overlay-opacity': 0.15, 'overlay-color': '#f59e0b' },
-    },
+    // Overlay styles — see Phase 1-7: rings now live on the cytoscape-canvas layer,
+    // not on node classes. Kept empty intentionally so the selectors themselves are gone.
     // Path highlight styles (Pathfinder)
     {
       selector: 'node.path-highlight',
@@ -346,7 +344,52 @@ function initCytoscape() {
   });
 
   cy.on('zoom', () => updateLOD());
-  applyOverlays();
+
+  // Overlay canvas layer — drawn above the graph, repainted automatically on pan/zoom/layout.
+  overlayLayer = (cy as any).cyCanvas({ zIndex: 1 });
+  overlayRedraw = () => {
+    if (!cy || !overlayLayer) return;
+    const canvas = overlayLayer.getCanvas();
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    overlayLayer.resetTransform(ctx);
+    overlayLayer.clear(ctx);
+    if (!graphStore.showOverlays) return;
+    overlayLayer.setTransform(ctx);
+    cy.nodes().forEach((node: any) => {
+      const id = node.id();
+      const isCircular = graphStore.circularNodeIds.has(id);
+      const isOrphan = graphStore.orphanNodeIds.has(id);
+      const isHub = graphStore.hubNodeIds.has(id);
+      if (!isCircular && !isOrphan && !isHub) return;
+      const pos = node.position();
+      const radius = Math.max(14, node.width() / 2 + 4);
+      if (isCircular) {
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#ef4444';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+      }
+      if (isHub) {
+        ctx.beginPath();
+        ctx.arc(pos.x, pos.y, radius + 4, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(245, 158, 11, 0.15)';
+        ctx.fill();
+      }
+      if (isOrphan) {
+        ctx.beginPath();
+        ctx.setLineDash([4, 3]);
+        ctx.arc(pos.x, pos.y, radius, 0, Math.PI * 2);
+        ctx.strokeStyle = '#666';
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+    });
+  };
+  cy.on('render cyCanvas.resize', overlayRedraw);
+  overlayRedraw();
 }
 
 function highlightNode(nodeId: string) {
@@ -395,8 +438,37 @@ function updateLOD() {
 function refreshGraph() {
   if (!cy) return;
   const elements = useClusters.value ? buildClusterElements() : buildElements();
-  cy.batch(() => { cy!.elements().remove(); cy!.add(elements); });
-  cy.layout({ name: 'fcose', animate: true, animationDuration: 400, quality: 'default', nodeSeparation: 80, idealEdgeLength: 120 } as any).run();
+
+  // Phase 1-4 — incremental diff instead of full remove+add. Preserves layout positions
+  // for nodes that persist across a filter toggle (big UX win on large graphs) and skips
+  // the fcose layout entirely if topology didn't change.
+  const incomingById = new Map<string, any>();
+  for (const el of elements) incomingById.set(el.data.id, el);
+
+  const toRemove: cytoscape.CollectionReturnValue[] = [];
+  cy.elements().forEach((el) => {
+    if (!incomingById.has(el.id())) {
+      toRemove.push(el as unknown as cytoscape.CollectionReturnValue);
+    }
+  });
+
+  const existingIds = new Set<string>();
+  cy.elements().forEach((el) => { existingIds.add(el.id()); });
+  const toAdd: any[] = [];
+  for (const [id, el] of incomingById) {
+    if (!existingIds.has(id)) toAdd.push(el);
+  }
+
+  const topologyChanged = toRemove.length > 0 || toAdd.length > 0;
+
+  cy.batch(() => {
+    for (const el of toRemove) el.remove();
+    if (toAdd.length) cy!.add(toAdd);
+  });
+
+  if (topologyChanged) {
+    cy.layout({ name: 'fcose', animate: true, animationDuration: 400, quality: 'default', nodeSeparation: 80, idealEdgeLength: 120, randomize: false } as any).run();
+  }
   applyOverlays();
 }
 
@@ -411,24 +483,15 @@ function focusNode(nodeId: string) {
 }
 
 // ─── Overlays ───
+// Drawing lives on the cytoscape-canvas layer (Phase 1-7). These hooks just request
+// a canvas redraw — no per-node style churn.
 
 function applyOverlays() {
-  if (!cy || !graphStore.showOverlays) return;
-  cy.batch(() => {
-    cy!.nodes().forEach(node => {
-      const id = node.id();
-      if (graphStore.circularNodeIds.has(id)) node.addClass('circular');
-      if (graphStore.orphanNodeIds.has(id)) node.addClass('orphan-node');
-      if (graphStore.hubNodeIds.has(id)) node.addClass('hub-node');
-    });
-  });
+  overlayRedraw?.();
 }
 
 function removeOverlays() {
-  if (!cy) return;
-  cy.batch(() => {
-    cy!.nodes().removeClass('circular').removeClass('orphan-node').removeClass('hub-node');
-  });
+  overlayRedraw?.();
 }
 
 // ─── Watchers ───
