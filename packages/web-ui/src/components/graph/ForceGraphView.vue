@@ -325,8 +325,16 @@ function initCytoscape() {
     tooltip.value.show = false;
   });
 
-  // Click: cluster → expand/collapse, node → select
-  cy.on('tap', 'node', async (evt) => {
+  // Phase 3-4 — single tap selects (uniform across clusters and regular nodes).
+  // Expansion happens only on dbltap below — no scroll-based auto-expand exists
+  // or will be added (FINAL-PLAN §0 explicitly forbids it).
+  cy.on('tap', 'node', (evt) => {
+    const data = evt.target.data();
+    graphStore.selectNode(data.id);
+    highlightNode(data.id);
+  });
+
+  cy.on('dbltap', 'node', async (evt) => {
     const data = evt.target.data();
     if (data.isCluster && data.childCount > 0 && !data.isExpanded) {
       await clustering.expandCluster(data.id);
@@ -338,9 +346,9 @@ function initCytoscape() {
       refreshGraph();
       return;
     }
-    graphStore.selectNode(data.id);
-    // Persistent highlight for selected node
-    highlightNode(data.id);
+    // Regular node dbltap → focus (centers + zooms). Distinguishes the
+    // deliberate drill gesture from a casual click.
+    graphStore.focusNode(data.id);
   });
 
   // Background click → deselect
@@ -713,7 +721,7 @@ defineExpose({ fitToView, focusNode, exportGraph });
     <!-- Cluster indicator -->
     <div v-if="useClusters" class="absolute top-3 left-3 rounded-lg px-3 py-2 text-xs border backdrop-blur-sm"
       style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">
-      Clustered view · Click cluster to expand
+      Clustered view · Double-click cluster to expand
     </div>
 
     <!-- Controls -->
