@@ -498,6 +498,138 @@ export class AnalysisEngine {
       }));
   }
 
+  // ─── Phase 2-3: Progressive Disclosure API ───
+  // Cheap entry point: returns per-service summaries + top directories. The web
+  // client uses this to render an initial picture without paying for the full
+  // graph payload. Each service detail is then loaded lazily via
+  // getServiceGraph()/getDirectoryGraph() as the user drills in.
+
+  getOverview(): GraphOverview {
+    const services: ServiceSummary[] = [];
+    const projectRoot = this.config.projectRoot;
+
+    // Per-node serviceId tagging is done in runAnalysis(). Group nodes by it
+    // (or by '__root__' for unmatched nodes when no services are configured).
+    const byService = new Map<string, GraphNode[]>();
+    for (const node of this.graph.nodesIter()) {
+      const sid = (node.metadata.serviceId as string | undefined) ?? '__root__';
+      let list = byService.get(sid);
+      if (!list) { list = []; byService.set(sid, list); }
+      list.push(node);
+    }
+
+    const configuredServices = this.config.services ?? [];
+    const serviceMeta = new Map<string, { root: string; type: string }>();
+    for (const s of configuredServices) {
+      serviceMeta.set(s.id, { root: s.root, type: s.type });
+    }
+    if (this.config.vueRoot && !serviceMeta.has('__root__')) {
+      serviceMeta.set('__root__', { root: this.config.vueRoot, type: 'vue' });
+    } else if (this.config.springBootRoot && !serviceMeta.has('__root__')) {
+      serviceMeta.set('__root__', { root: this.config.springBootRoot, type: 'spring-boot' });
+    }
+
+    // Compute per-service edge count: edges where both endpoints share serviceId
+    const nodeService = new Map<string, string>();
+    for (const [sid, nodes] of byService) {
+      for (const n of nodes) nodeService.set(n.id, sid);
+    }
+    const edgeCountByService = new Map<string, number>();
+    for (const edge of this.graph.edgesIter()) {
+      const ss = nodeService.get(edge.source);
+      const ts = nodeService.get(edge.target);
+      if (ss && ts && ss === ts) {
+        edgeCountByService.set(ss, (edgeCountByService.get(ss) ?? 0) + 1);
+      }
+    }
+
+    for (const [sid, nodes] of byService) {
+      const nodesByKind: Record<string, number> = {};
+      const dirCounts = new Map<string, number>();
+      for (const n of nodes) {
+        nodesByKind[n.kind] = (nodesByKind[n.kind] ?? 0) + 1;
+        const dir = getDirectoryAtDepth(n.filePath, projectRoot, 3);
+        if (dir) dirCounts.set(dir, (dirCounts.get(dir) ?? 0) + 1);
+      }
+      const topDirectories = [...dirCounts.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 5)
+        .map(([path, nodeCount]) => ({ path, nodeCount }));
+
+      const meta = serviceMeta.get(sid);
+      services.push({
+        id: sid,
+        type: meta?.type ?? 'unknown',
+        root: meta?.root ?? '',
+        nodeCount: nodes.length,
+        edgeCount: edgeCountByService.get(sid) ?? 0,
+        nodesByKind,
+        topDirectories,
+      });
+    }
+
+    // Sort services by nodeCount desc for stable rendering
+    services.sort((a, b) => b.nodeCount - a.nodeCount);
+
+    return {
+      global: {
+        totalNodes: this.graph.getNodeCount(),
+        totalEdges: this.graph.getEdgeCount(),
+        parseErrorCount: this.graph.metadata.parseErrors.length,
+        analyzedAt: this.graph.metadata.analyzedAt,
+      },
+      services,
+    };
+  }
+
+  getServiceGraph(serviceId: string): SerializedGraph {
+    const nodes: GraphNode[] = [];
+    for (const n of this.graph.nodesIter()) {
+      const sid = (n.metadata.serviceId as string | undefined) ?? '__root__';
+      if (sid === serviceId) nodes.push(n);
+    }
+    return this.subgraphFromNodes(nodes);
+  }
+
+  getDirectoryGraph(relativePath: string): SerializedGraph {
+    const projectRoot = this.config.projectRoot;
+    const cleanRel = relativePath.replace(/^\/+/, '').replace(/\/+$/, '');
+    const absPrefix = cleanRel.length > 0
+      ? join(projectRoot, cleanRel) + '/'
+      : projectRoot + '/';
+
+    const nodes: GraphNode[] = [];
+    for (const n of this.graph.nodesIter()) {
+      // filePath might equal absPrefix without trailing slash for files at the dir root
+      if (n.filePath === absPrefix.slice(0, -1) || n.filePath.startsWith(absPrefix)) {
+        nodes.push(n);
+      }
+    }
+    return this.subgraphFromNodes(nodes);
+  }
+
+  /**
+   * Build a SerializedGraph from a node subset, including only edges whose
+   * BOTH endpoints fall in the subset. Lightweight metadata (file count,
+   * subset size) is reused so clients can validate the result.
+   */
+  private subgraphFromNodes(nodes: GraphNode[]): SerializedGraph {
+    const idSet = new Set<string>();
+    for (const n of nodes) idSet.add(n.id);
+    const edges = [];
+    for (const e of this.graph.edgesIter()) {
+      if (idSet.has(e.source) && idSet.has(e.target)) edges.push(e);
+    }
+    return {
+      nodes,
+      edges,
+      metadata: {
+        ...this.graph.metadata,
+        fileCount: new Set(nodes.map((n) => n.filePath)).size,
+      },
+    };
+  }
+
   getStats() {
     const stats = this.graph.getStats();
     const circularDeps = findCircularDependencies(this.graph);
@@ -664,6 +796,28 @@ export class AnalysisEngine {
       } catch { /* client may be disconnected */ }
     }
   }
+}
+
+// ─── Phase 2-3 overview types ───
+
+export interface ServiceSummary {
+  id: string;
+  type: string;
+  root: string;
+  nodeCount: number;
+  edgeCount: number;
+  nodesByKind: Record<string, number>;
+  topDirectories: { path: string; nodeCount: number }[];
+}
+
+export interface GraphOverview {
+  global: {
+    totalNodes: number;
+    totalEdges: number;
+    parseErrorCount: number;
+    analyzedAt: string;
+  };
+  services: ServiceSummary[];
 }
 
 // ─── Clustering helpers ───

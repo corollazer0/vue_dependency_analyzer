@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import type { AnalysisEngine } from '../engine.js';
-import { pathsResponseSchema, errorSchema } from './schemas.js';
+import { pathsResponseSchema, errorSchema, overviewSchema, serializedGraphSchema } from './schemas.js';
 
 // Phase 1-3 — Dirty-flag cache + ETag for /api/graph.
 // We cache the pre-stringified JSON keyed by (graphVersion, queryKey). On 2xx we send
@@ -99,6 +99,60 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
       const body = JSON.stringify(payload);
       const entry = setCached(queryKey, body);
       return sendWithEtag(request, reply, entry);
+    },
+  );
+
+  // ─── Phase 2-3: Progressive Disclosure ───
+  // Overview: tiny per-service summary (target <5KB) for the initial landing view.
+  fastify.get(
+    '/api/graph/overview',
+    { schema: { response: { 200: overviewSchema } } },
+    async (request, reply) => {
+      const queryKey = 'overview';
+      const hit = getCached(queryKey);
+      if (hit) return sendWithEtag(request, reply, hit);
+      const body = JSON.stringify(engine.getOverview());
+      return sendWithEtag(request, reply, setCached(queryKey, body));
+    },
+  );
+
+  // Service drill-down: full nodes+edges for a single service's serviceId.
+  fastify.get(
+    '/api/graph/service/:id',
+    { schema: { response: { 200: serializedGraphSchema, 404: errorSchema } } },
+    async (request, reply) => {
+      const { id } = request.params as { id: string };
+      const decoded = decodeURIComponent(id);
+      const queryKey = `service:${decoded}`;
+      const hit = getCached(queryKey);
+      if (hit) return sendWithEtag(request, reply, hit);
+      const sub = engine.getServiceGraph(decoded);
+      if (sub.nodes.length === 0) {
+        reply.code(404);
+        return { error: 'No nodes found for service id' };
+      }
+      const body = JSON.stringify(sub);
+      return sendWithEtag(request, reply, setCached(queryKey, body));
+    },
+  );
+
+  // Directory drill-down: nodes whose filePath sits under projectRoot/<path>.
+  fastify.get(
+    '/api/graph/directory',
+    { schema: { response: { 200: serializedGraphSchema, 400: errorSchema } } },
+    async (request, reply) => {
+      const { path: dirPath } = request.query as { path?: string };
+      if (!dirPath) {
+        reply.code(400);
+        return { error: '"path" query parameter is required' };
+      }
+      const decoded = decodeURIComponent(dirPath);
+      const queryKey = `dir:${decoded}`;
+      const hit = getCached(queryKey);
+      if (hit) return sendWithEtag(request, reply, hit);
+      const sub = engine.getDirectoryGraph(decoded);
+      const body = JSON.stringify(sub);
+      return sendWithEtag(request, reply, setCached(queryKey, body));
     },
   );
 

@@ -169,6 +169,98 @@ describe('Server API', () => {
     });
   });
 
+  // ─── Phase 2-3: Progressive Disclosure API ───
+
+  describe('GET /api/graph/overview', () => {
+    it('should return a tiny per-service summary under 5KB', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/overview' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.global).toBeDefined();
+      expect(typeof body.global.totalNodes).toBe('number');
+      expect(typeof body.global.totalEdges).toBe('number');
+      expect(Array.isArray(body.services)).toBe(true);
+      expect(body.services.length).toBeGreaterThan(0);
+      const sv = body.services[0];
+      expect(typeof sv.id).toBe('string');
+      expect(typeof sv.nodeCount).toBe('number');
+      expect(sv.nodesByKind).toBeDefined();
+      expect(Array.isArray(sv.topDirectories)).toBe(true);
+      // Phase 2-3 gate
+      expect(Buffer.byteLength(res.body, 'utf8')).toBeLessThan(5 * 1024);
+    });
+
+    it('should be cacheable via the same ETag mechanism as /api/graph', async () => {
+      const first = await fastify.inject({ method: 'GET', url: '/api/graph/overview' });
+      const etag = first.headers.etag as string;
+      expect(typeof etag).toBe('string');
+      const revalidated = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph/overview',
+        headers: { 'if-none-match': etag },
+      });
+      expect(revalidated.statusCode).toBe(304);
+    });
+  });
+
+  describe('GET /api/graph/service/:id', () => {
+    it('should return the subset of nodes tagged with the given serviceId (404 if unknown)', async () => {
+      // The fixtures dir has no configured services, so all nodes carry serviceId='__root__'.
+      const ok = await fastify.inject({ method: 'GET', url: '/api/graph/service/__root__' });
+      expect(ok.statusCode).toBe(200);
+      const body = JSON.parse(ok.body);
+      expect(body.nodes.length).toBeGreaterThan(0);
+      // Every edge in the subgraph must have both endpoints inside the node set
+      const ids = new Set(body.nodes.map((n: { id: string }) => n.id));
+      for (const e of body.edges) {
+        expect(ids.has(e.source)).toBe(true);
+        expect(ids.has(e.target)).toBe(true);
+      }
+
+      const missing = await fastify.inject({ method: 'GET', url: '/api/graph/service/does-not-exist' });
+      expect(missing.statusCode).toBe(404);
+    });
+  });
+
+  describe('GET /api/graph/directory', () => {
+    it('should require a path query parameter', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/directory' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('should return only nodes whose filePath sits under the requested directory', async () => {
+      // Pick any node whose filePath has at least one directory component below projectRoot
+      const all = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const allBody = JSON.parse(all.body);
+      const projectRoot = allBody.metadata.projectRoot as string;
+      const sample = allBody.nodes.find((n: { filePath: string }) =>
+        n.filePath.startsWith(projectRoot + '/') &&
+        n.filePath.slice(projectRoot.length + 1).includes('/')
+      );
+      expect(sample, 'fixture should contain at least one nested file').toBeDefined();
+      const rel = sample.filePath.slice(projectRoot.length + 1).split('/').slice(0, -1).join('/');
+
+      const res = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/directory?path=${encodeURIComponent(rel)}`,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.nodes.length).toBeGreaterThan(0);
+      // Every returned node must live under the requested directory
+      const absPrefix = projectRoot + '/' + rel + '/';
+      for (const n of body.nodes) {
+        expect(n.filePath.startsWith(absPrefix) || n.filePath === absPrefix.slice(0, -1)).toBe(true);
+      }
+      // Subset invariant on edges
+      const ids = new Set(body.nodes.map((n: { id: string }) => n.id));
+      for (const e of body.edges) {
+        expect(ids.has(e.source)).toBe(true);
+        expect(ids.has(e.target)).toBe(true);
+      }
+    });
+  });
+
   // ─── GET /api/graph/node?id= ───
 
   describe('GET /api/graph/node?id=', () => {

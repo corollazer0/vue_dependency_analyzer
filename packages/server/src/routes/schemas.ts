@@ -132,6 +132,53 @@ export const pathsResponseSchema = {
   additionalProperties: true,
 } as const;
 
+export const overviewSchema = {
+  type: 'object',
+  properties: {
+    global: {
+      type: 'object',
+      properties: {
+        totalNodes: { type: 'integer' },
+        totalEdges: { type: 'integer' },
+        parseErrorCount: { type: 'integer' },
+        analyzedAt: { type: 'string' },
+      },
+      required: ['totalNodes', 'totalEdges', 'parseErrorCount', 'analyzedAt'],
+      additionalProperties: false,
+    },
+    services: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          id: { type: 'string' },
+          type: { type: 'string' },
+          root: { type: 'string' },
+          nodeCount: { type: 'integer' },
+          edgeCount: { type: 'integer' },
+          nodesByKind: { type: 'object', additionalProperties: { type: 'integer' } },
+          topDirectories: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                path: { type: 'string' },
+                nodeCount: { type: 'integer' },
+              },
+              required: ['path', 'nodeCount'],
+              additionalProperties: false,
+            },
+          },
+        },
+        required: ['id', 'type', 'root', 'nodeCount', 'edgeCount', 'nodesByKind', 'topDirectories'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['global', 'services'],
+  additionalProperties: false,
+} as const;
+
 export const errorSchema = {
   type: 'object',
   properties: { error: { type: 'string' } },
