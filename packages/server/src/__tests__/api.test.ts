@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
+import { constants as zlibConstants, brotliDecompressSync, gunzipSync } from 'zlib';
 import { registerGraphRoutes } from '../routes/graphRoutes.js';
 import { registerAnalysisRoutes } from '../routes/analysisRoutes.js';
 import { registerSearchRoutes } from '../routes/searchRoutes.js';
@@ -24,6 +26,16 @@ describe('Server API', () => {
   beforeAll(async () => {
     fastify = Fastify({ logger: false });
     await fastify.register(cors);
+    await fastify.register(compress, {
+      encodings: ['br', 'gzip', 'deflate'],
+      threshold: 1024,
+      brotliOptions: {
+        params: {
+          [zlibConstants.BROTLI_PARAM_QUALITY]: 4,
+          [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
+        },
+      },
+    });
 
     engine = new AnalysisEngine(fixturesDir, {}, false);
     await engine.initialize();
@@ -100,6 +112,60 @@ describe('Server API', () => {
       expect(body.clusters).toBeDefined();
       expect(body.edges).toBeDefined();
       expect(body.clusters.length).toBeGreaterThan(0);
+    });
+
+    // Phase 1-1 — brotli compression on large JSON payloads
+    it('should serve /api/graph compressed when Accept-Encoding advertises br', async () => {
+      const raw = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      expect(raw.statusCode).toBe(200);
+      expect(raw.headers['content-encoding']).toBeUndefined();
+      const uncompressedLength = Buffer.byteLength(raw.body, 'utf8');
+
+      const brRes = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'accept-encoding': 'br' },
+      });
+      expect(brRes.statusCode).toBe(200);
+      expect(brRes.headers['content-encoding']).toBe('br');
+
+      const decoded = brotliDecompressSync(brRes.rawPayload).toString('utf8');
+      expect(JSON.parse(decoded).nodes).toBeDefined();
+      // Payload must shrink dramatically — the Phase 1 gate demands -80% on /api/graph.
+      expect(brRes.rawPayload.length).toBeLessThan(uncompressedLength * 0.2);
+
+      const gzipRes = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'accept-encoding': 'gzip' },
+      });
+      expect(gzipRes.headers['content-encoding']).toBe('gzip');
+      const gunzipped = gunzipSync(gzipRes.rawPayload).toString('utf8');
+      expect(JSON.parse(gunzipped).nodes).toBeDefined();
+    });
+
+    // Phase 1-3 — dirty-flag cache + ETag revalidation
+    it('should emit an ETag and Cache-Control, and 304 on If-None-Match match', async () => {
+      const first = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      expect(first.statusCode).toBe(200);
+      const etag = first.headers.etag;
+      expect(typeof etag).toBe('string');
+      expect(first.headers['cache-control']).toMatch(/must-revalidate/);
+
+      const revalidated = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'if-none-match': etag as string },
+      });
+      expect(revalidated.statusCode).toBe(304);
+
+      const mismatched = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'if-none-match': 'W/"stale"' },
+      });
+      expect(mismatched.statusCode).toBe(200);
+      expect(mismatched.body).toBe(first.body);
     });
   });
 
