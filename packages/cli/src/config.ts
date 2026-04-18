@@ -173,6 +173,10 @@ export async function runAnalysis(
   const circularDeps = findCircularDependencies(graph);
   const orphans = findOrphanNodes(graph).map(n => `${n.kind}: ${n.label}`);
 
+  // Release the persistent worker pool so the CLI process can exit.
+  parser.dispose();
+  if (cache) cache.close();
+
   return {
     graph,
     stats: {

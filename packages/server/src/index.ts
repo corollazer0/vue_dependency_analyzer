@@ -164,6 +164,11 @@ export async function startServer(opts: ServerOptions): Promise<void> {
     });
   });
 
+  // Release worker pool + sqlite handle on server shutdown
+  fastify.addHook('onClose', async () => {
+    engine.dispose();
+  });
+
   try {
     await fastify.listen({ port: env.port, host: '0.0.0.0' });
     fastify.log.info(`VDA Server running at http://localhost:${env.port}`);

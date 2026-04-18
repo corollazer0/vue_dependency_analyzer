@@ -52,6 +52,7 @@ export class AnalysisEngine {
   private graph: DependencyGraph = new DependencyGraph();
   private config: AnalysisConfig & { projectRoot: string };
   private cache: ParseCache;
+  private parser: ParallelParser;
   private clients: Set<WebSocket> = new Set();
   private watcher: any = null;
   private watchEnabled: boolean;
@@ -65,6 +66,10 @@ export class AnalysisEngine {
     const projectRoot = resolve(dir);
     this.config = this.buildConfig(projectRoot, options);
     this.cache = new ParseCache(projectRoot, JSON.stringify(this.config));
+    // Phase 2-2: long-lived parser owns a persistent worker pool. Workers
+    // receive the AnalysisConfig once during init and are reused across
+    // every runAnalysis() call (initial load + every file-watcher trigger).
+    this.parser = new ParallelParser(this.config);
     this.watchEnabled = watch;
     this.log = logger || noopLogger;
   }
@@ -126,9 +131,8 @@ export class AnalysisEngine {
         payload: { totalFiles: files.length },
       });
 
-      // Parallel parsing with cache
-      const parser = new ParallelParser(this.config);
-      const result = await parser.parseAll(
+      // Parallel parsing with cache (parser + pool reused across runs)
+      const result = await this.parser.parseAll(
         files,
         // Progress callback — throttle to max 10/sec
         (info: ProgressInfo) => {
@@ -333,6 +337,16 @@ export class AnalysisEngine {
   }
 
   // ─── Public API ───
+
+  /** Release worker pool, sqlite handle, and file watcher. Idempotent. */
+  dispose(): void {
+    try { this.parser.dispose(); } catch { /* ignore */ }
+    try { this.cache.close(); } catch { /* ignore */ }
+    if (this.watcher) {
+      try { this.watcher.close(); } catch { /* ignore */ }
+      this.watcher = null;
+    }
+  }
 
   /** Whether the engine has completed at least one analysis run */
   isReady(): boolean {
