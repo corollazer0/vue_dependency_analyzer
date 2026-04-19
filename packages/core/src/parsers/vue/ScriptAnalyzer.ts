@@ -235,6 +235,32 @@ export function analyzeScript(
   }
 
   visit(sourceFile);
+
+  // Phase 7a-8 — propagate storeToRefs destructured field names onto the
+  // matching `uses-store` edge so consumers (RuleEngine, ImpactAnalyzer)
+  // can reason about which store fields a component actually subscribes
+  // to instead of treating the whole store as one opaque dependency.
+  if (metadata.storeToRefsUsage && metadata.storeToRefsUsage.length > 0) {
+    const fieldsByStore = new Map<string, Set<string>>();
+    for (const usage of metadata.storeToRefsUsage) {
+      // `useXxxStore()` may show up as a literal call expression text —
+      // normalise to the bare composable name.
+      const storeName = usage.storeName.replace(/\(\s*\)$/, '');
+      if (!fieldsByStore.has(storeName)) fieldsByStore.set(storeName, new Set());
+      const sink = fieldsByStore.get(storeName)!;
+      for (const f of usage.fields) sink.add(f);
+    }
+    for (const edge of edges) {
+      if (edge.kind !== 'uses-store') continue;
+      const storeName = edge.metadata.storeName as string | undefined;
+      if (!storeName) continue;
+      const fields = fieldsByStore.get(storeName);
+      if (fields && fields.size > 0) {
+        edge.metadata.subscribedFields = Array.from(fields).sort();
+      }
+    }
+  }
+
   return { edges, nodes, errors, metadata };
 }
 

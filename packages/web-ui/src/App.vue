@@ -197,6 +197,7 @@ function handleKeydown(e: KeyboardEvent) {
         <!-- Left Sidebar -->
         <aside
           v-if="showSidebar"
+          id="vda-sidebar"
           role="complementary"
           aria-label="Search and filter"
           class="flex flex-col flex-shrink-0 border-r"
@@ -207,16 +208,16 @@ function handleKeydown(e: KeyboardEvent) {
           <div class="p-3 border-b flex items-center justify-between" style="border-color: var(--border-subtle)">
             <div class="flex items-center gap-2">
               <h1 class="text-lg font-bold" style="color: var(--accent-vue)">VDA</h1>
-              <span class="w-2 h-2 rounded-full flex-shrink-0" :style="{ backgroundColor: wsStatus === 'connected' ? 'var(--accent-vue)' : wsStatus === 'connecting' ? 'var(--accent-warning)' : 'var(--accent-danger)' }" :class="wsStatus === 'connecting' ? 'animate-pulse' : ''"></span>
+              <span class="w-2 h-2 rounded-full flex-shrink-0" role="status" :aria-label="`Connection: ${wsStatus}`" :style="{ backgroundColor: wsStatus === 'connected' ? 'var(--accent-vue)' : wsStatus === 'connecting' ? 'var(--accent-warning)' : 'var(--accent-danger)' }" :class="wsStatus === 'connecting' ? 'animate-pulse' : ''"></span>
             </div>
-            <button @click="showSidebar = false" class="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors" style="color: var(--text-tertiary)" title="Close sidebar">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            <button @click="showSidebar = false" class="w-6 h-6 flex items-center justify-center rounded hover:bg-white/10 transition-colors" style="color: var(--text-tertiary)" title="Close sidebar" aria-label="Close sidebar">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
             </button>
           </div>
 
           <!-- Tabs -->
-          <div class="flex border-b" style="border-color: var(--border-subtle)">
-            <button v-for="tab in [{id:'search',label:'Search'},{id:'filter',label:'Filter'}]" :key="tab.id" @click="sidebarTab = tab.id as any" class="flex-1 px-3 py-2 text-sm border-b-2 transition-colors" :style="{ color: sidebarTab === tab.id ? 'var(--text-primary)' : 'var(--text-tertiary)', borderColor: sidebarTab === tab.id ? 'var(--accent-blue)' : 'transparent' }">{{ tab.label }}</button>
+          <div class="flex border-b" role="tablist" aria-label="Sidebar tabs" style="border-color: var(--border-subtle)">
+            <button v-for="tab in [{id:'search',label:'Search'},{id:'filter',label:'Filter'}]" :key="tab.id" @click="sidebarTab = tab.id as any" role="tab" :aria-selected="sidebarTab === tab.id" class="flex-1 px-3 py-2 text-sm border-b-2 transition-colors" :style="{ color: sidebarTab === tab.id ? 'var(--text-primary)' : 'var(--text-tertiary)', borderColor: sidebarTab === tab.id ? 'var(--accent-blue)' : 'transparent' }">{{ tab.label }}</button>
           </div>
 
           <!-- Content — Bug #4: overflow-y-auto so long filter lists are scrollable -->
@@ -240,20 +241,22 @@ function handleKeydown(e: KeyboardEvent) {
           <!-- Toolbar -->
           <header role="navigation" aria-label="Toolbar" class="h-10 flex items-center px-3 gap-2 flex-shrink-0 border-b" style="background: var(--surface-secondary); border-color: var(--border-subtle)">
             <!-- Open sidebar button (visible when sidebar is closed) -->
-            <button v-if="!showSidebar" @click="showSidebar = true" class="w-8 h-8 flex items-center justify-center rounded-md transition-colors border" style="background: var(--surface-elevated); color: var(--text-primary); border-color: var(--border-default)" title="Open sidebar (☰)">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+            <button v-if="!showSidebar" @click="showSidebar = true" class="w-8 h-8 flex items-center justify-center rounded-md transition-colors border" style="background: var(--surface-elevated); color: var(--text-primary); border-color: var(--border-default)" title="Open sidebar (☰)" aria-label="Open sidebar" aria-expanded="false" aria-controls="vda-sidebar">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
             </button>
 
             <!-- View switcher -->
-            <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'},{id:'matrix',label:'Matrix'},{id:'bottom-up',label:'Bottom-Up'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
+            <div role="tablist" aria-label="Graph view" class="flex gap-1">
+              <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'},{id:'matrix',label:'Matrix'},{id:'bottom-up',label:'Bottom-Up'}]" :key="view.id" @click="activeView = view.id as any" role="tab" :aria-selected="activeView === view.id" :aria-controls="`vda-view-${view.id}`" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
+            </div>
 
-            <button @click="showPathfinder = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Pathfinder</button>
-            <button @click="showChangeImpact = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Impact</button>
+            <button @click="showPathfinder = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" aria-label="Open Pathfinder">Pathfinder</button>
+            <button @click="showChangeImpact = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" aria-label="Open Change Impact panel">Impact</button>
 
             <!-- Navigation history -->
-            <div class="flex gap-0.5">
-              <button @click="graphStore.navBack()" :disabled="!graphStore.canNavBack" class="w-7 h-7 flex items-center justify-center rounded-md text-xs disabled:opacity-20 transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Back (Alt+←)">←</button>
-              <button @click="graphStore.navForward()" :disabled="!graphStore.canNavForward" class="w-7 h-7 flex items-center justify-center rounded-md text-xs disabled:opacity-20 transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Forward (Alt+→)">→</button>
+            <div class="flex gap-0.5" role="group" aria-label="Selection history">
+              <button @click="graphStore.navBack()" :disabled="!graphStore.canNavBack" class="w-7 h-7 flex items-center justify-center rounded-md text-xs disabled:opacity-20 transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Back (Alt+←)" aria-label="Previous selection">←</button>
+              <button @click="graphStore.navForward()" :disabled="!graphStore.canNavForward" class="w-7 h-7 flex items-center justify-center rounded-md text-xs disabled:opacity-20 transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" title="Forward (Alt+→)" aria-label="Next selection">→</button>
             </div>
 
             <div class="flex-1"></div>
@@ -272,10 +275,18 @@ function handleKeydown(e: KeyboardEvent) {
                   <div class="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin"></div>Loading...
                 </div>
               </div>
-              <ForceGraphView v-show="activeView === 'graph'" />
-              <TreeView v-show="activeView === 'tree'" />
-              <MatrixView v-show="activeView === 'matrix'" />
-              <BottomUpView v-show="activeView === 'bottom-up'" />
+              <div v-show="activeView === 'graph'" id="vda-view-graph" role="tabpanel" aria-label="Graph view" tabindex="0" class="absolute inset-0">
+                <ForceGraphView />
+              </div>
+              <div v-show="activeView === 'tree'" id="vda-view-tree" role="tabpanel" aria-label="Tree view" tabindex="0" class="absolute inset-0">
+                <TreeView />
+              </div>
+              <div v-show="activeView === 'matrix'" id="vda-view-matrix" role="tabpanel" aria-label="Matrix view" tabindex="0" class="absolute inset-0">
+                <MatrixView />
+              </div>
+              <div v-show="activeView === 'bottom-up'" id="vda-view-bottom-up" role="tabpanel" aria-label="Bottom-up view" tabindex="0" class="absolute inset-0">
+                <BottomUpView />
+              </div>
               <GraphLegend v-if="activeView === 'graph'" />
             </div>
 

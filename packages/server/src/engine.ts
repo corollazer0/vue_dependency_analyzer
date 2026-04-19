@@ -397,6 +397,11 @@ export class AnalysisEngine {
     return this.initializeTime !== null && !this.analyzing;
   }
 
+  /** Phase 7a-3 — gitRoutes need the resolved project root to scope `git` calls. */
+  getProjectRoot(): string {
+    return this.config.projectRoot;
+  }
+
   getHealthInfo(): { ready: boolean; analyzing: boolean; nodeCount: number; edgeCount: number; analyzedAt: string | null } {
     return {
       ready: this.initializeTime !== null && !this.analyzing,
