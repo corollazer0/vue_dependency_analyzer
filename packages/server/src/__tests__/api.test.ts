@@ -392,6 +392,23 @@ describe('Server API', () => {
       const res = await fastify.inject({ method: 'GET', url: '/api/graph/node' });
       expect(res.statusCode).toBe(400);
     });
+
+    it('should round-trip an ID containing slashes through decodeURIComponent (Phase 7a-5)', async () => {
+      // Legacy `/api/graph/node/:id` 404'd whenever the id had a `/`
+      // (path-segment chopping). The query-param flavor must accept the
+      // literal slash after URL-decoding.
+      const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const { nodes } = JSON.parse(graphRes.body);
+      const slashed = nodes.find((n: any) => n.id.includes('/') && n.id.includes(':'));
+      expect(slashed, 'fixture should expose at least one id with both : and /').toBeDefined();
+
+      const encoded = encodeURIComponent(slashed.id);
+      expect(encoded).toContain('%2F'); // sanity: slash actually survived
+      const res = await fastify.inject({ method: 'GET', url: `/api/graph/node?id=${encoded}` });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.node.id).toBe(slashed.id);
+    });
   });
 
   // ─── GET /api/search ───

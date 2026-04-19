@@ -7,10 +7,10 @@
 >
 > 상태 요약:
 > - T0-01 warm-cache db-table 유실 → ✅ Phase 0-6 해결
-> - T0-02 `/api/graph/node/:id` 404 → 🚧 v2 7a-5
+> - T0-02 `/api/graph/node/:id` 404 → ✅ v2 7a-5 (query-param `?id=`)
 > - T0-03 CLI getStats node/edge 분리 → ✅ 해결
 > - T1-01 @Mapper interface → ✅ 해결
-> - T1-02 vue-router `route-renders` → 🚧 v2 7a-6
+> - T1-02 vue-router `route-renders` → ✅ v2 7a-6 (PR-A `e8f5538`)
 > - T1-03 Event virtual edges → 🚧 v2 7a-7 (부분 해결, 전수 검증 필요)
 > - T1-04 worker_threads 병렬 → ✅ Phase 2-2
 > - T1-05 services[] MSA → ✅ Phase 2-6
