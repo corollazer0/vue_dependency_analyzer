@@ -393,6 +393,18 @@ describe('Server API', () => {
       expect(res.statusCode).toBe(400);
     });
 
+    it('GET /api/analysis/layer-compliance returns layers + matrix shape (Phase 7b-4)', async () => {
+      // test-project's .vdarc.json doesn't ship a layer DSL — the
+      // route must still return a valid (empty) shape, not 500.
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/layer-compliance' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('layers');
+      expect(body).toHaveProperty('matrix');
+      expect(Array.isArray(body.layers)).toBe(true);
+      expect(Array.isArray(body.matrix)).toBe(true);
+    });
+
     it('should round-trip an ID containing slashes through decodeURIComponent (Phase 7a-5)', async () => {
       // Legacy `/api/graph/node/:id` 404'd whenever the id had a `/`
       // (path-segment chopping). The query-param flavor must accept the
