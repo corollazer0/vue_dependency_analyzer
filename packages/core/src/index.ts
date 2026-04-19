@@ -31,6 +31,12 @@ export {
   type EntrypointReason,
 } from './analyzers/EntrypointCollector.js';
 export { findDeadNodes, type DeadCodeReport } from './analyzers/DeadCodeDetector.js';
+export {
+  WaiverEngine,
+  loadWaivers,
+  type Waiver,
+  type WaiverMatchInput,
+} from './analyzers/WaiverEngine.js';
 export { calculateComplexity, findHubs } from './analyzers/ComplexityScorer.js';
 export type { ComplexityScore } from './analyzers/ComplexityScorer.js';
 export { analyzeImpact } from './analyzers/ImpactAnalyzer.js';
