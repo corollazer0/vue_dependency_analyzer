@@ -95,7 +95,12 @@ export async function impactCommand(
         );
         return !m.waived;
       });
-      report = { changes: filtered, byCode: filtered.reduce((acc, c) => { acc[c.code] = (acc[c.code] ?? 0) + 1; return acc; }, { B1: 0, B2: 0, B3: 0, B4: 0 } as typeof report.byCode) };
+      report = {
+        changes: filtered,
+        byCode: filtered.reduce((acc, c) => { acc[c.code] = (acc[c.code] ?? 0) + 1; return acc; }, { B1: 0, B2: 0, B3: 0, B4: 0 } as typeof report.byCode),
+        // Phase 10-4 — preserve rename pairs after waiver filtering.
+        renamed: report.renamed,
+      };
       breakingMarkdown = renderBreakingMarkdown(report.changes);
     }
     store.close();

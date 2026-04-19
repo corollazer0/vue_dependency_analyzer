@@ -138,13 +138,17 @@ export async function runMeasurement(opts: MeasureOptions): Promise<MeasurementR
       // Mark the cytoscape canvas as aria-hidden so axe doesn't surface
       // canvas-no-accessible-name as the dominant violation. Real-graph
       // semantics should be exposed via siblings (NodeDetail panel etc.).
+      // The callback runs in the browser, where `document` exists. Cast
+      // through `any` so the Node-side TS checker doesn't try to resolve
+      // the DOM lib.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await page.evaluate(() => {
-        for (const c of Array.from(document.querySelectorAll('canvas'))) {
-          c.setAttribute('aria-hidden', 'true');
-        }
+        const doc = (globalThis as any).document;
+        const canvases: any[] = Array.from(doc.querySelectorAll('canvas'));
+        for (const c of canvases) c.setAttribute('aria-hidden', 'true');
       });
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const result = await page.evaluate(async () => {
-        // axe is attached to window by the script tag.
         const axe = (globalThis as any).axe;
         const r = await axe.run();
         return {
