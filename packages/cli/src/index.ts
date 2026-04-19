@@ -5,6 +5,7 @@ import { serveCommand } from './commands/serve.js';
 import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
 import { lintCommand } from './commands/lint.js';
+import { snapshotCommand } from './commands/snapshot.js';
 import { impactCommand } from './commands/impact.js';
 import { decommissionCommand } from './commands/decommission.js';
 
@@ -78,6 +79,16 @@ program
   .option('--min-fan-in <n>', 'Hot-spot minimum fan-in (default 5)', v => parseInt(v, 10))
   .option('--no-cache', 'Disable parse cache')
   .action(lintCommand);
+
+program
+  .command('snapshot')
+  .description('Persist an architecture snapshot to .vda-cache/snapshots.sqlite (Phase 11-7)')
+  .argument('[dir]', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--label <name>', 'Snapshot label (default: today YYYY-MM-DD)')
+  .option('--json', 'Print the persisted snapshot record as JSON')
+  .option('--no-cache', 'Disable parse cache')
+  .action(snapshotCommand);
 
 program
   .command('init')
