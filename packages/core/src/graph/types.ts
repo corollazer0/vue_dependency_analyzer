@@ -31,6 +31,7 @@ export type EdgeKind =
   | 'listens-event'
   | 'api-call'
   | 'api-serves'
+  | 'api-implements'
   | 'native-call'
   | 'route-renders'
   | 'spring-injects'

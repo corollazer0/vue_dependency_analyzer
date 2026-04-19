@@ -45,6 +45,21 @@ describe('JavaFileParser', () => {
       expect(servesEdges.length).toBeGreaterThanOrEqual(5);
     });
 
+    it('should mirror every api-serves with a reverse api-implements alias (Phase 7a-1)', () => {
+      const servesEdges = result.edges.filter(e => e.kind === 'api-serves');
+      const implementsEdges = result.edges.filter(e => e.kind === 'api-implements');
+      expect(implementsEdges).toHaveLength(servesEdges.length);
+
+      for (const ie of implementsEdges) {
+        expect(ie.source.startsWith('spring-endpoint:')).toBe(true);
+        expect(ie.target.startsWith('spring-controller:')).toBe(true);
+        const paired = servesEdges.find(se => se.source === ie.target && se.target === ie.source);
+        expect(paired, `expected paired api-serves for ${ie.id}`).toBeDefined();
+        expect(ie.metadata.httpMethod).toBe(paired!.metadata.httpMethod);
+        expect(ie.metadata.path).toBe(paired!.metadata.path);
+      }
+    });
+
     it('should detect @Autowired injections', () => {
       const injectEdges = result.edges.filter(e => e.kind === 'spring-injects');
       expect(injectEdges.length).toBeGreaterThanOrEqual(1);
@@ -133,6 +148,15 @@ class ProductController(private val productService: ProductService) {
     expect(endpoints).toHaveLength(2);
     expect(endpoints.map(e => (e.metadata as any).path)).toContain('/api/products/list');
     expect(endpoints.map(e => (e.metadata as any).path)).toContain('/api/products/create');
+
+    // Phase 7a-1 — reverse alias edges
+    const servesEdges = result.edges.filter(e => e.kind === 'api-serves');
+    const implementsEdges = result.edges.filter(e => e.kind === 'api-implements');
+    expect(implementsEdges).toHaveLength(servesEdges.length);
+    for (const ie of implementsEdges) {
+      expect(ie.source.startsWith('spring-endpoint:')).toBe(true);
+      expect(ie.target.startsWith('spring-controller:')).toBe(true);
+    }
   });
 
   it('should detect @Service class as spring-service', () => {

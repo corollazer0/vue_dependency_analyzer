@@ -42,7 +42,7 @@ export class JavaFileParser implements FileParser {
 
         for (const ep of endpoints) {
           nodes.push(ep.node);
-          edges.push(ep.edge);
+          edges.push(...ep.edges);
         }
       } else if (isService || isRepository || isMapper || isConfiguration || isComponent) {
         nodes.push({
@@ -159,7 +159,7 @@ function extractClassInfo(content: string, filePath: string): ClassInfo | null {
 
 interface EndpointInfo {
   node: GraphNode;
-  edge: GraphEdge;
+  edges: GraphEdge[];
 }
 
 function extractEndpoints(content: string, filePath: string, basePath: string, controllerNodeId: string): EndpointInfo[] {
@@ -223,13 +223,25 @@ function addEndpoint(
       metadata: { httpMethod, path: endpointPath, handlerMethod, returnType, paramTypes },
       loc: { filePath, line, column: 0 },
     },
-    edge: {
-      id: `${controllerNodeId}:api-serves:${nodeId}`,
-      source: controllerNodeId,
-      target: nodeId,
-      kind: 'api-serves',
-      metadata: { httpMethod, path: endpointPath },
-    },
+    edges: [
+      {
+        id: `${controllerNodeId}:api-serves:${nodeId}`,
+        source: controllerNodeId,
+        target: nodeId,
+        kind: 'api-serves',
+        metadata: { httpMethod, path: endpointPath },
+      },
+      // Reverse alias: lets a forward DFS from spring-endpoint reach back
+      // into the controller (and onward to services/mappers/db-table).
+      // Phase 7a-1 — Pathfinder direction fix.
+      {
+        id: `${nodeId}:api-implements:${controllerNodeId}`,
+        source: nodeId,
+        target: controllerNodeId,
+        kind: 'api-implements',
+        metadata: { httpMethod, path: endpointPath },
+      },
+    ],
   });
 }
 

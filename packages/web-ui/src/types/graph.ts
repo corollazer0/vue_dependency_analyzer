@@ -29,6 +29,7 @@ export type EdgeKind =
   | 'listens-event'
   | 'api-call'
   | 'api-serves'
+  | 'api-implements'
   | 'native-call'
   | 'route-renders'
   | 'spring-injects'
@@ -181,6 +182,7 @@ export const EDGE_STYLES: Record<EdgeKind, { color: string; dashed: boolean }> =
   'listens-event': { color: '#d35400', dashed: true },
   'api-call': { color: '#e74c3c', dashed: true },
   'api-serves': { color: '#8bc34a', dashed: false },
+  'api-implements': { color: '#8bc34a', dashed: true },
   'native-call': { color: '#ff7043', dashed: true },
   'route-renders': { color: '#3498db', dashed: false },
   'spring-injects': { color: '#4caf50', dashed: false },

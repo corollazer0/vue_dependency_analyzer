@@ -15,6 +15,7 @@ const ALL_NODE_KINDS: NodeKind[] = [
 const ALL_EDGE_KINDS: EdgeKind[] = [
   'imports', 'uses-component', 'uses-store', 'uses-composable',
   'uses-directive', 'provides', 'injects', 'api-call', 'api-serves',
+  'api-implements',
   'native-call', 'route-renders', 'spring-injects',
   'mybatis-maps', 'reads-table', 'writes-table', 'dto-flows',
   'emits-event', 'listens-event',
@@ -31,7 +32,7 @@ const FILTER_PRESETS: Record<FilterPreset, { nodes: NodeKind[]; edges: EdgeKind[
   },
   spring: {
     nodes: ['spring-controller', 'spring-endpoint', 'spring-service', 'spring-event'],
-    edges: ['spring-injects', 'api-serves', 'emits-event', 'listens-event'],
+    edges: ['spring-injects', 'api-serves', 'api-implements', 'emits-event', 'listens-event'],
   },
   db: {
     nodes: ['mybatis-mapper', 'mybatis-statement', 'db-table'],
@@ -39,7 +40,7 @@ const FILTER_PRESETS: Record<FilterPreset, { nodes: NodeKind[]; edges: EdgeKind[
   },
   api: {
     nodes: ['api-call-site', 'spring-endpoint', 'vue-component'],
-    edges: ['api-call', 'api-serves'],
+    edges: ['api-call', 'api-serves', 'api-implements'],
   },
 };
 

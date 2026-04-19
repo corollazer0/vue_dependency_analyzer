@@ -48,7 +48,10 @@ function buildTree(rootId: string, dir: 'dependencies' | 'dependents', maxDepth:
   const nodeMap = new Map(nodes.map(n => [n.id, n]));
   const visited = new Set<string>();
   const REVERSE_SEMANTIC_KINDS = new Set(['api-serves', 'mybatis-maps']);
-  const SKIP_IN_TREE = new Set(['dto-flows']);
+  // Skip `api-implements` (Phase 7a-1) — it's the reverse alias of
+  // `api-serves` and would duplicate every endpoint↔controller hop in
+  // both dependencies and dependents traversals.
+  const SKIP_IN_TREE = new Set(['dto-flows', 'api-implements']);
 
   function traverse(nodeId: string, depth: number): TreeNode {
     const node = nodeMap.get(nodeId);
