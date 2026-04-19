@@ -90,19 +90,30 @@ function activeFiles(): string[] {
   return filesInput.value.split('\n').map(f => f.trim()).filter(Boolean);
 }
 
+// Phase 8-7 — breaking-change report fetched in parallel with the
+// regular impact analysis so the user sees both at once.
+const breaking = ref<any>(null);
+
 async function analyzeImpact() {
   const files = activeFiles();
   if (files.length === 0) return;
 
   loading.value = true;
   result.value = null;
+  breaking.value = null;
   try {
-    const res = await apiFetch('/api/analysis/change-impact', {
-      method: 'POST',
-      body: JSON.stringify({ files }),
-    });
-    const data = await res.json();
+    const [impactRes, breakingRes] = await Promise.all([
+      apiFetch('/api/analysis/change-impact', {
+        method: 'POST',
+        body: JSON.stringify({ files }),
+      }),
+      apiFetch('/api/analysis/breaking-changes').catch(() => null),
+    ]);
+    const data = await impactRes.json();
     result.value = data;
+    if (breakingRes && breakingRes.ok) {
+      breaking.value = await breakingRes.json();
+    }
 
     // Set impact overlay on graph
     graphStore.impactNodeIds = {
@@ -115,6 +126,13 @@ async function analyzeImpact() {
   } finally {
     loading.value = false;
   }
+}
+
+function breakingColor(code: string, severity: string): string {
+  if (severity === 'warning') return '#f59e0b';
+  if (code === 'B1' || code === 'B3') return '#ef4444';
+  if (code === 'B4') return '#dc2626';
+  return '#f59e0b';
 }
 
 function clearImpact() {
@@ -292,6 +310,30 @@ function navigateTo(nodeId: string) {
               class="block w-full text-left text-xs px-2 py-1 rounded hover:bg-white/5"
               style="color: var(--text-secondary)"
             >{{ n.label }}</button>
+          </div>
+
+          <!-- Phase 8-7: breaking change risks -->
+          <div v-if="breaking" class="space-y-1 pt-2 border-t" style="border-color: var(--border-subtle)">
+            <div class="text-xs font-semibold" style="color: var(--text-secondary)">
+              ⚠️ Breaking risks vs. baseline `{{ breaking.baseline }}`
+              <span v-if="!breaking.found" class="font-normal" style="color: var(--text-tertiary)">
+                — no baseline snapshot found (run <code>vda analyze --signatures-only --label {{ breaking.baseline }}</code>).
+              </span>
+            </div>
+            <div v-if="breaking.found && breaking.report.changes.length === 0" class="text-xs" style="color: var(--text-tertiary)">
+              No breaking changes detected.
+            </div>
+            <div v-else-if="breaking.found" class="max-h-40 overflow-y-auto space-y-1">
+              <div
+                v-for="c in breaking.report.changes" :key="c.signatureId + ':' + c.code"
+                class="text-xs px-2 py-1 rounded"
+                :style="{ background: 'rgba(0,0,0,0.15)', color: breakingColor(c.code, c.severity) }"
+              >
+                <strong>{{ c.code }}</strong>
+                <code class="ml-1" style="color: var(--text-primary)">{{ c.signatureId }}</code>
+                <div style="color: var(--text-tertiary)">{{ c.message }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>

@@ -806,6 +806,48 @@ export class AnalysisEngine {
    * DSL (compileLayerRules + the engine's evaluateRules cross-check).
    * The view consumes this directly so no client-side rule logic ships.
    */
+  /**
+   * Phase 8-6 — diff against a stored signature snapshot and run the
+   * BreakingChangeDetector. Returns an empty report when the baseline
+   * label has no rows so the UI can render "no baseline yet".
+   */
+  async getBreakingChanges(opts?: { baseline?: string }): Promise<{
+    baseline: string;
+    found: boolean;
+    report: { changes: any[]; byCode: { B1: number; B2: number; B3: number; B4: number } };
+  }> {
+    const { SignatureStore } = await import('@vda/core');
+    const { detectBreakingChanges } = await import('@vda/core');
+    const { loadWaivers } = await import('@vda/core');
+    const baseline = opts?.baseline ?? 'main';
+    const store = new SignatureStore(this.config.projectRoot);
+    if (store.count(baseline) === 0) {
+      store.close();
+      return { baseline, found: false, report: { changes: [], byCode: { B1: 0, B2: 0, B3: 0, B4: 0 } } };
+    }
+    store.snapshot('__pending__', this.graph);
+    const diff = store.diff(baseline, '__pending__');
+    let report = detectBreakingChanges(diff);
+    const waivers = loadWaivers(this.config.projectRoot, this.graph);
+    const today = new Date().toISOString().slice(0, 10);
+    const filtered = report.changes.filter((c) => {
+      const m = waivers.isWaived(
+        { ruleId: 'breaking', target: c.code, file: c.before?.sourceFile ?? c.after?.sourceFile },
+        today,
+      );
+      return !m.waived;
+    });
+    const byCode = filtered.reduce(
+      (acc, c) => {
+        acc[c.code] = (acc[c.code] ?? 0) + 1;
+        return acc;
+      },
+      { B1: 0, B2: 0, B3: 0, B4: 0 } as { B1: number; B2: number; B3: number; B4: number },
+    );
+    store.close();
+    return { baseline, found: true, report: { changes: filtered, byCode } };
+  }
+
   getLayerCompliance(): {
     layers: Array<{ name: string; kinds: string[]; nodeIds: string[] }>;
     matrix: Array<{

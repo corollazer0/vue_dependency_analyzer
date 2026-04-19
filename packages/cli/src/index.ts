@@ -23,6 +23,8 @@ program
   .option('--spring-root <path>', 'Spring Boot project root (relative to dir)')
   .option('--config <path>', 'Config file path', '.vdarc.json')
   .option('--json', 'Output as JSON')
+  .option('--signatures-only', 'Skip reporting and persist a SignatureStore snapshot only')
+  .option('--label <name>', 'Snapshot label for --signatures-only (default: main)')
   .option('--no-cache', 'Disable parse cache')
   .action(analyzeCommand);
 
@@ -57,6 +59,8 @@ program
   .option('--files <list>', 'Comma-separated file paths')
   .option('--json', 'Output as JSON')
   .option('--format <fmt>', 'Output format: text | github-pr', 'text')
+  .option('--breaking', 'Detect B1-B4 breaking changes against the baseline snapshot')
+  .option('--baseline <label>', 'Baseline snapshot label (default: main)', 'main')
   .option('--no-cache', 'Disable parse cache')
   .action(impactCommand);
 

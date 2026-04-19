@@ -1,7 +1,10 @@
 import { runAnalysis, loadConfig, type CliOptions } from '../config.js';
-import type { ProgressInfo } from '@vda/core';
+import { SignatureStore, type ProgressInfo } from '@vda/core';
 
-export async function analyzeCommand(dir: string, options: CliOptions & { cache?: boolean }): Promise<void> {
+export async function analyzeCommand(
+  dir: string,
+  options: CliOptions & { cache?: boolean; signaturesOnly?: boolean; label?: string },
+): Promise<void> {
   const config = await loadConfig(dir, options);
   console.log(`\n🔍 Analyzing project: ${dir}\n`);
 
@@ -30,6 +33,20 @@ export async function analyzeCommand(dir: string, options: CliOptions & { cache?
 
   // Clear progress line
   if (lastLine) process.stdout.write('\r' + ' '.repeat(lastLine.length) + '\r');
+
+  // Phase 8-11 — `--signatures-only` skips reporting + JSON dump and
+  // just persists the snapshot under `--label <name>`. The full
+  // parse cost is unchanged (we still need the graph to extract
+  // signatures), but downstream steps (Cytoscape render, JSON
+  // serialization, dto-consistency, etc.) are skipped.
+  if (options.signaturesOnly) {
+    const label = options.label ?? 'main';
+    const store = new SignatureStore(config.projectRoot);
+    const records = store.snapshot(label, graph);
+    store.close();
+    console.log(`💾 Snapshot \`${label}\` written: ${records.length} signature(s) (${stats.totalFiles} files parsed in ${(stats.durationMs / 1000).toFixed(1)}s).`);
+    return;
+  }
 
   if (options.json) {
     const { toJSON } = await import('@vda/core');

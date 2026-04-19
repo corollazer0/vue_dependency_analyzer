@@ -32,6 +32,20 @@ export {
 } from './analyzers/EntrypointCollector.js';
 export { findDeadNodes, type DeadCodeReport } from './analyzers/DeadCodeDetector.js';
 export {
+  SignatureStore,
+  type SignatureKind,
+  type SignatureRecord,
+  type SignatureSet,
+  type SignatureDiff,
+  type SignatureStoreOptions,
+} from './engine/SignatureStore.js';
+export {
+  detectBreakingChanges,
+  type BreakingChange,
+  type BreakingChangesReport,
+  type BreakingCode,
+} from './analyzers/BreakingChangeDetector.js';
+export {
   WaiverEngine,
   loadWaivers,
   type Waiver,
