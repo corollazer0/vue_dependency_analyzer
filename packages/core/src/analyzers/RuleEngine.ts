@@ -105,6 +105,24 @@ function toArray<T>(val: T | T[] | undefined): T[] {
   return Array.isArray(val) ? val : [val];
 }
 
+/**
+ * Phase 10-5 — apply a Layer DSL `where:` predicate to a node. Returns true
+ * iff every key of `pred` equals `node.metadata[key]`. `undefined` predicate
+ * = no filter (always true).
+ */
+function nodeMatchesPredicate(
+  node: { metadata?: Record<string, unknown> } | undefined | null,
+  pred: Record<string, string | boolean> | undefined,
+): boolean {
+  if (!pred) return true;
+  if (!node) return false;
+  const md = (node.metadata ?? {}) as Record<string, unknown>;
+  for (const [k, v] of Object.entries(pred)) {
+    if (md[k] !== v) return false;
+  }
+  return true;
+}
+
 function checkDenyCircular(
   graph: DependencyGraph, rule: ArchitectureRule, ruleId: string, severity: 'error' | 'warning',
 ): RuleViolation[] {
@@ -141,6 +159,9 @@ function checkDenyDirect(
     if (!sourceNode || !targetNode) continue;
 
     if (fromKinds.has(sourceNode.kind) && toKinds.has(targetNode.kind)) {
+      // Phase 10-5 — Layer DSL `where:` narrows the layer at evaluation time.
+      if (!nodeMatchesPredicate(sourceNode, rule.fromWhere)) continue;
+      if (!nodeMatchesPredicate(targetNode, rule.toWhere)) continue;
       violations.push({
         ruleId,
         ruleType: 'deny-direct',
@@ -166,6 +187,8 @@ function checkAllowOnly(
 
   for (const node of graph.getAllNodes()) {
     if (!fromKinds.has(node.kind)) continue;
+    // Phase 10-5 — `from` predicate narrows source layer.
+    if (!nodeMatchesPredicate(node, rule.fromWhere)) continue;
 
     for (const edge of graph.getOutEdges(node.id)) {
       if (rule.edgeKinds?.length && !rule.edgeKinds.includes(edge.kind)) continue;
@@ -174,11 +197,24 @@ function checkAllowOnly(
       if (!targetNode) continue;
 
       if (!allowedKinds.has(targetNode.kind)) {
+        // toWhere applies to the *allowed* side: an edge to a non-allowed
+        // kind is always a violation, but if the target IS an allowed kind
+        // and toWhere is set, the predicate must hold to consider it allowed.
         violations.push({
           ruleId,
           ruleType: 'allow-only',
           severity,
           message: rule.message || `${node.label} (${node.kind}) depends on ${targetNode.label} (${targetNode.kind}), which is not in the allowed list`,
+          nodeIds: [node.id, edge.target],
+          edgeIds: [edge.id],
+        });
+      } else if (rule.toWhere && !nodeMatchesPredicate(targetNode, rule.toWhere)) {
+        // Allowed by kind but fails the metadata predicate -> still a violation.
+        violations.push({
+          ruleId,
+          ruleType: 'allow-only',
+          severity,
+          message: rule.message || `${node.label} (${node.kind}) depends on ${targetNode.label} (${targetNode.kind}), which fails the layer predicate`,
           nodeIds: [node.id, edge.target],
           edgeIds: [edge.id],
         });

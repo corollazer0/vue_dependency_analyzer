@@ -94,6 +94,70 @@ describe('LayerDsl (Phase 7b-3)', () => {
     expect(dropped[0].isError).toBe(true);
   });
 
+  // Phase 10-5 — Layer DSL `where:` predicate.
+  it('compiles where: into rule fromWhere/toWhere fields', () => {
+    const { rules } = compileLayerRules({
+      layers: [
+        {
+          name: 'service-application',
+          match: ['spring-service'],
+          where: { isRepository: false },
+        },
+        {
+          name: 'service-infrastructure',
+          match: ['spring-service'],
+          where: { isRepository: true },
+        },
+      ],
+      layerRules: [
+        { from: 'service-application', to: 'service-infrastructure', policy: 'allow-only' },
+      ],
+    });
+    expect(rules).toHaveLength(1);
+    expect(rules[0].fromWhere).toEqual({ isRepository: false });
+    expect(rules[0].toWhere).toEqual({ isRepository: true });
+  });
+
+  it('where: predicate at evaluateRules narrows actual matched nodes', () => {
+    // Two spring-service nodes — one is a repository, one isn't.
+    const g = new DependencyGraph();
+    g.addNode({
+      id: 'svc:UserService', kind: 'spring-service', label: 'UserService',
+      filePath: '/UserService.java',
+      metadata: { isRepository: false },
+    });
+    g.addNode({
+      id: 'svc:UserRepo', kind: 'spring-service', label: 'UserRepo',
+      filePath: '/UserRepo.java',
+      metadata: { isRepository: true },
+    });
+    // Application service depends on a repository — allowed
+    g.addEdge({
+      id: 'e1', source: 'svc:UserService', target: 'svc:UserRepo',
+      kind: 'spring-injects', metadata: {},
+    });
+    // Repository depends on application service — should violate the
+    // "infra cannot depend on application" deny rule.
+    g.addEdge({
+      id: 'e2', source: 'svc:UserRepo', target: 'svc:UserService',
+      kind: 'spring-injects', metadata: {},
+    });
+
+    const merged = mergeWithLayerRules([], {
+      layers: [
+        { name: 'app', match: ['spring-service'], where: { isRepository: false } },
+        { name: 'infra', match: ['spring-service'], where: { isRepository: true } },
+      ],
+      layerRules: [
+        { from: 'infra', to: 'app', policy: 'deny' },
+      ],
+    });
+    const violations = evaluateRules(g, merged.rules);
+    expect(violations).toHaveLength(1);
+    // Only the e2 edge (UserRepo → UserService) should violate.
+    expect(violations[0].nodeIds).toEqual(['svc:UserRepo', 'svc:UserService']);
+  });
+
   it('mergeWithLayerRules + evaluateRules — DSL deny actually flags a real graph edge', () => {
     const g = new DependencyGraph();
     g.addNode({ id: 'spring-controller:/c.java', kind: 'spring-controller', label: 'C', filePath: '/c.java', metadata: {} });
