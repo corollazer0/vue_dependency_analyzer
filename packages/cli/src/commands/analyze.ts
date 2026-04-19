@@ -1,7 +1,7 @@
 import { runAnalysis, loadConfig, type CliOptions } from '../config.js';
 import type { ProgressInfo } from '@vda/core';
 
-export async function analyzeCommand(dir: string, options: CliOptions): Promise<void> {
+export async function analyzeCommand(dir: string, options: CliOptions & { cache?: boolean }): Promise<void> {
   const config = await loadConfig(dir, options);
   console.log(`\n🔍 Analyzing project: ${dir}\n`);
 
@@ -17,8 +17,14 @@ export async function analyzeCommand(dir: string, options: CliOptions): Promise<
     lastLine = line;
   }
 
+  // Phase 7a-10 — `.option('--no-cache')` in commander binds to
+  // `options.cache === false` (via the auto-generated negation flag),
+  // not `options.noCache`. The previous read silently ignored the flag
+  // and the SQLite parse cache served stale results across runs.
+  const noCache = options.cache === false ? true : options.noCache;
+
   const { graph, stats } = await runAnalysis(config, {
-    noCache: options.noCache,
+    noCache,
     onProgress: showProgress,
   });
 
