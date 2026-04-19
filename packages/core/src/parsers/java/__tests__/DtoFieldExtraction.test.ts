@@ -146,9 +146,9 @@ describe('JavaFileParser DTO detection', () => {
     const content = readFileSync(resolve(fixturesDir, 'UserResponse.java'), 'utf-8');
     const result = parser.parse('/test/UserResponse.java', content, {});
 
-    const dtoNode = result.nodes.find(n => n.label === 'UserResponse');
+    // Phase 7a-2 — pure DTOs are now `spring-dto` nodes
+    const dtoNode = result.nodes.find(n => n.kind === 'spring-dto' && n.label === 'UserResponse');
     expect(dtoNode).toBeDefined();
-    expect(dtoNode!.metadata.isDto).toBe(true);
     expect(dtoNode!.metadata.fields).toEqual([
       { type: 'Long', name: 'id' },
       { type: 'String', name: 'name' },
@@ -161,9 +161,8 @@ describe('JavaFileParser DTO detection', () => {
     const content = readFileSync(resolve(fixturesDir, 'CreateUserRequest.java'), 'utf-8');
     const result = parser.parse('/test/CreateUserRequest.java', content, {});
 
-    const dtoNode = result.nodes.find(n => n.label === 'CreateUserRequest');
+    const dtoNode = result.nodes.find(n => n.kind === 'spring-dto' && n.label === 'CreateUserRequest');
     expect(dtoNode).toBeDefined();
-    expect(dtoNode!.metadata.isDto).toBe(true);
     expect(dtoNode!.metadata.fields).toEqual([
       { type: 'String', name: 'name' },
       { type: 'String', name: 'email' },
@@ -181,7 +180,7 @@ describe('JavaFileParser DTO detection', () => {
         }
       `;
       const result = parser.parse(`/test/User${suffix}.java`, content, {});
-      const dtoNode = result.nodes.find(n => n.metadata.isDto === true);
+      const dtoNode = result.nodes.find(n => n.kind === 'spring-dto');
       expect(dtoNode, `Expected DTO detection for suffix: ${suffix}`).toBeDefined();
     }
   });

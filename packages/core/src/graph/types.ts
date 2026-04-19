@@ -11,6 +11,7 @@ export type NodeKind =
   | 'spring-controller'
   | 'spring-endpoint'
   | 'spring-service'
+  | 'spring-dto'
   | 'native-bridge'
   | 'native-method'
   | 'mybatis-mapper'

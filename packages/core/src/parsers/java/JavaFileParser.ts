@@ -63,22 +63,23 @@ export class JavaFileParser implements FileParser {
         }
       }
 
-      // Detect DTO classes and extract their fields
+      // Detect DTO classes and emit a first-class `spring-dto` node
+      // (Phase 7a-2). Pure DTOs no longer ride on a `spring-service` node;
+      // hybrid classes (controller/service whose name happens to end in a
+      // DTO suffix) get a sibling spring-dto node so consumers find DTO
+      // metadata in one well-known place.
       const isDto = /(?:DTO|Dto|Request|Response|VO|Summary|Detail)$/.test(className);
       if (isDto) {
         const fields = extractDtoFields(content);
-        // If this class wasn't already added as a controller/service, add it as a spring-service with DTO metadata
-        const existingNode = nodes.find(n => n.label === className);
-        if (existingNode) {
-          existingNode.metadata.isDto = true;
-          existingNode.metadata.fields = fields;
-        } else {
+        const dtoNodeId = `spring-dto:${filePath}`;
+        if (!nodes.some(n => n.id === dtoNodeId)) {
           nodes.push({
-            id: `spring-service:${filePath}`,
-            kind: 'spring-service',
+            id: dtoNodeId,
+            kind: 'spring-dto',
             label: className,
             filePath,
-            metadata: { className, packageName, fqn, isDto: true, fields },
+            metadata: { className, packageName, fqn, fields },
+            loc: { filePath, line: 1, column: 0 },
           });
         }
       }

@@ -275,12 +275,22 @@ describe.skipIf(!hasTestProject)('E2E: Full test-project analysis', () => {
 
   // === DTO nodes ===
   it('should detect DTO nodes with fields', () => {
-    const dtos = graph.getAllNodes().filter(n =>
-      n.kind === 'spring-service' && n.metadata.isDto
-    );
+    // Phase 7a-2 — DTOs are first-class spring-dto kind now.
+    const dtos = graph.getAllNodes().filter(n => n.kind === 'spring-dto');
     expect(dtos.length).toBeGreaterThan(0);
     const withFields = dtos.filter(d => (d.metadata.fields as any[])?.length > 0);
     expect(withFields.length).toBeGreaterThan(0);
+  });
+
+  // === Phase 7a-2 gate: no noisy endpoint↔endpoint dto-flows edges ===
+  it('should not emit dto-flows edges between two spring-endpoint nodes', () => {
+    const offenders = graph.getAllEdges().filter(e => {
+      if (e.kind !== 'dto-flows') return false;
+      const src = graph.getNode(e.source);
+      const tgt = graph.getNode(e.target);
+      return src?.kind === 'spring-endpoint' && tgt?.kind === 'spring-endpoint';
+    });
+    expect(offenders).toHaveLength(0);
   });
 
   // === API call sites ===

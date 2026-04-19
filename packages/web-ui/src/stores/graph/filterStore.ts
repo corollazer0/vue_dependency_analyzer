@@ -6,7 +6,7 @@ import { useGraphDataStore } from './dataStore';
 const ALL_NODE_KINDS: NodeKind[] = [
   'vue-component', 'vue-composable', 'pinia-store', 'vue-directive',
   'vue-router-route', 'ts-module', 'api-call-site',
-  'spring-controller', 'spring-endpoint', 'spring-service',
+  'spring-controller', 'spring-endpoint', 'spring-service', 'spring-dto',
   'native-bridge', 'native-method',
   'mybatis-mapper', 'mybatis-statement', 'db-table',
   'vue-event', 'spring-event',
@@ -31,8 +31,8 @@ const FILTER_PRESETS: Record<FilterPreset, { nodes: NodeKind[]; edges: EdgeKind[
     edges: ['imports', 'uses-component', 'uses-store', 'uses-composable', 'uses-directive', 'provides', 'injects', 'route-renders', 'emits-event', 'listens-event'],
   },
   spring: {
-    nodes: ['spring-controller', 'spring-endpoint', 'spring-service', 'spring-event'],
-    edges: ['spring-injects', 'api-serves', 'api-implements', 'emits-event', 'listens-event'],
+    nodes: ['spring-controller', 'spring-endpoint', 'spring-service', 'spring-dto', 'spring-event'],
+    edges: ['spring-injects', 'api-serves', 'api-implements', 'dto-flows', 'emits-event', 'listens-event'],
   },
   db: {
     nodes: ['mybatis-mapper', 'mybatis-statement', 'db-table'],

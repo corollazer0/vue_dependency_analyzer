@@ -9,6 +9,7 @@ export type NodeKind =
   | 'spring-controller'
   | 'spring-endpoint'
   | 'spring-service'
+  | 'spring-dto'
   | 'native-bridge'
   | 'native-method'
   | 'mybatis-mapper'
@@ -136,6 +137,7 @@ export const NODE_STYLES: Record<NodeKind, NodeStyle> = {
   'spring-controller': { color: '#6db33f', shape: 'round-rectangle' },
   'spring-endpoint':   { color: '#8bc34a', shape: 'rectangle' },
   'spring-service':    { color: '#4caf50', shape: 'hexagon' },
+  'spring-dto':        { color: '#ab47bc', shape: 'rectangle' },
   'native-bridge':     { color: '#ff7043', shape: 'star' },
   'native-method':     { color: '#ff9800', shape: 'star' },
   'mybatis-mapper':    { color: '#e91e63', shape: 'round-rectangle' },
@@ -161,6 +163,7 @@ export const NODE_LABELS: Record<NodeKind, string> = {
   'spring-controller': 'Controller',
   'spring-endpoint': 'Endpoint',
   'spring-service': 'Service',
+  'spring-dto': 'Spring DTO',
   'native-bridge': 'Native Bridge',
   'native-method': 'Native Method',
   'mybatis-mapper': 'MyBatis Mapper',

@@ -105,11 +105,12 @@ interface TsInterface {
 export function checkDtoConsistency(graph: DependencyGraph): DtoMismatch[] {
   const mismatches: DtoMismatch[] = [];
 
-  // Build a map of DTO name -> fields (with types) from spring-service nodes marked as DTOs
+  // Build a map of DTO name -> fields (with types) from spring-dto nodes
+  // (Phase 7a-2 — DTOs are now first-class instead of spring-service+isDto).
   const dtoFieldMap = new Map<string, BackendField[]>();
   const dtoNodeMap = new Map<string, GraphNode>();
   for (const node of graph.getAllNodes()) {
-    if (node.kind === 'spring-service' && node.metadata.isDto) {
+    if (node.kind === 'spring-dto') {
       const fields = node.metadata.fields as BackendField[] | undefined;
       if (fields) {
         dtoFieldMap.set(node.label, fields);
