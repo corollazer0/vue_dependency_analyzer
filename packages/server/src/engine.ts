@@ -3,6 +3,7 @@ import { resolve, join, sep as pathSep } from 'path';
 import {
   DependencyGraph,
   CrossBoundaryResolver,
+  buildMsaServiceGraph,
   ParallelParser,
   ParseCache,
   parseFile,
@@ -202,6 +203,10 @@ export class AnalysisEngine {
       const resolver = new CrossBoundaryResolver(this.config, this.config.projectRoot);
       resolver.resolve(this.graph);
 
+      // Phase 12-1 — post-process MSA service graph (top-level nodes +
+      // inter-service edges). Same step the CLI runs in `runAnalysis`.
+      buildMsaServiceGraph(this.graph, this.config.services);
+
       this.log.info({
         event: 'analysis:complete',
         totalFiles: files.length,
@@ -367,6 +372,10 @@ export class AnalysisEngine {
     // Only re-link edges involving this file's nodes (not full re-resolve)
     const resolver = new CrossBoundaryResolver(this.config, this.config.projectRoot);
     resolver.resolve(this.graph);
+
+    // Phase 12-1 — re-derive msa-service nodes/edges after a re-resolve
+    // (incremental file change). Idempotent on existing service nodes.
+    buildMsaServiceGraph(this.graph, this.config.services);
 
     this.broadcast({ type: 'graph:update', payload: { changedFile: filePath, action } });
   }

@@ -162,6 +162,18 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
     return engine.expandCluster(decodeURIComponent(clusterId));
   });
 
+  // Phase 12-6 — top-level service graph (msa-service nodes + 3 inter-
+  // service EdgeKinds only). Useful for the new ServicesView tab; the
+  // payload is small even on a 50K-node analysis (just service summaries).
+  fastify.get('/api/graph/services', async (request, reply) => {
+    const queryKey = 'services-only';
+    const hit = getCached(queryKey);
+    if (hit) return sendWithEtag(request, reply, hit);
+    const sub = engine.getGraphFiltered(['msa-service'], ['service-calls', 'service-shares-db', 'service-shares-dto']);
+    const body = JSON.stringify(sub);
+    return sendWithEtag(request, reply, setCached(queryKey, body));
+  });
+
   // Phase 9-4 — F4 Feature Slice.
   fastify.get('/api/graph/feature/:id', async (request, reply) => {
     const { id } = request.params as { id: string };

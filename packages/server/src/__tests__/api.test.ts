@@ -643,6 +643,21 @@ describe('Server API', () => {
       expect(emptyBody.paths).toEqual([]);
     });
 
+    // Phase 12-6 — top-level services graph.
+    it('GET /api/graph/services returns only msa-service nodes and inter-service edges', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/services' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('nodes');
+      expect(body).toHaveProperty('edges');
+      // Every node returned must be msa-service.
+      for (const n of body.nodes) expect(n.kind).toBe('msa-service');
+      // Edges must be one of the three inter-service kinds.
+      for (const e of body.edges) {
+        expect(['service-calls', 'service-shares-db', 'service-shares-dto']).toContain(e.kind);
+      }
+    });
+
     // Phase 11-9 — architecture snapshot listing + diff routes.
     it('GET /api/analysis/snapshots returns a snapshots[] array', async () => {
       const res = await fastify.inject({ method: 'GET', url: '/api/analysis/snapshots' });
