@@ -40,6 +40,15 @@ export {
   type SignatureStoreOptions,
 } from './engine/SignatureStore.js';
 export {
+  ArchSnapshotStore,
+  diffSnapshots,
+  type ArchSnapshot,
+  type ArchSnapshotByKind,
+  type ArchSnapshotSummary,
+  type ArchSnapshotDiff,
+  type ArchSnapshotStoreOptions,
+} from './engine/ArchSnapshotStore.js';
+export {
   detectBreakingChanges,
   type BreakingChange,
   type BreakingChangesReport,
