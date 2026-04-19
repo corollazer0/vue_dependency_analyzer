@@ -1,11 +1,13 @@
 import { runAnalysis, loadConfig, type CliOptions } from '../config.js';
 import { analyzeChangeImpact, parseGitDiff } from '@vda/core';
+import { formatPrReport, type ImpactSummary } from './prReport.js';
 
 export async function impactCommand(
   dir: string,
-  options: CliOptions & { diff?: string; files?: string; json?: boolean },
+  options: CliOptions & { diff?: string; files?: string; json?: boolean; format?: string; cache?: boolean },
 ): Promise<void> {
   const config = await loadConfig(dir, options);
+  const noCache = options.cache === false ? true : options.noCache;
 
   // Get changed files
   let changedFiles: string[];
@@ -19,14 +21,34 @@ export async function impactCommand(
   }
 
   if (changedFiles.length === 0) {
+    if (options.format === 'github-pr') {
+      // Always print *something* for the PR-comment workflow.
+      console.log(formatPrReport({
+        changedFiles: [],
+        impact: { summary: { changed: 0, direct: 0, transitive: 0, endpoints: 0, tables: 0 }, changedNodes: [], directImpact: [], transitiveImpact: [], affectedEndpoints: [], affectedTables: [] } as unknown as ImpactSummary,
+        ruleViolationDelta: 0,
+      }));
+      return;
+    }
     console.log('No changed files found.');
     return;
   }
 
-  console.log(`\n🔍 Analyzing impact of ${changedFiles.length} changed file(s)...\n`);
+  if (options.format !== 'github-pr') {
+    console.log(`\n🔍 Analyzing impact of ${changedFiles.length} changed file(s)...\n`);
+  }
 
-  const { graph } = await runAnalysis(config, { noCache: options.noCache });
+  const { graph } = await runAnalysis(config, { noCache });
   const impact = analyzeChangeImpact(graph, changedFiles, config.projectRoot);
+
+  if (options.format === 'github-pr') {
+    console.log(formatPrReport({
+      changedFiles,
+      impact: impact as unknown as ImpactSummary,
+      ruleViolationDelta: 0, // wired up properly when 7b-3 LayerDsl lands
+    }));
+    return;
+  }
 
   if (options.json) {
     console.log(JSON.stringify({

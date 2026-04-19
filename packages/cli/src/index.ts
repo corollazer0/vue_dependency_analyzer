@@ -56,6 +56,7 @@ program
   .option('--diff <spec>', 'Git diff spec (e.g., HEAD~1..HEAD)')
   .option('--files <list>', 'Comma-separated file paths')
   .option('--json', 'Output as JSON')
+  .option('--format <fmt>', 'Output format: text | github-pr', 'text')
   .option('--no-cache', 'Disable parse cache')
   .action(impactCommand);
 
