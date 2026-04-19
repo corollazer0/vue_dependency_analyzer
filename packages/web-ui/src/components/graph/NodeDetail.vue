@@ -298,6 +298,27 @@ watch(() => graphStore.selectedNode, (node) => {
       </div>
     </div>
 
+    <!-- Phase 13-10 — DB table columns (when DDL ingested). Shows the
+         column list with type + nullable hint. Drift markers (added /
+         removed / changed) come from a sibling /api/analysis/schema-diff
+         lookup once a baseline label is set; absent here keeps the panel
+         lean. The column list alone is the headline value. -->
+    <div v-if="graphStore.selectedNode.kind === 'db-table' && Array.isArray((graphStore.selectedNode.metadata as any).columns) && (graphStore.selectedNode.metadata as any).columns.length > 0" class="rounded p-2" style="background: rgba(0,0,0,0.25)">
+      <h3 class="font-semibold text-gray-300 mb-1 text-xs">🗄️ Columns ({{ (graphStore.selectedNode.metadata as any).columns.length }})</h3>
+      <div class="text-xs space-y-0.5 max-h-64 overflow-y-auto">
+        <div v-for="col in ((graphStore.selectedNode.metadata as any).columns as Array<{name:string;type:string;nullable?:boolean;default?:string}>)"
+             :key="col.name" class="flex items-baseline gap-2 font-mono">
+          <span style="color: var(--text-primary)">{{ col.name }}</span>
+          <span style="color: var(--text-tertiary)">{{ col.type }}</span>
+          <span v-if="col.nullable === false" style="color: #f59e0b">NOT NULL</span>
+          <span v-if="col.default !== undefined && col.default !== null" style="color: var(--text-tertiary)">= {{ col.default }}</span>
+        </div>
+      </div>
+      <div class="text-[10px] mt-1" style="color: var(--text-tertiary)">
+        ddlSource: {{ (graphStore.selectedNode.metadata as any).ddlSource || 'unknown' }}
+      </div>
+    </div>
+
     <!-- Phase 11-3 — Last touched (only when withGitBlame populated metadata). -->
     <div v-if="(graphStore.selectedNode.metadata as any).lastTouchedAt" class="rounded p-2" style="background: rgba(0,0,0,0.25)">
       <h3 class="font-semibold text-gray-300 mb-1 text-xs">🕒 Last touched</h3>
