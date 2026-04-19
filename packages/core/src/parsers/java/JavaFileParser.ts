@@ -9,6 +9,7 @@ import type {
   SpringDtoNodeMetadata,
 } from '../../graph/types.js';
 import path from 'path';
+import { countLines, distinctJavaPackageCount } from '../_shared/fileMetrics.js';
 
 export class JavaFileParser implements FileParser {
   supports(filePath: string): boolean {
@@ -137,6 +138,15 @@ export class JavaFileParser implements FileParser {
         message: `Java parse error: ${e instanceof Error ? e.message : String(e)}`,
         severity: 'error',
       });
+    }
+
+    // Phase 10-2 — stamp lineCount/packageCount on every node from this file.
+    const fileLines = countLines(content);
+    const filePkg = distinctJavaPackageCount(content);
+    for (const n of nodes) {
+      const m = (n.metadata ??= {}) as Record<string, unknown>;
+      if (m.lineCount === undefined) m.lineCount = fileLines;
+      if (m.packageCount === undefined) m.packageCount = filePkg;
     }
 
     return { nodes, edges, errors };

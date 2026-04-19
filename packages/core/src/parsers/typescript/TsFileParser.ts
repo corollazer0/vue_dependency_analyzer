@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import type { FileParser, ParseResult, AnalysisConfig, GraphNode, GraphEdge, NodeKind, ParseError } from '../../graph/types.js';
 import path from 'path';
+import { countLines, distinctPackageCount } from '../_shared/fileMetrics.js';
 
 export class TsFileParser implements FileParser {
   supports(filePath: string): boolean {
@@ -16,6 +17,10 @@ export class TsFileParser implements FileParser {
     const nodeId = `${kind}:${filePath}`;
     const label = path.basename(filePath, path.extname(filePath));
 
+    // Phase 10-2 — every node carries lineCount/packageCount; the import-spec
+    // collection feeds packageCount and is shared with the route-renders /
+    // navigation parsers below (so we don't have to scan twice).
+    const importSpecs: string[] = [];
     const moduleNode: GraphNode = {
       id: nodeId,
       kind,
@@ -24,6 +29,8 @@ export class TsFileParser implements FileParser {
       metadata: {
         exportedFunctions: [] as string[],
         isBarrel: false,
+        lineCount: countLines(content),
+        packageCount: 0,
       },
     };
     nodes.push(moduleNode);
@@ -65,6 +72,7 @@ export class TsFileParser implements FileParser {
       // Import declarations
       if (ts.isImportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
         const importPath = node.moduleSpecifier.text;
+        importSpecs.push(importPath);
         edges.push({
           id: `${nodeId}:imports:${importPath}`,
           source: nodeId,
@@ -77,6 +85,7 @@ export class TsFileParser implements FileParser {
       // Export declarations (re-exports)
       if (ts.isExportDeclaration(node) && node.moduleSpecifier && ts.isStringLiteral(node.moduleSpecifier)) {
         const exportPath = node.moduleSpecifier.text;
+        importSpecs.push(exportPath);
         edges.push({
           id: `${nodeId}:imports:${exportPath}`,
           source: nodeId,
@@ -179,6 +188,7 @@ export class TsFileParser implements FileParser {
 
     (moduleNode.metadata as Record<string, unknown>).exportedFunctions = exportedFunctions;
     (moduleNode.metadata as Record<string, unknown>).isBarrel = !hasNonReExport && edges.length > 0;
+    (moduleNode.metadata as Record<string, unknown>).packageCount = distinctPackageCount(importSpecs);
     if (interfaces.length > 0) {
       (moduleNode.metadata as Record<string, unknown>).interfaces = interfaces;
     }
@@ -193,6 +203,18 @@ export class TsFileParser implements FileParser {
 
     // Detect router.push / router.replace navigation calls in any TS/JS file
     parseRouterNavigation(content, nodeId, moduleNode);
+
+    // Phase 10-2 — stamp lineCount/packageCount on every node from this file so
+    // consumers (anti-pattern, hot-spot ranking) read one shape everywhere.
+    const moduleMeta = moduleNode.metadata as Record<string, unknown>;
+    const fileLines = moduleMeta.lineCount as number;
+    const filePkg = moduleMeta.packageCount as number;
+    for (const n of nodes) {
+      if (n === moduleNode) continue;
+      const m = (n.metadata ??= {}) as Record<string, unknown>;
+      if (m.lineCount === undefined) m.lineCount = fileLines;
+      if (m.packageCount === undefined) m.packageCount = filePkg;
+    }
 
     return { nodes, edges, errors };
   }

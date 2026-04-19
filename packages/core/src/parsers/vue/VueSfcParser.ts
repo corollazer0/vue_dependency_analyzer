@@ -2,6 +2,7 @@ import { parse as parseSfc } from '@vue/compiler-sfc';
 import type { FileParser, ParseResult, AnalysisConfig, GraphNode, GraphEdge, ParseError } from '../../graph/types.js';
 import { analyzeScript } from './ScriptAnalyzer.js';
 import { analyzeTemplate } from './TemplateAnalyzer.js';
+import { countLines, distinctPackageCount } from '../_shared/fileMetrics.js';
 import path from 'path';
 
 export class VueSfcParser implements FileParser {
@@ -30,6 +31,8 @@ export class VueSfcParser implements FileParser {
     const componentName = getComponentName(filePath);
     const nodeId = `vue:${filePath}`;
 
+    // Phase 10-2 — universal lineCount/packageCount stamped on every node.
+    const fileLineCount = countLines(content);
     const componentNode: GraphNode = {
       id: nodeId,
       kind: 'vue-component',
@@ -39,6 +42,8 @@ export class VueSfcParser implements FileParser {
         isSetupScript: !!descriptor.scriptSetup,
         props: [] as string[],
         emits: [] as string[],
+        lineCount: fileLineCount,
+        packageCount: 0,
       },
     };
     nodes.push(componentNode);
@@ -69,6 +74,23 @@ export class VueSfcParser implements FileParser {
       const templateResult = analyzeTemplate(descriptor.template.content, filePath, nodeId);
       edges.push(...templateResult.edges);
       errors.push(...templateResult.errors);
+    }
+
+    // Phase 10-2 — finalize packageCount from imports edges; stamp on all nodes.
+    const importPaths: string[] = [];
+    for (const e of edges) {
+      if (e.kind === 'imports') {
+        const ip = (e.metadata as Record<string, unknown> | undefined)?.importPath;
+        if (typeof ip === 'string') importPaths.push(ip);
+      }
+    }
+    const filePkg = distinctPackageCount(importPaths);
+    (componentNode.metadata as Record<string, unknown>).packageCount = filePkg;
+    for (const n of nodes) {
+      if (n === componentNode) continue;
+      const m = (n.metadata ??= {}) as Record<string, unknown>;
+      if (m.lineCount === undefined) m.lineCount = fileLineCount;
+      if (m.packageCount === undefined) m.packageCount = filePkg;
     }
 
     return { nodes, edges, errors };

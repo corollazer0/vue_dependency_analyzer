@@ -170,4 +170,33 @@ describe('VueSfcParser', () => {
       expect((cartEdge.metadata as any).subscribedFields).toEqual(['items', 'totalPrice']);
     });
   });
+
+  // Phase 10-2 — every node carries lineCount + packageCount.
+  describe('universal lineCount/packageCount metadata', () => {
+    const content = readFileSync(resolve(fixturesDir, 'SampleComponent.vue'), 'utf-8');
+    const result = parser.parse('/test/SampleComponent.vue', content, {
+      nativeBridges: ['AndroidBridge'],
+    });
+
+    it('every emitted node has numeric lineCount and packageCount', () => {
+      for (const node of result.nodes) {
+        const m = node.metadata as Record<string, unknown>;
+        expect(typeof m.lineCount).toBe('number');
+        expect(typeof m.packageCount).toBe('number');
+      }
+    });
+
+    it('component node lineCount matches the source file size', () => {
+      const componentNode = result.nodes.find(n => n.kind === 'vue-component');
+      const m = componentNode!.metadata as Record<string, unknown>;
+      const expectedLines = content.split('\n').length;
+      expect(m.lineCount).toBe(expectedLines);
+    });
+
+    it('component packageCount is > 0 when imports exist', () => {
+      const componentNode = result.nodes.find(n => n.kind === 'vue-component');
+      const m = componentNode!.metadata as Record<string, unknown>;
+      expect((m.packageCount as number) > 0).toBe(true);
+    });
+  });
 });
