@@ -9,6 +9,13 @@ import type { EdgeKind } from '@/types/graph';
 // Higher = more meaningful. Used to surface "the path that crosses
 // real boundaries" ahead of long import-only chains.
 const EDGE_WEIGHT: Record<string, number> = {
+  // Phase 12-8 — inter-service edges score highest because crossing a
+  // service boundary is the most architecturally meaningful step in any
+  // path. service-shares-* are anti-patterns but still meaningful
+  // (deserve to surface in "Most meaningful" sort).
+  'service-calls': 12,
+  'service-shares-db': 11,
+  'service-shares-dto': 11,
   'api-call': 10,
   'api-implements': 9,
   'api-serves': 9,
