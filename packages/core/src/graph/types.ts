@@ -127,7 +127,16 @@ export type LayerMetadataPredicate = Record<string, string | boolean>;
 
 export interface ArchitectureRule {
   id?: string;
-  type: 'deny-circular' | 'deny-direct' | 'allow-only' | 'max-depth' | 'max-dependents';
+  type:
+    | 'deny-circular'
+    | 'deny-direct'
+    | 'allow-only'
+    | 'max-depth'
+    | 'max-dependents'
+    // Phase 12-9 — flag every service-shares-db / -dto / -calls edge as a
+    // violation. Useful when a project's policy is "no cross-service DB
+    // reach-around"; opt-in via .vdarc.json.
+    | 'no-cross-service-db';
   edgeKinds?: EdgeKind[];
   from?: NodeKind | NodeKind[];
   to?: NodeKind | NodeKind[];
