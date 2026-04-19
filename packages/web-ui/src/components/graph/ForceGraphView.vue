@@ -380,7 +380,9 @@ function initCytoscape() {
       return new Promise((resolve) => {
         const start = performance.now();
         cy!.one('render', () => resolve(performance.now() - start));
-        graphStore.toggleNodeKind(kind);
+        // Harness passes a plain string; the store accepts a narrowed NodeKind
+        // union. The bench only calls this with valid kinds so the cast is safe.
+        graphStore.toggleNodeKind(kind as Parameters<typeof graphStore.toggleNodeKind>[0]);
       });
     };
   }
