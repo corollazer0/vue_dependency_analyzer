@@ -12,6 +12,13 @@ export interface MeasureOptions {
   firstPaintTimeoutMs?: number;
   /** Max wall-time to wait for filter repaint, ms. Default 10_000. */
   filterTimeoutMs?: number;
+  /**
+   * Phase 10-8 — when true, inject axe-core into the page after first render
+   * and run an a11y audit. Result is returned as `axe`. Cytoscape canvas is
+   * marked aria-hidden so cytoscape's lack of an accessible name doesn't
+   * dominate the report. The CI workflow gates on `axe.violations.critical`.
+   */
+  audit?: boolean;
 }
 
 // Declare the in-page globals `@vda/bench` cares about; the measurement
@@ -19,6 +26,14 @@ export interface MeasureOptions {
 /* eslint-disable @typescript-eslint/no-explicit-any */
 declare const globalThis: any;
 /* eslint-enable @typescript-eslint/no-explicit-any */
+
+/** Phase 10-8 — axe-core audit summary. Mirrors the shape we feed CI gates. */
+export interface AxeAuditSummary {
+  /** Total violation count broken down by impact bucket. */
+  violations: { critical: number; serious: number; moderate: number; minor: number };
+  /** First N violations with their rule id + selector for human triage. */
+  details: Array<{ id: string; impact: string | null; nodes: number; help: string }>;
+}
 
 export interface MeasurementResult {
   firstPaintMs: number;
@@ -28,6 +43,8 @@ export interface MeasurementResult {
   userAgent: string;
   chromiumVersion: string;
   pageErrors: string[];
+  /** Phase 10-8 — present only when MeasureOptions.audit was true. */
+  axe?: AxeAuditSummary;
 }
 
 export async function runMeasurement(opts: MeasureOptions): Promise<MeasurementResult> {
@@ -108,6 +125,45 @@ export async function runMeasurement(opts: MeasureOptions): Promise<MeasurementR
       return { nodeCount: g.nodes.length, edgeCount: g.edges.length };
     });
 
+    // Phase 10-8 — axe-core a11y audit. Runs AFTER the G1/G2 measurements so
+    // the script-injection cost can't pollute the perf numbers.
+    let axe: AxeAuditSummary | undefined;
+    if (opts.audit) {
+      // Resolve axe-core's UMD bundle path (devDep). Inject it as the page
+      // script source so it sets `window.axe` without bundling.
+      const { createRequire } = await import('node:module');
+      const req = createRequire(import.meta.url);
+      const axePath = req.resolve('axe-core/axe.min.js');
+      await page.addScriptTag({ path: axePath });
+      // Mark the cytoscape canvas as aria-hidden so axe doesn't surface
+      // canvas-no-accessible-name as the dominant violation. Real-graph
+      // semantics should be exposed via siblings (NodeDetail panel etc.).
+      await page.evaluate(() => {
+        for (const c of Array.from(document.querySelectorAll('canvas'))) {
+          c.setAttribute('aria-hidden', 'true');
+        }
+      });
+      const result = await page.evaluate(async () => {
+        // axe is attached to window by the script tag.
+        const axe = (globalThis as any).axe;
+        const r = await axe.run();
+        return {
+          violations: r.violations.map((v: any) => ({
+            id: v.id,
+            impact: v.impact ?? null,
+            nodes: v.nodes.length,
+            help: v.help,
+          })),
+        };
+      });
+      const buckets = { critical: 0, serious: 0, moderate: 0, minor: 0 };
+      for (const v of result.violations) {
+        const bucket = (v.impact ?? 'minor') as keyof typeof buckets;
+        if (bucket in buckets) buckets[bucket] += 1;
+      }
+      axe = { violations: buckets, details: result.violations.slice(0, 25) };
+    }
+
     return {
       firstPaintMs: Math.round(firstPaintMs),
       filterMs: Math.round(filterMs as number),
@@ -116,6 +172,7 @@ export async function runMeasurement(opts: MeasureOptions): Promise<MeasurementR
       userAgent,
       chromiumVersion,
       pageErrors,
+      ...(axe ? { axe } : {}),
     };
   } finally {
     if (page) await page.close().catch(() => {});
