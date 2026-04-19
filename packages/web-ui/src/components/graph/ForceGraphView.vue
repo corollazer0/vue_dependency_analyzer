@@ -254,14 +254,30 @@ function buildStylesheet(): any[] {
     },
     // Overlay styles — see Phase 1-7: rings now live on the cytoscape-canvas layer,
     // not on node classes. Kept empty intentionally so the selectors themselves are gone.
-    // Path highlight styles (Pathfinder)
+    // Path highlight styles (Pathfinder) — Phase 7a-11.
+    // Labels stay legible (`text-opacity: 1`) even though the .faded
+    // siblings dim everything else; bumped edge width + arrow scale so
+    // the highlighted run reads at a glance against the dimmed graph.
     {
       selector: 'node.path-highlight',
-      style: { 'border-width': 3, 'border-color': '#3498db', 'opacity': 1, 'z-index': 25 },
+      style: {
+        'border-width': 4,
+        'border-color': '#3498db',
+        'opacity': 1,
+        'text-opacity': 1,
+        'z-index': 25,
+      },
     },
     {
       selector: 'edge.path-highlight',
-      style: { 'line-color': '#3498db', 'target-arrow-color': '#3498db', 'width': 3, 'opacity': 1, 'z-index': 15 },
+      style: {
+        'line-color': '#3498db',
+        'target-arrow-color': '#3498db',
+        'width': 4,
+        'arrow-scale': 1.0,
+        'opacity': 1,
+        'z-index': 15,
+      },
     },
     // Change impact styles
     {
