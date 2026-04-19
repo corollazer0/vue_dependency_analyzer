@@ -88,6 +88,8 @@ export type { CommunityDetectionOptions, CommunityResult } from './analyzers/Com
 export { parseGitDiff, getUncommittedFiles } from './git/GitDiffParser.js';
 export { analyzeChangeImpact } from './git/ChangeImpactAnalyzer.js';
 export type { ChangeImpact } from './git/ChangeImpactAnalyzer.js';
+export { readGitBlame, repoRelative } from './git/GitBlameReader.js';
+export type { GitBlameRecord, GitBlameMap } from './git/GitBlameReader.js';
 
 // Engine
 export { ParallelParser, parseFile } from './engine/ParallelParser.js';
