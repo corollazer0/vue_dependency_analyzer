@@ -51,4 +51,9 @@ export function registerAnalysisRoutes(fastify: FastifyInstance, engine: Analysi
     const { baseline } = request.query as { baseline?: string };
     return engine.getBreakingChanges({ baseline });
   });
+
+  // Phase 9-9 — F9 anti-pattern classifier.
+  fastify.get('/api/analysis/anti-patterns', async () => {
+    return engine.getAntiPatterns();
+  });
 }

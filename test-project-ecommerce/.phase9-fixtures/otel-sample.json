@@ -1,0 +1,48 @@
+{
+  "comment": "Phase 9-14 PoC fixture — synthetic OTLP JSON for 5 endpoints, hand-tagged with realistic Spring auto-instrumentation span names. Read-only by VDA — generated/exported by an APM system, not collected by us.",
+  "resourceSpans": [
+    {
+      "resource": {
+        "attributes": [
+          { "key": "service.name", "value": { "stringValue": "user-service" } }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": { "name": "io.opentelemetry.spring-webmvc-6.0", "version": "1.32.0" },
+          "spans": [
+            { "name": "GET /api/users", "kind": 2, "startTimeUnixNano": "1700000000000000000", "endTimeUnixNano": "1700000000045000000", "status": { "code": 1 }, "attributes": [{ "key": "http.method", "value": { "stringValue": "GET" } }, { "key": "http.route", "value": { "stringValue": "/api/users" } }, { "key": "http.status_code", "value": { "intValue": 200 } }] },
+            { "name": "GET /api/users", "kind": 2, "startTimeUnixNano": "1700000001000000000", "endTimeUnixNano": "1700000001078000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/users", "kind": 2, "startTimeUnixNano": "1700000002000000000", "endTimeUnixNano": "1700000002120000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/users", "kind": 2, "startTimeUnixNano": "1700000003000000000", "endTimeUnixNano": "1700000003180000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/users", "kind": 2, "startTimeUnixNano": "1700000004000000000", "endTimeUnixNano": "1700000004250000000", "status": { "code": 2 }, "attributes": [{ "key": "http.status_code", "value": { "intValue": 500 } }] },
+            { "name": "GET /api/users/{id}", "kind": 2, "startTimeUnixNano": "1700000005000000000", "endTimeUnixNano": "1700000005031000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/users/{id}", "kind": 2, "startTimeUnixNano": "1700000006000000000", "endTimeUnixNano": "1700000006046000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/users/{id}", "kind": 2, "startTimeUnixNano": "1700000007000000000", "endTimeUnixNano": "1700000007059000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "POST /api/auth/login", "kind": 2, "startTimeUnixNano": "1700000008000000000", "endTimeUnixNano": "1700000008210000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "POST /api/auth/login", "kind": 2, "startTimeUnixNano": "1700000009000000000", "endTimeUnixNano": "1700000009290000000", "status": { "code": 2 }, "attributes": [{ "key": "http.status_code", "value": { "intValue": 401 } }] }
+          ]
+        }
+      ]
+    },
+    {
+      "resource": {
+        "attributes": [
+          { "key": "service.name", "value": { "stringValue": "product-service" } }
+        ]
+      },
+      "scopeSpans": [
+        {
+          "scope": { "name": "io.opentelemetry.spring-webmvc-6.0", "version": "1.32.0" },
+          "spans": [
+            { "name": "GET /api/products", "kind": 2, "startTimeUnixNano": "1700000010000000000", "endTimeUnixNano": "1700000010085000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/products", "kind": 2, "startTimeUnixNano": "1700000011000000000", "endTimeUnixNano": "1700000011120000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/products", "kind": 2, "startTimeUnixNano": "1700000012000000000", "endTimeUnixNano": "1700000012165000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/products/{id}", "kind": 2, "startTimeUnixNano": "1700000013000000000", "endTimeUnixNano": "1700000013040000000", "status": { "code": 1 }, "attributes": [] },
+            { "name": "GET /api/products/{id}", "kind": 2, "startTimeUnixNano": "1700000014000000000", "endTimeUnixNano": "1700000014050000000", "status": { "code": 1 }, "attributes": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}

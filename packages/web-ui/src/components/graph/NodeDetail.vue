@@ -10,6 +10,31 @@ const graphStore = useGraphStore();
 const showSnippet = ref(false);
 const snippetRef = ref<InstanceType<typeof SourceSnippet>>();
 
+// Phase 9-9 — anti-pattern overlay loaded once per session and indexed
+// by node id so opening NodeDetail is O(1).
+const antiPatterns = ref<{ byNodeId: Record<string, string[]>; suggestions: Record<string, string> } | null>(null);
+async function loadAntiPatterns(): Promise<void> {
+  if (antiPatterns.value) return;
+  try {
+    const res = await apiFetch('/api/analysis/anti-patterns');
+    if (res.ok) antiPatterns.value = await res.json();
+  } catch {
+    /* keep null */
+  }
+}
+loadAntiPatterns();
+function tagsForCurrentNode(): string[] {
+  const id = graphStore.selectedNode?.id;
+  if (!id || !antiPatterns.value) return [];
+  return antiPatterns.value.byNodeId[id] ?? [];
+}
+function tagColor(tag: string): string {
+  if (tag === 'god-object') return '#ef4444';
+  if (tag === 'cyclic-cluster') return '#f59e0b';
+  if (tag === 'utility-sink') return '#3498db';
+  return '#22c55e';
+}
+
 function viewSource(filePath: string, line: number) {
   showSnippet.value = true;
   snippetRef.value?.loadSnippet(filePath, line);
@@ -223,6 +248,40 @@ watch(() => graphStore.selectedNode, (node) => {
           title="View Source"
         >📄</button>
       </p>
+    </div>
+
+    <!-- Phase 9-13 — OTel runtime stats -->
+    <div v-if="graphStore.selectedNode.kind === 'spring-endpoint' && (graphStore.selectedNode.metadata as any).p95Ms !== undefined" class="rounded p-2" style="background: rgba(0,0,0,0.25)">
+      <h3 class="font-semibold text-gray-300 mb-1 text-xs">📡 Runtime (OTel)</h3>
+      <div class="grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <div class="text-gray-500">p95</div>
+          <div class="font-mono text-white">{{ (graphStore.selectedNode.metadata as any).p95Ms }}ms</div>
+        </div>
+        <div>
+          <div class="text-gray-500">error rate</div>
+          <div class="font-mono" :style="{ color: ((graphStore.selectedNode.metadata as any).errorRate || 0) > 0 ? '#ef4444' : '#22c55e' }">
+            {{ (((graphStore.selectedNode.metadata as any).errorRate || 0) * 100).toFixed(1) }}%
+          </div>
+        </div>
+        <div>
+          <div class="text-gray-500">traces</div>
+          <div class="font-mono text-white">{{ (graphStore.selectedNode.metadata as any).traceCount }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 9-9 — Patterns -->
+    <div v-if="tagsForCurrentNode().length > 0">
+      <h3 class="font-semibold text-gray-300 mb-1">Patterns</h3>
+      <div class="space-y-1">
+        <div v-for="t in tagsForCurrentNode()" :key="t"
+             class="rounded p-2 text-xs"
+             :style="{ background: 'rgba(0,0,0,0.25)', borderLeft: `3px solid ${tagColor(t)}` }">
+          <div class="font-mono" :style="{ color: tagColor(t) }">{{ t }}</div>
+          <div class="mt-0.5 text-gray-300">{{ antiPatterns?.suggestions?.[t] }}</div>
+        </div>
+      </div>
     </div>
 
     <!-- Metadata -->

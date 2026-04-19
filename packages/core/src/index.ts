@@ -46,6 +46,20 @@ export {
   type BreakingCode,
 } from './analyzers/BreakingChangeDetector.js';
 export {
+  classifyAntiPatterns,
+  type AntiPatternTag,
+  type AntiPatternResult,
+  type ClassifyOptions,
+  type ComplexityThresholds,
+} from './analyzers/AntiPatternClassifier.js';
+export {
+  readOtelTraces,
+  reduceSpans,
+  type SpanRecord,
+  type EndpointTraceStats,
+  type OtelReadResult,
+} from './telemetry/OtelReader.js';
+export {
   WaiverEngine,
   loadWaivers,
   type Waiver,

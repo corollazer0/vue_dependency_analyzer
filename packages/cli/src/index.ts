@@ -25,6 +25,7 @@ program
   .option('--json', 'Output as JSON')
   .option('--signatures-only', 'Skip reporting and persist a SignatureStore snapshot only')
   .option('--label <name>', 'Snapshot label for --signatures-only (default: main)')
+  .option('--otel-traces <file>', 'Inject p95Ms / errorRate from an OTLP JSON trace export (Phase 9-12)')
   .option('--no-cache', 'Disable parse cache')
   .action(analyzeCommand);
 
@@ -70,6 +71,7 @@ program
   .argument('[dir]', 'Project directory', '.')
   .option('--config <path>', 'Config file path', '.vdarc.json')
   .option('--json', 'Output as JSON')
+  .option('--patterns', 'Run anti-pattern classifier instead of architecture rules (Phase 9-10)')
   .option('--no-cache', 'Disable parse cache')
   .action(lintCommand);
 
