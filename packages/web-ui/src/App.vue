@@ -9,6 +9,7 @@ import TreeView from '@/components/graph/TreeView.vue';
 import MatrixView from '@/components/graph/MatrixView.vue';
 import BottomUpView from '@/components/graph/BottomUpView.vue';
 import LayerComplianceView from '@/components/graph/LayerComplianceView.vue';
+import FeatureView from '@/components/graph/FeatureView.vue';
 import NodeDetail from '@/components/graph/NodeDetail.vue';
 import GraphLegend from '@/components/graph/GraphLegend.vue';
 import FilterPanel from '@/components/sidebar/FilterPanel.vue';
@@ -26,7 +27,7 @@ import ChangeImpactPanel from '@/components/ChangeImpactPanel.vue';
 
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
-const activeView = ref<'graph' | 'tree' | 'matrix' | 'bottom-up' | 'layer-compliance'>('graph');
+const activeView = ref<'graph' | 'tree' | 'matrix' | 'bottom-up' | 'layer-compliance' | 'feature'>('graph');
 const showPathfinder = ref(false);
 const showParseErrors = ref(false);
 const showUnresolvedEdges = ref(false);
@@ -248,7 +249,7 @@ function handleKeydown(e: KeyboardEvent) {
 
             <!-- View switcher -->
             <div role="tablist" aria-label="Graph view" class="flex gap-1">
-              <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'},{id:'matrix',label:'Matrix'},{id:'bottom-up',label:'Bottom-Up'},{id:'layer-compliance',label:'Layers'}]" :key="view.id" @click="activeView = view.id as any" role="tab" :aria-selected="activeView === view.id" :aria-controls="`vda-view-${view.id}`" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
+              <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'},{id:'matrix',label:'Matrix'},{id:'bottom-up',label:'Bottom-Up'},{id:'layer-compliance',label:'Layers'},{id:'feature',label:'Features'}]" :key="view.id" @click="activeView = view.id as any" role="tab" :aria-selected="activeView === view.id" :aria-controls="`vda-view-${view.id}`" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
             </div>
 
             <button @click="showPathfinder = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)" aria-label="Open Pathfinder">Pathfinder</button>
@@ -290,6 +291,9 @@ function handleKeydown(e: KeyboardEvent) {
               </div>
               <div v-show="activeView === 'layer-compliance'" id="vda-view-layer-compliance" role="tabpanel" aria-label="Layer compliance matrix" tabindex="0" class="absolute inset-0">
                 <LayerComplianceView />
+              </div>
+              <div v-show="activeView === 'feature'" id="vda-view-feature" role="tabpanel" aria-label="Feature slice" tabindex="0" class="absolute inset-0">
+                <FeatureView />
               </div>
               <GraphLegend v-if="activeView === 'graph'" />
             </div>

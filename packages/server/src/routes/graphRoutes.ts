@@ -162,6 +162,21 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
     return engine.expandCluster(decodeURIComponent(clusterId));
   });
 
+  // Phase 9-4 — F4 Feature Slice.
+  fastify.get('/api/graph/feature/:id', async (request, reply) => {
+    const { id } = request.params as { id: string };
+    const slice = await engine.getFeatureSlice(decodeURIComponent(id));
+    if (!slice) {
+      reply.code(404);
+      return { error: `Feature "${id}" not declared in .vdarc.json` };
+    }
+    return slice;
+  });
+
+  fastify.get('/api/graph/feature-intersections', async () => {
+    return engine.getFeatureIntersections();
+  });
+
   // Single node detail — query param to support IDs with slashes
   fastify.get('/api/graph/node', async (request, reply) => {
     const { id } = request.query as { id?: string };

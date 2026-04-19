@@ -15,5 +15,10 @@
     "node_modules/**",
     "dist/**",
     "build/**"
+  ],
+  "features": [
+    { "id": "user", "entry": "frontend/src/components/user/UserList.vue" },
+    { "id": "product", "entry": "frontend/src/components/product/ProductList.vue" },
+    { "id": "order", "entry": "frontend/src/components/order/OrderList.vue" }
   ]
 }

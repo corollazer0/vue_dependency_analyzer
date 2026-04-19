@@ -393,6 +393,20 @@ describe('Server API', () => {
       expect(res.statusCode).toBe(400);
     });
 
+    it('GET /api/graph/feature/:id returns 404 for an unknown feature (Phase 9-4)', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/feature/missing-id' });
+      expect(res.statusCode).toBe(404);
+      const body = JSON.parse(res.body);
+      expect(body.error).toMatch(/not declared/);
+    });
+
+    it('GET /api/graph/feature-intersections returns a pairs array (Phase 9-6)', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/feature-intersections' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(Array.isArray(body.pairs)).toBe(true);
+    });
+
     it('GET /api/analysis/breaking-changes returns empty report when no baseline (Phase 8-6)', async () => {
       const res = await fastify.inject({ method: 'GET', url: '/api/analysis/breaking-changes?baseline=missing-label' });
       expect(res.statusCode).toBe(200);
