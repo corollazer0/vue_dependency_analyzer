@@ -1,9 +1,35 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
 import { apiFetch } from '@/api/client';
 import { EDGE_STYLES } from '@/types/graph';
 import type { EdgeKind } from '@/types/graph';
+
+// Phase 7a-4 — semantic edge-kind weights for Pathfinder scoring.
+// Higher = more meaningful. Used to surface "the path that crosses
+// real boundaries" ahead of long import-only chains.
+const EDGE_WEIGHT: Record<string, number> = {
+  'api-call': 10,
+  'api-implements': 9,
+  'api-serves': 9,
+  'spring-injects': 8,
+  'mybatis-maps': 7,
+  'reads-table': 7,
+  'writes-table': 7,
+  'route-renders': 6,
+  'uses-component': 5,
+  'uses-store': 5,
+  'uses-composable': 5,
+  'emits-event': 5,
+  'listens-event': 5,
+  'native-call': 5,
+  'provides': 4,
+  'injects': 4,
+  'uses-directive': 3,
+  'imports': 2,
+  'dto-flows': 2,
+};
+const TOP_BY_SCORE_CAP = 20;
 
 const emit = defineEmits<{ close: [] }>();
 const graphStore = useGraphStore();
@@ -28,6 +54,7 @@ const shortestOnly = ref(false);
 const showOptions = ref(false);
 const edgeKindList = Object.keys(EDGE_STYLES) as EdgeKind[];
 const activeEdgeKinds = ref<Set<EdgeKind>>(new Set(edgeKindList));
+const sortMode = ref<'length' | 'score'>('length');
 
 let fromDebounce: ReturnType<typeof setTimeout>;
 let toDebounce: ReturnType<typeof setTimeout>;
@@ -115,13 +142,44 @@ function edgeKindBetween(fromId: string, toId: string): string | null {
   return edge?.kind ?? null;
 }
 
+function pathScore(path: string[]): number {
+  let total = 0;
+  for (let i = 0; i < path.length - 1; i++) {
+    const kind = edgeKindBetween(path[i], path[i + 1]);
+    if (!kind) continue;
+    total += EDGE_WEIGHT[kind] ?? 1;
+  }
+  return total;
+}
+
+// Default: shortest-first (length asc, then score desc as tiebreaker).
+// Top-by-score: pick the highest-meaning paths regardless of length,
+// capped at TOP_BY_SCORE_CAP so the UI stays scannable.
+const visiblePaths = computed(() => {
+  const xs = paths.value.slice();
+  if (sortMode.value === 'score') {
+    xs.sort((a, b) => {
+      const ds = pathScore(b) - pathScore(a);
+      if (ds !== 0) return ds;
+      return a.length - b.length;
+    });
+    return xs.slice(0, TOP_BY_SCORE_CAP);
+  }
+  xs.sort((a, b) => {
+    const dl = a.length - b.length;
+    if (dl !== 0) return dl;
+    return pathScore(b) - pathScore(a);
+  });
+  return xs;
+});
+
 function edgeColor(kind: string): string {
   return (EDGE_STYLES as Record<string, { color: string }>)[kind]?.color ?? '#666';
 }
 
 function highlightPath(index: number) {
   selectedPathIndex.value = index;
-  const path = paths.value[index];
+  const path = visiblePaths.value[index];
   if (path) {
     graphStore.highlightedPath = path;
   }
@@ -300,9 +358,34 @@ function clear() {
 
         <!-- Results -->
         <div v-if="searched && !loading" class="space-y-2">
-          <p class="text-xs" style="color: var(--text-tertiary)">
-            {{ pathCount }} path{{ pathCount === 1 ? '' : 's' }} found
-          </p>
+          <div class="flex items-center justify-between">
+            <p class="text-xs" style="color: var(--text-tertiary)">
+              {{ pathCount }} path{{ pathCount === 1 ? '' : 's' }} found
+              <span v-if="sortMode === 'score' && pathCount > visiblePaths.length">
+                · showing top {{ visiblePaths.length }}
+              </span>
+            </p>
+            <!-- Phase 7a-4: sort tabs -->
+            <div v-if="paths.length > 1" class="inline-flex rounded-md overflow-hidden text-[10px]"
+                 style="border: 1px solid var(--border-subtle)">
+              <button
+                @click="sortMode = 'length'; selectedPathIndex = null"
+                class="px-2 py-0.5 transition-colors"
+                :style="{
+                  background: sortMode === 'length' ? 'var(--accent-blue)' : 'transparent',
+                  color: sortMode === 'length' ? '#fff' : 'var(--text-tertiary)'
+                }"
+              >Shortest</button>
+              <button
+                @click="sortMode = 'score'; selectedPathIndex = null"
+                class="px-2 py-0.5 transition-colors"
+                :style="{
+                  background: sortMode === 'score' ? 'var(--accent-blue)' : 'transparent',
+                  color: sortMode === 'score' ? '#fff' : 'var(--text-tertiary)'
+                }"
+              >Most meaningful</button>
+            </div>
+          </div>
           <div
             v-if="paths.length === 0"
             class="text-center py-4 text-xs"
@@ -312,7 +395,7 @@ function clear() {
           </div>
           <div v-else class="max-h-60 overflow-y-auto space-y-2">
             <div
-              v-for="(path, i) in paths"
+              v-for="(path, i) in visiblePaths"
               :key="i"
               class="rounded-md px-3 py-2 text-xs cursor-pointer transition-colors"
               :style="{
@@ -324,6 +407,7 @@ function clear() {
             >
               <span class="font-mono" style="color: var(--text-tertiary)">#{{ i + 1 }}</span>
               <span class="ml-2" style="color: var(--text-secondary)">{{ path.length - 1 }} hop{{ path.length - 1 === 1 ? '' : 's' }}</span>
+              <span class="ml-2" style="color: var(--text-tertiary)" :title="'Edge-kind weight sum'">· score {{ pathScore(path) }}</span>
               <div class="mt-1 flex flex-wrap items-center gap-1">
                 <template v-for="(node, j) in path" :key="j">
                   <span
