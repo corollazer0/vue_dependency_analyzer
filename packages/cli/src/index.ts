@@ -6,6 +6,7 @@ import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
 import { lintCommand } from './commands/lint.js';
 import { impactCommand } from './commands/impact.js';
+import { decommissionCommand } from './commands/decommission.js';
 
 const program = new Command();
 
@@ -72,5 +73,15 @@ program
   .description('Auto-detect project structure and generate .vdarc.json')
   .argument('[dir]', 'Project directory', '.')
   .action(initCommand);
+
+// Phase 7b-2 — F2 decommission helper.
+program
+  .command('decommission')
+  .description('List files that become safe to delete alongside the target')
+  .argument('<file>', 'Target file (relative to project root or absolute)')
+  .option('--dir <path>', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--no-cache', 'Disable parse cache')
+  .action(decommissionCommand);
 
 program.parse();

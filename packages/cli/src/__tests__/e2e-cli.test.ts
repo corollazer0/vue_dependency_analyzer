@@ -71,4 +71,18 @@ describe.skipIf(!hasFixture || !hasCliBuild)('vda CLI E2E (Phase 7a-10)', () => 
     expect(r.stdout).toMatch(/Node Types:/);
     expect(r.stdout).toMatch(/Edge Types:/);
   });
+
+  it('vda decommission <file> reports both kept and safe-to-delete sets (Phase 7b-2)', () => {
+    const r = runCli([
+      'decommission',
+      'frontend/src/components/dashboard/PieChart.vue',
+      '--dir', testProject,
+      '--no-cache',
+    ]);
+    expect(r.status, `stderr: ${r.stderr}`).toBe(0);
+    // Headline + both sections should always be present, even if one is empty.
+    expect(r.stdout).toMatch(/Decommission impact for:/);
+    expect(r.stdout).toMatch(/Safe to delete with the target/);
+    expect(r.stdout).toMatch(/Still in use after target is removed/);
+  });
 });
