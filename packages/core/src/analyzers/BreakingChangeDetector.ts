@@ -1,4 +1,5 @@
 import type { SignatureDiff, SignatureRecord } from '../engine/SignatureStore.js';
+import type { SchemaDiff } from '../engine/SchemaSnapshotStore.js';
 
 // Phase 8-2 + 8-3 + 8-4 — translate a `SignatureDiff` into the four
 // breaking-change codes the plan tracks:
@@ -45,7 +46,16 @@ function isNullable(value: unknown): boolean {
   return value === true;
 }
 
-export function detectBreakingChanges(diff: SignatureDiff): BreakingChangesReport {
+/**
+ * Phase 13-9 — when supplied, the schema diff is OR-unioned with the
+ * SignatureStore diff for B4. Schema-driven removals dedupe against
+ * id matches in `signatureDiff.removed` so we don't double-count.
+ */
+export interface DetectBreakingChangesOptions {
+  schemaDiff?: SchemaDiff | null;
+}
+
+export function detectBreakingChanges(diff: SignatureDiff, opts: DetectBreakingChangesOptions = {}): BreakingChangesReport {
   const changes: BreakingChange[] = [];
   const byCode = emptyByCode();
 
@@ -151,6 +161,48 @@ export function detectBreakingChanges(diff: SignatureDiff): BreakingChangesRepor
         after: m.after,
       });
       byCode.B4 += 1;
+    }
+  }
+
+  // Phase 13-9 — schema-diff-driven B4. Reports any DDL-side removed
+  // table or column as B4. Dedupes against the SignatureStore-driven
+  // ids that were already pushed above (by signatureId).
+  if (opts.schemaDiff) {
+    const seenIds = new Set(changes.map(c => c.signatureId));
+    for (const t of opts.schemaDiff.removedTables) {
+      const id = t.table;
+      if (seenIds.has(id)) continue;
+      changes.push({
+        code: 'B4', severity: 'error', signatureId: id,
+        message: `DB table dropped (DDL): \`${t.table}\` (was ${t.was.length} cols)`,
+      });
+      byCode.B4 += 1;
+      seenIds.add(id);
+    }
+    for (const t of opts.schemaDiff.changedTables) {
+      for (const c of t.removedColumns) {
+        const id = `${t.table}.${c.name}`;
+        if (seenIds.has(id)) continue;
+        changes.push({
+          code: 'B4', severity: 'error', signatureId: id,
+          message: `DB column dropped (DDL): \`${id}\``,
+        });
+        byCode.B4 += 1;
+        seenIds.add(id);
+      }
+      // Type changes — warning (matches the SignatureStore code path).
+      for (const c of t.changedColumns) {
+        const id = `${t.table}.${c.name}`;
+        if (seenIds.has(id)) continue;
+        // Don't push if the type actually didn't change (only nullable).
+        if (c.from.type === c.to.type && c.from.nullable === c.to.nullable) continue;
+        changes.push({
+          code: 'B4', severity: 'warning', signatureId: id,
+          message: `DB column changed (DDL): \`${id}\` ${c.from.type}${c.from.nullable === false ? ' NOT NULL' : ''} → ${c.to.type}${c.to.nullable === false ? ' NOT NULL' : ''}`,
+        });
+        byCode.B4 += 1;
+        seenIds.add(id);
+      }
     }
   }
 
