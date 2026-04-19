@@ -16,7 +16,9 @@ export type NodeKind =
   | 'mybatis-statement'
   | 'db-table'
   | 'vue-event'
-  | 'spring-event';
+  | 'spring-event'
+  // Phase 12-1
+  | 'msa-service';
 
 export type EdgeKind =
   | 'imports'
@@ -37,7 +39,11 @@ export type EdgeKind =
   | 'mybatis-maps'
   | 'reads-table'
   | 'writes-table'
-  | 'dto-flows';
+  | 'dto-flows'
+  // Phase 12 — inter-service
+  | 'service-calls'
+  | 'service-shares-db'
+  | 'service-shares-dto';
 
 export interface SourceLocation {
   filePath: string;
@@ -145,6 +151,7 @@ export const NODE_STYLES: Record<NodeKind, NodeStyle> = {
   'db-table':          { color: '#00bcd4', shape: 'diamond' },
   'vue-event':         { color: '#e67e22', shape: 'star' },
   'spring-event':      { color: '#ff9800', shape: 'star' },
+  'msa-service':       { color: '#7c3aed', shape: 'round-rectangle' },
 };
 
 // Backward compat
@@ -171,6 +178,7 @@ export const NODE_LABELS: Record<NodeKind, string> = {
   'db-table': 'DB Table',
   'vue-event': 'Vue Event',
   'spring-event': 'Spring Event',
+  'msa-service': 'MSA Service',
 };
 
 export const EDGE_STYLES: Record<EdgeKind, { color: string; dashed: boolean }> = {
@@ -193,4 +201,8 @@ export const EDGE_STYLES: Record<EdgeKind, { color: string; dashed: boolean }> =
   'reads-table': { color: '#00bcd4', dashed: false },
   'writes-table': { color: '#ff5722', dashed: false },
   'dto-flows': { color: '#9c27b0', dashed: true },
+  // Phase 12 — inter-service
+  'service-calls':       { color: '#7c3aed', dashed: false },
+  'service-shares-db':   { color: '#f59e0b', dashed: true },
+  'service-shares-dto':  { color: '#f59e0b', dashed: true },
 };

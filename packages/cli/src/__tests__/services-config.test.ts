@@ -42,9 +42,11 @@ describe('services[] configuration', () => {
     const result = await runAnalysis(config, { noCache: true });
     const nodes = result.graph.getAllNodes();
 
-    // Every node should have a serviceId
-    const frontendNodes = nodes.filter(n => n.metadata.serviceId === 'frontend');
-    const backendNodes = nodes.filter(n => n.metadata.serviceId === 'backend');
+    // Every parser-emitted node should have a serviceId. Phase 12 also adds
+    // synthetic msa-service nodes (filePath=''); filter them out before
+    // asserting filePath shape.
+    const frontendNodes = nodes.filter(n => n.metadata.serviceId === 'frontend' && n.kind !== 'msa-service');
+    const backendNodes = nodes.filter(n => n.metadata.serviceId === 'backend' && n.kind !== 'msa-service');
 
     expect(frontendNodes.length).toBeGreaterThanOrEqual(1);
     expect(backendNodes.length).toBeGreaterThanOrEqual(1);

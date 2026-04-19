@@ -10,6 +10,8 @@ const ALL_NODE_KINDS: NodeKind[] = [
   'native-bridge', 'native-method',
   'mybatis-mapper', 'mybatis-statement', 'db-table',
   'vue-event', 'spring-event',
+  // Phase 12-1
+  'msa-service',
 ];
 
 const ALL_EDGE_KINDS: EdgeKind[] = [
@@ -19,9 +21,11 @@ const ALL_EDGE_KINDS: EdgeKind[] = [
   'native-call', 'route-renders', 'spring-injects',
   'mybatis-maps', 'reads-table', 'writes-table', 'dto-flows',
   'emits-event', 'listens-event',
+  // Phase 12 — inter-service edges
+  'service-calls', 'service-shares-db', 'service-shares-dto',
 ];
 
-type FilterPreset = 'all' | 'none' | 'vue' | 'spring' | 'db' | 'api';
+type FilterPreset = 'all' | 'none' | 'vue' | 'spring' | 'db' | 'api' | 'services';
 
 const FILTER_PRESETS: Record<FilterPreset, { nodes: NodeKind[]; edges: EdgeKind[] }> = {
   all: { nodes: ALL_NODE_KINDS, edges: ALL_EDGE_KINDS },
@@ -41,6 +45,11 @@ const FILTER_PRESETS: Record<FilterPreset, { nodes: NodeKind[]; edges: EdgeKind[
   api: {
     nodes: ['api-call-site', 'spring-endpoint', 'vue-component'],
     edges: ['api-call', 'api-serves', 'api-implements'],
+  },
+  // Phase 12-5 — top-level service-only preset.
+  services: {
+    nodes: ['msa-service'],
+    edges: ['service-calls', 'service-shares-db', 'service-shares-dto'],
   },
 };
 

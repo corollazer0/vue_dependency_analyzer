@@ -32,6 +32,12 @@ export {
 } from './analyzers/EntrypointCollector.js';
 export { findDeadNodes, type DeadCodeReport } from './analyzers/DeadCodeDetector.js';
 export {
+  buildMsaServiceGraph,
+  MSA_SERVICE_NODE_PREFIX,
+  UNASSIGNED_SERVICE_ID,
+  type MsaBuildResult,
+} from './analyzers/MsaServiceGraphBuilder.js';
+export {
   SignatureStore,
   type SignatureKind,
   type SignatureRecord,

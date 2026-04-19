@@ -61,6 +61,9 @@ export function evaluateRulesWithWaivers(
       case 'max-dependents':
         raw.push(...checkMaxDependents(graph, rule, ruleId, severity));
         break;
+      case 'no-cross-service-db':
+        raw.push(...checkNoCrossServiceDb(graph, rule, ruleId, severity));
+        break;
     }
   }
 
@@ -270,6 +273,35 @@ function measureDepth(
 
   visited.delete(nodeId);
   return 1 + maxChildDepth;
+}
+
+// Phase 12-9 — no-cross-service-db.
+// Iterates the inter-service edges added by buildMsaServiceGraph and
+// emits one violation per edge. Default scans `service-shares-db`; the
+// `edgeKinds` rule field can broaden to also include `service-shares-dto`
+// and `service-calls` if the project is strict.
+function checkNoCrossServiceDb(
+  graph: DependencyGraph, rule: ArchitectureRule, ruleId: string, severity: 'error' | 'warning',
+): RuleViolation[] {
+  const targetKinds = rule.edgeKinds?.length
+    ? new Set(rule.edgeKinds)
+    : new Set(['service-shares-db'] as EdgeKind[]);
+  const violations: RuleViolation[] = [];
+  for (const edge of graph.getAllEdges()) {
+    if (!targetKinds.has(edge.kind)) continue;
+    const source = graph.getNode(edge.source);
+    const target = graph.getNode(edge.target);
+    violations.push({
+      ruleId,
+      ruleType: 'no-cross-service-db',
+      severity,
+      message: rule.message
+        || `Cross-service ${edge.kind}: ${source?.label ?? edge.source} → ${target?.label ?? edge.target}`,
+      nodeIds: [edge.source, edge.target],
+      edgeIds: [edge.id],
+    });
+  }
+  return violations;
 }
 
 function checkMaxDependents(

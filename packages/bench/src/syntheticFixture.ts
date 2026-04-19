@@ -67,6 +67,9 @@ const DEFAULT_KIND_RATIOS: Record<NodeKind, number> = {
   'native-method': 0.0,
   'vue-event': 0.0,
   'spring-event': 0.0,
+  // Phase 12 — synthetic fixture doesn't generate top-level service
+  // nodes (the test-project fixture serves the e2e gate). Keep at 0.
+  'msa-service': 0.0,
 };
 
 // Edge rules: for each source kind, which target kinds are valid + edge kind.

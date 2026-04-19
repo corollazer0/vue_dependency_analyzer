@@ -9,6 +9,7 @@ import {
   findOrphanNodes,
   readGitBlame,
   blameLookupKey,
+  buildMsaServiceGraph,
   type AnalysisConfig,
   type ProgressInfo,
 } from '@vda/core';
@@ -185,6 +186,11 @@ export async function runAnalysis(
 
     circularDeps = findCircularDependencies(graph);
     orphans = findOrphanNodes(graph).map(n => `${n.kind}: ${n.label}`);
+
+    // Phase 12-1 — post-process the resolved graph to add msa-service nodes
+    // + inter-service edges. Skipped when signaturesOnly because the linker
+    // hasn't run (api-call-site → spring-endpoint edges aren't resolved).
+    buildMsaServiceGraph(graph, config.services);
   }
 
   // Phase 11-2 — F8 git blame stamp. Single batch git log; fail-soft when no

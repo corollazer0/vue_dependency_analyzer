@@ -18,7 +18,10 @@ export type NodeKind =
   | 'mybatis-statement'
   | 'db-table'
   | 'vue-event'
-  | 'spring-event';
+  | 'spring-event'
+  // Phase 12-1 — top-level MSA service node, one per services[] entry
+  // (or `unassigned` for nodes with no serviceId).
+  | 'msa-service';
 
 export type EdgeKind =
   | 'imports'
@@ -39,7 +42,11 @@ export type EdgeKind =
   | 'mybatis-maps'
   | 'reads-table'
   | 'writes-table'
-  | 'dto-flows';
+  | 'dto-flows'
+  // Phase 12 — inter-service edges, all msa-service → msa-service.
+  | 'service-calls'        // service A → service B endpoint (HTTP)
+  | 'service-shares-db'    // service A's mybatis writes a table service B owns
+  | 'service-shares-dto';  // service A and B both reference the same DTO fqn
 
 export interface SourceLocation {
   filePath: string;
@@ -120,7 +127,16 @@ export type LayerMetadataPredicate = Record<string, string | boolean>;
 
 export interface ArchitectureRule {
   id?: string;
-  type: 'deny-circular' | 'deny-direct' | 'allow-only' | 'max-depth' | 'max-dependents';
+  type:
+    | 'deny-circular'
+    | 'deny-direct'
+    | 'allow-only'
+    | 'max-depth'
+    | 'max-dependents'
+    // Phase 12-9 — flag every service-shares-db / -dto / -calls edge as a
+    // violation. Useful when a project's policy is "no cross-service DB
+    // reach-around"; opt-in via .vdarc.json.
+    | 'no-cross-service-db';
   edgeKinds?: EdgeKind[];
   from?: NodeKind | NodeKind[];
   to?: NodeKind | NodeKind[];

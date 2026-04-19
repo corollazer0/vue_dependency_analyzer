@@ -161,4 +161,34 @@ describe('RuleEngine', () => {
       expect(violations).toHaveLength(0);
     });
   });
+
+  // Phase 12-9 — no-cross-service-db rule fires per inter-service edge.
+  describe('no-cross-service-db rule (Phase 12-9)', () => {
+    it('flags every service-shares-db edge by default', () => {
+      const graph = new DependencyGraph();
+      addNode(graph, 'msa-service:user', 'msa-service', 'user');
+      addNode(graph, 'msa-service:product', 'msa-service', 'product');
+      addEdge(graph, 'msa-service:user', 'msa-service:product', 'service-shares-db');
+      const violations = evaluateRules(graph, [
+        { id: 'r1', type: 'no-cross-service-db', severity: 'error' },
+      ]);
+      expect(violations).toHaveLength(1);
+      expect(violations[0].ruleType).toBe('no-cross-service-db');
+      expect(violations[0].edgeIds).toEqual(['msa-service:user:service-shares-db:msa-service:product']);
+    });
+
+    it('respects edgeKinds override (broaden to dto + calls)', () => {
+      const graph = new DependencyGraph();
+      addNode(graph, 'msa-service:user', 'msa-service', 'user');
+      addNode(graph, 'msa-service:order', 'msa-service', 'order');
+      addEdge(graph, 'msa-service:user', 'msa-service:order', 'service-shares-db');
+      addEdge(graph, 'msa-service:user', 'msa-service:order', 'service-shares-dto');
+      addEdge(graph, 'msa-service:user', 'msa-service:order', 'service-calls');
+      const violations = evaluateRules(graph, [
+        { id: 'r1', type: 'no-cross-service-db', edgeKinds: ['service-shares-db', 'service-shares-dto'], severity: 'warning' },
+      ]);
+      expect(violations).toHaveLength(2);
+      expect(violations.every(v => v.severity === 'warning')).toBe(true);
+    });
+  });
 });
