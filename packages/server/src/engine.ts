@@ -1,5 +1,5 @@
 import { readFileSync, existsSync } from 'fs';
-import { resolve, join } from 'path';
+import { resolve, join, sep as pathSep } from 'path';
 import {
   DependencyGraph,
   CrossBoundaryResolver,
@@ -340,12 +340,16 @@ export class AnalysisEngine {
       // Phase 2-6: tag serviceId on the incremental re-parse path too,
       // mirroring what ParallelParser does on full runs.
       if (this.config.services && this.config.services.length > 0) {
+        // Longest root first so prefix-sharing siblings (e.g. `services/api`
+        // vs `services/api-gateway`) resolve to the most specific match.
+        const sortedServices = [...this.config.services]
+          .map((s) => ({ id: s.id, root: resolve(this.config.projectRoot, s.root) }))
+          .sort((a, b) => b.root.length - a.root.length);
         for (const node of result.nodes) {
           if (node.metadata.serviceId !== undefined) continue;
-          for (const service of this.config.services) {
-            const sroot = resolve(this.config.projectRoot, service.root);
-            if (node.filePath.startsWith(sroot)) {
-              node.metadata.serviceId = service.id;
+          for (const sr of sortedServices) {
+            if (node.filePath === sr.root || node.filePath.startsWith(sr.root + pathSep)) {
+              node.metadata.serviceId = sr.id;
               break;
             }
           }

@@ -1,7 +1,7 @@
 import { Worker } from 'worker_threads';
 import { cpus } from 'os';
 import { readFileSync } from 'fs';
-import { resolve as resolvePath } from 'path';
+import { resolve as resolvePath, sep as pathSep } from 'path';
 import type { GraphNode, GraphEdge, ParseError, AnalysisConfig, ParseResult } from '../graph/types.js';
 import { VueSfcParser } from '../parsers/vue/VueSfcParser.js';
 import { TsFileParser } from '../parsers/typescript/TsFileParser.js';
@@ -350,10 +350,14 @@ export class ParallelParser {
     this.concurrency = concurrency || Math.max(1, Math.min(8, cpus().length - 1));
     if (config.services && config.services.length > 0) {
       const root = projectRoot ?? '';
-      this.serviceRoots = config.services.map((s) => ({
-        id: s.id,
-        root: root ? resolvePath(root, s.root) : s.root,
-      }));
+      this.serviceRoots = config.services
+        .map((s) => ({
+          id: s.id,
+          root: root ? resolvePath(root, s.root) : s.root,
+        }))
+        // Longest root first so prefix-sharing siblings (e.g. `services/api`
+        // vs `services/api-gateway`) resolve to the most specific match.
+        .sort((a, b) => b.root.length - a.root.length);
     }
   }
 
@@ -361,7 +365,7 @@ export class ParallelParser {
     if (this.serviceRoots.length === 0) return;
     if (node.metadata.serviceId !== undefined) return;
     for (const sr of this.serviceRoots) {
-      if (node.filePath.startsWith(sr.root)) {
+      if (node.filePath === sr.root || node.filePath.startsWith(sr.root + pathSep)) {
         node.metadata.serviceId = sr.id;
         return;
       }
