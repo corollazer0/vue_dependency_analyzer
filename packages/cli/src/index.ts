@@ -73,6 +73,9 @@ program
   .option('--config <path>', 'Config file path', '.vdarc.json')
   .option('--json', 'Output as JSON')
   .option('--patterns', 'Run anti-pattern classifier instead of architecture rules (Phase 9-10)')
+  .option('--hot-spots', 'List stale (≥90d untouched) high-fan-in nodes (Phase 11-5; needs git history)')
+  .option('--stale-days <n>', 'Hot-spot staleness window in days (default 90)', v => parseInt(v, 10))
+  .option('--min-fan-in <n>', 'Hot-spot minimum fan-in (default 5)', v => parseInt(v, 10))
   .option('--no-cache', 'Disable parse cache')
   .action(lintCommand);
 
