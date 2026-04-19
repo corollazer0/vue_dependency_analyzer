@@ -1,0 +1,14 @@
+CREATE TABLE users (
+  id BIGINT NOT NULL,
+  email VARCHAR(255) NOT NULL,
+  display_name VARCHAR(100),
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  PRIMARY KEY (id)
+);
+
+CREATE TABLE products (
+  id BIGINT NOT NULL,
+  sku VARCHAR(64) NOT NULL,
+  price NUMERIC NOT NULL,
+  PRIMARY KEY (id)
+);
