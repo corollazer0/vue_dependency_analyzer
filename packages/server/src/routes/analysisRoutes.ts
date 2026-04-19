@@ -45,4 +45,10 @@ export function registerAnalysisRoutes(fastify: FastifyInstance, engine: Analysi
   fastify.get('/api/analysis/layer-compliance', async () => {
     return engine.getLayerCompliance();
   });
+
+  // Phase 8-6 — F6 breaking-change detector.
+  fastify.get('/api/analysis/breaking-changes', async (request) => {
+    const { baseline } = request.query as { baseline?: string };
+    return engine.getBreakingChanges({ baseline });
+  });
 }

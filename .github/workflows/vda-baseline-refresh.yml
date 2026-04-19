@@ -1,0 +1,52 @@
+# Phase 8-11 — nightly baseline refresh.
+#
+# Snapshots `main`'s SignatureStore so subsequent PR runs of
+# `vda impact --breaking --baseline main` hit the cached signatures
+# instead of having to re-analyse the base ref. Plan §2 row 8-11
+# baseline strategy step (3).
+
+name: vda-baseline-refresh
+
+on:
+  push:
+    branches: [main]
+  schedule:
+    - cron: "0 3 * * *"  # nightly 03:00 UTC fallback
+  workflow_dispatch: {}
+
+concurrency:
+  group: vda-baseline-refresh
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI + core
+        run: npx turbo run build --filter=@vda/cli
+
+      - name: Snapshot main signatures
+        run: |
+          # `--signatures-only` skips reporting + JSON dump and just
+          # writes the SignatureStore row set under the `main` label.
+          # The cache lives in `.vda-cache/signatures.sqlite`.
+          npx -w @vda/cli vda analyze . --signatures-only --label main --no-cache
+
+      - name: Upload signatures cache
+        uses: actions/upload-artifact@v4
+        with:
+          name: vda-signatures-main
+          path: .vda-cache/signatures.sqlite
+          if-no-files-found: error
+          retention-days: 30

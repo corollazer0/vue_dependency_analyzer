@@ -1,10 +1,35 @@
 import { runAnalysis, loadConfig, type CliOptions } from '../config.js';
-import { analyzeChangeImpact, parseGitDiff } from '@vda/core';
+import {
+  analyzeChangeImpact,
+  parseGitDiff,
+  SignatureStore,
+  detectBreakingChanges,
+  loadWaivers,
+  type BreakingChange,
+} from '@vda/core';
 import { formatPrReport, type ImpactSummary } from './prReport.js';
+
+function renderBreakingMarkdown(changes: BreakingChange[]): string {
+  if (changes.length === 0) return '_No breaking changes detected._';
+  const lines: string[] = [];
+  for (const c of changes) {
+    const icon = c.severity === 'error' ? '🔴' : '🟠';
+    lines.push(`- ${icon} **${c.code}** \`${c.signatureId}\` — ${c.message}`);
+  }
+  return lines.join('\n');
+}
 
 export async function impactCommand(
   dir: string,
-  options: CliOptions & { diff?: string; files?: string; json?: boolean; format?: string; cache?: boolean },
+  options: CliOptions & {
+    diff?: string;
+    files?: string;
+    json?: boolean;
+    format?: string;
+    cache?: boolean;
+    breaking?: boolean;
+    baseline?: string;
+  },
 ): Promise<void> {
   const config = await loadConfig(dir, options);
   const noCache = options.cache === false ? true : options.noCache;
@@ -41,11 +66,41 @@ export async function impactCommand(
   const { graph } = await runAnalysis(config, { noCache });
   const impact = analyzeChangeImpact(graph, changedFiles, config.projectRoot);
 
+  // Phase 8-5 — when --breaking is set, snapshot the *current* analysis
+  // and diff against the baseline label (`--baseline`, default 'main').
+  // The PR Report then fills the marker slot with the rendered list.
+  let breakingMarkdown: string | undefined;
+  if (options.breaking) {
+    const baseline = options.baseline ?? 'main';
+    const store = new SignatureStore(config.projectRoot);
+    if (store.count(baseline) === 0) {
+      breakingMarkdown = `_(no baseline snapshot \`${baseline}\` — run \`vda analyze --signatures-only --label ${baseline}\` on the base ref first)_`;
+    } else {
+      store.snapshot('__pending__', graph);
+      const diff = store.diff(baseline, '__pending__');
+      let report = detectBreakingChanges(diff);
+      // Apply waivers (Phase 7b-5 contract) — `breaking <code>` rule id.
+      const waivers = loadWaivers(config.projectRoot, graph);
+      const today = new Date().toISOString().slice(0, 10);
+      const filtered = report.changes.filter(c => {
+        const m = waivers.isWaived(
+          { ruleId: 'breaking', target: c.code, file: c.before?.sourceFile ?? c.after?.sourceFile },
+          today,
+        );
+        return !m.waived;
+      });
+      report = { changes: filtered, byCode: filtered.reduce((acc, c) => { acc[c.code] = (acc[c.code] ?? 0) + 1; return acc; }, { B1: 0, B2: 0, B3: 0, B4: 0 } as typeof report.byCode) };
+      breakingMarkdown = renderBreakingMarkdown(report.changes);
+    }
+    store.close();
+  }
+
   if (options.format === 'github-pr') {
     console.log(formatPrReport({
       changedFiles,
       impact: impact as unknown as ImpactSummary,
-      ruleViolationDelta: 0, // wired up properly when 7b-3 LayerDsl lands
+      ruleViolationDelta: 0,
+      breakingRisksMarkdown: breakingMarkdown,
     }));
     return;
   }

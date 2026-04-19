@@ -393,6 +393,16 @@ describe('Server API', () => {
       expect(res.statusCode).toBe(400);
     });
 
+    it('GET /api/analysis/breaking-changes returns empty report when no baseline (Phase 8-6)', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/breaking-changes?baseline=missing-label' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.found).toBe(false);
+      expect(body.baseline).toBe('missing-label');
+      expect(body.report.changes).toEqual([]);
+      expect(body.report.byCode).toEqual({ B1: 0, B2: 0, B3: 0, B4: 0 });
+    });
+
     it('GET /api/analysis/layer-compliance returns layers + matrix shape (Phase 7b-4)', async () => {
       // test-project's .vdarc.json doesn't ship a layer DSL — the
       // route must still return a valid (empty) shape, not 500.
