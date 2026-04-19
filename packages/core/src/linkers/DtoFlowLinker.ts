@@ -237,7 +237,7 @@ export class DtoFlowLinker {
         const mapping = mappingsByProperty.get(bf.name);
         entries.push({
           fieldName: bf.name,
-          backendType: bf.type,
+          backendType: bf.typeRef,
           backendNullable: bf.nullable,
           jsonName: bf.jsonName,
           frontendType: ff?.type,
@@ -274,9 +274,12 @@ export class DtoFlowLinker {
   }
 }
 
+// Mirrors `SpringDtoField` (Phase 7a-12) so the linker can pull the
+// frozen DTO metadata without dragging the public type into its
+// internal field-chain helpers.
 interface BackendField {
   name: string;
-  type: string;
+  typeRef: string;
   nullable?: boolean;
   jsonName?: string;
 }

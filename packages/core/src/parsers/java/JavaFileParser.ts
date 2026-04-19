@@ -1,4 +1,13 @@
-import type { FileParser, ParseResult, AnalysisConfig, GraphNode, GraphEdge, ParseError } from '../../graph/types.js';
+import type {
+  FileParser,
+  ParseResult,
+  AnalysisConfig,
+  GraphNode,
+  GraphEdge,
+  ParseError,
+  SpringDtoField,
+  SpringDtoNodeMetadata,
+} from '../../graph/types.js';
 import path from 'path';
 
 export class JavaFileParser implements FileParser {
@@ -70,16 +79,32 @@ export class JavaFileParser implements FileParser {
       // metadata in one well-known place.
       const isDto = /(?:DTO|Dto|Request|Response|VO|Summary|Detail)$/.test(className);
       if (isDto) {
-        const fields = extractDtoFields(content);
+        const dtoFields = extractDtoFields(content);
         const dtoNodeId = `spring-dto:${filePath}`;
         if (!nodes.some(n => n.id === dtoNodeId)) {
+          // Map the loose extractor output onto the frozen SpringDtoField
+          // shape (Phase 7a-12). Phase 8 SignatureStore reads this directly.
+          const fields: SpringDtoField[] = dtoFields.map((f) => ({
+            name: f.name,
+            typeRef: f.type,
+            ...(f.nullable !== undefined ? { nullable: f.nullable } : {}),
+            ...(f.jsonName !== undefined ? { jsonName: f.jsonName } : {}),
+          }));
+          const sourceRef = { filePath, line: 1, column: 0 };
+          const metadata: SpringDtoNodeMetadata = {
+            fqn,
+            fields,
+            sourceRef,
+            className,
+            packageName,
+          };
           nodes.push({
             id: dtoNodeId,
             kind: 'spring-dto',
             label: className,
             filePath,
-            metadata: { className, packageName, fqn, fields },
-            loc: { filePath, line: 1, column: 0 },
+            metadata,
+            loc: sourceRef,
           });
         }
       }

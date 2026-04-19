@@ -76,9 +76,10 @@ function areTypesCompatible(javaType: string, tsType: string): boolean {
   return baseJava === baseTs;
 }
 
+// Mirrors `SpringDtoField` (Phase 7a-12) — frozen by Phase 8 contract.
 interface BackendField {
   name: string;
-  type: string;
+  typeRef: string;
   nullable?: boolean;
   jsonName?: string;
 }
@@ -236,21 +237,21 @@ export function checkDtoConsistency(graph: DependencyGraph): DtoMismatch[] {
 
           if (!ft) {
             fieldDetails.push({
-              name: bf.name, backendType: bf.type, optional: false,
+              name: bf.name, backendType: bf.typeRef, optional: false,
               backendNullable: bf.nullable, column: mapping?.column, jdbcType: mapping?.jdbcType,
               severity: 'critical', issue: 'missing-frontend',
             });
           } else {
-            const compatible = areTypesCompatible(bf.type, ft.type);
+            const compatible = areTypesCompatible(bf.typeRef, ft.type);
             if (!compatible) {
               fieldDetails.push({
-                name: bf.name, backendType: bf.type, frontendType: ft.type, optional: ft.optional,
+                name: bf.name, backendType: bf.typeRef, frontendType: ft.type, optional: ft.optional,
                 backendNullable: bf.nullable, column: mapping?.column, jdbcType: mapping?.jdbcType,
                 severity: 'warning', issue: 'type-mismatch',
               });
             } else if (bf.nullable !== undefined && bf.nullable !== ft.optional) {
               fieldDetails.push({
-                name: bf.name, backendType: bf.type, frontendType: ft.type, optional: ft.optional,
+                name: bf.name, backendType: bf.typeRef, frontendType: ft.type, optional: ft.optional,
                 backendNullable: bf.nullable, column: mapping?.column, jdbcType: mapping?.jdbcType,
                 severity: 'warning', issue: 'nullable-mismatch',
               });
@@ -260,7 +261,7 @@ export function checkDtoConsistency(graph: DependencyGraph): DtoMismatch[] {
 
           if (hasStatement && !mapping) {
             fieldDetails.push({
-              name: bf.name, backendType: bf.type, optional: false,
+              name: bf.name, backendType: bf.typeRef, optional: false,
               backendNullable: bf.nullable,
               severity: 'warning', issue: 'missing-db',
             });
@@ -303,7 +304,7 @@ export function checkDtoConsistency(graph: DependencyGraph): DtoMismatch[] {
         const fieldDetails: FieldDetail[] = backendFieldsTyped.map(f => {
           const mapping = columnMappings?.get(f.name);
           return {
-            name: f.name, backendType: f.type, optional: false, backendNullable: f.nullable,
+            name: f.name, backendType: f.typeRef, optional: false, backendNullable: f.nullable,
             column: mapping?.column, jdbcType: mapping?.jdbcType,
             severity: 'critical' as const, issue: 'missing-frontend' as const,
           };

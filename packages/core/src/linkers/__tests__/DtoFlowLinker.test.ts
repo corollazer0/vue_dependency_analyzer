@@ -36,7 +36,7 @@ describe('DtoFlowLinker', () => {
           metadata: {
             className: 'UserResponse',
             isDto: true,
-            fields: [{ name: 'id', type: 'Long' }],
+            fields: [{ name: 'id', typeRef: 'Long' }],
           },
         },
       ],
@@ -73,7 +73,7 @@ describe('DtoFlowLinker', () => {
           metadata: {
             className: 'CreateUserRequest',
             isDto: true,
-            fields: [{ name: 'name', type: 'String' }],
+            fields: [{ name: 'name', typeRef: 'String' }],
           },
         },
       ],
@@ -110,7 +110,7 @@ describe('DtoFlowLinker', () => {
           metadata: {
             className: 'UserResponse',
             isDto: true,
-            fields: [{ name: 'id', type: 'Long' }],
+            fields: [{ name: 'id', typeRef: 'Long' }],
           },
         },
       ],
@@ -156,7 +156,7 @@ describe('DtoFlowLinker', () => {
           metadata: {
             className: 'UserResponse',
             isDto: true,
-            fields: [{ name: 'id', type: 'Long' }],
+            fields: [{ name: 'id', typeRef: 'Long' }],
           },
         },
       ],
@@ -196,7 +196,7 @@ describe('DtoFlowLinker', () => {
           kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
-          metadata: { className: 'UserResponse', fields: [{ name: 'id', type: 'Long' }] },
+          metadata: { className: 'UserResponse', fields: [{ name: 'id', typeRef: 'Long' }] },
         },
       ],
       [],
@@ -229,9 +229,9 @@ describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
             className: 'OrderResponse',
             isDto: true,
             fields: [
-              { name: 'orderId', type: 'Long' },
-              { name: 'customerName', type: 'String' },
-              { name: 'total', type: 'BigDecimal' },
+              { name: 'orderId', typeRef: 'Long' },
+              { name: 'customerName', typeRef: 'String' },
+              { name: 'total', typeRef: 'BigDecimal' },
             ],
           },
         },
@@ -330,8 +330,8 @@ describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
             className: 'OrderResponse',
             isDto: true,
             fields: [
-              { name: 'orderId', type: 'Long' },
-              { name: 'total', type: 'BigDecimal' },
+              { name: 'orderId', typeRef: 'Long' },
+              { name: 'total', typeRef: 'BigDecimal' },
             ],
           },
         },
@@ -395,7 +395,7 @@ describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
           metadata: {
             className: 'PingDTO',
             isDto: true,
-            fields: [{ name: 'msg', type: 'String' }],
+            fields: [{ name: 'msg', typeRef: 'String' }],
           },
         },
       ],
