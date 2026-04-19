@@ -374,3 +374,47 @@ class ProductController(private val productService: ProductService) {
     expect(injectEdges[0].source).toContain('spring-controller');
   });
 });
+
+// Phase 10-2 — universal node metadata: every emitted node carries
+// lineCount + packageCount derived from the file. Java packageCount counts
+// distinct top-level Java package roots (com / org / java / …).
+describe('JavaFileParser universal lineCount/packageCount metadata', () => {
+  const parser = new JavaFileParser();
+  const content = `
+package com.example.demo;
+
+import com.example.demo.dto.UserDto;
+import com.example.demo.service.UserService;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import java.util.List;
+
+@RestController
+@RequestMapping("/api/users")
+public class UserController {
+    private final UserService service;
+    public UserController(UserService service) { this.service = service; }
+
+    @GetMapping("/")
+    public List<UserDto> getAll() { return service.findAll(); }
+}
+`;
+  const result = parser.parse('/test/UserController.java', content, {});
+
+  it('every emitted node has numeric lineCount and packageCount', () => {
+    expect(result.nodes.length).toBeGreaterThan(0);
+    for (const node of result.nodes) {
+      const m = node.metadata as Record<string, unknown>;
+      expect(typeof m.lineCount).toBe('number');
+      expect(typeof m.packageCount).toBe('number');
+    }
+  });
+
+  it('packageCount counts distinct top-level Java packages', () => {
+    const ctrl = result.nodes.find(n => n.kind === 'spring-controller')!;
+    const m = ctrl.metadata as Record<string, unknown>;
+    // top-level: com / org / java
+    expect(m.packageCount).toBe(3);
+  });
+});

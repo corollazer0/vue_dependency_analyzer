@@ -15,12 +15,64 @@ const graphStore = useGraphStore();
 //   (B) Manual textarea — collapsed under "Advanced" so the typed-paths
 //       failure mode the user reported in Phase 7 doesn't block the
 //       happy path.
-type Mode = 'git' | 'manual';
+//   (C) Phase 10-6 — files-tree picker. Lazy expand (depth 1 + on-demand)
+//       so 50K-file repos stay scannable. 3-clicks gate: open → select
+//       file checkbox → Analyze.
+type Mode = 'git' | 'manual' | 'files';
 const mode = ref<Mode>('git');
 const filesInput = ref('');
 const showAdvanced = ref(false);
 const loading = ref(false);
 const result = ref<any>(null);
+
+// Phase 10-6 — file-tree state.
+type TreeNode = { path: string; name: string; isDir: boolean; expanded?: boolean; children?: TreeNode[] };
+const treeRoot = ref<TreeNode[]>([]);
+const treeLoading = ref(false);
+const treeError = ref<string | null>(null);
+const selectedTreeFiles = ref<Set<string>>(new Set());
+
+async function loadTreeChildren(node?: TreeNode) {
+  treeLoading.value = !node; // only show top-level spinner on first load
+  treeError.value = null;
+  try {
+    const url = node
+      ? `/api/files/tree?root=${encodeURIComponent(node.path)}&depth=1`
+      : `/api/files/tree?depth=1`;
+    const res = await apiFetch(url);
+    const data = await res.json();
+    if (!res.ok) {
+      treeError.value = data.error || 'Failed to load tree';
+      return;
+    }
+    if (node) {
+      node.children = data.entries;
+      node.expanded = true;
+    } else {
+      treeRoot.value = data.entries;
+    }
+  } catch (e: any) {
+    treeError.value = e?.message || 'Tree request failed';
+  } finally {
+    treeLoading.value = false;
+  }
+}
+
+async function toggleTreeNode(node: TreeNode) {
+  if (!node.isDir) {
+    if (selectedTreeFiles.value.has(node.path)) selectedTreeFiles.value.delete(node.path);
+    else selectedTreeFiles.value.add(node.path);
+    // Force reactivity for Set membership.
+    selectedTreeFiles.value = new Set(selectedTreeFiles.value);
+    return;
+  }
+  if (node.expanded) {
+    node.expanded = false;
+    return;
+  }
+  if (!node.children) await loadTreeChildren(node);
+  else node.expanded = true;
+}
 
 // Git source state
 type GitSource = 'uncommitted' | 'range';
@@ -87,7 +139,15 @@ onMounted(() => {
 
 function activeFiles(): string[] {
   if (mode.value === 'git') return gitFiles.value.slice();
+  if (mode.value === 'files') return [...selectedTreeFiles.value];
   return filesInput.value.split('\n').map(f => f.trim()).filter(Boolean);
+}
+
+function switchToFilesMode() {
+  mode.value = 'files';
+  if (treeRoot.value.length === 0 && !treeLoading.value) {
+    void loadTreeChildren();
+  }
 }
 
 // Phase 8-7 — breaking-change report fetched in parallel with the
@@ -179,6 +239,15 @@ function navigateTo(nodeId: string) {
             }"
           >Git</button>
           <button
+            role="tab" :aria-selected="mode === 'files'"
+            @click="switchToFilesMode"
+            class="flex-1 px-3 py-1.5 transition-colors"
+            :style="{
+              background: mode === 'files' ? 'var(--accent-blue)' : 'transparent',
+              color: mode === 'files' ? '#fff' : 'var(--text-tertiary)'
+            }"
+          >Files (tree)</button>
+          <button
             role="tab" :aria-selected="mode === 'manual'"
             @click="mode = 'manual'; showAdvanced = true"
             class="flex-1 px-3 py-1.5 transition-colors"
@@ -187,6 +256,60 @@ function navigateTo(nodeId: string) {
               color: mode === 'manual' ? '#fff' : 'var(--text-tertiary)'
             }"
           >Manual paths</button>
+        </div>
+
+        <!-- Files (tree) mode (Phase 10-6) -->
+        <div v-if="mode === 'files'" class="space-y-2">
+          <div
+            class="rounded text-xs max-h-60 overflow-y-auto"
+            style="background: var(--surface-primary); border: 1px solid var(--border-subtle)"
+          >
+            <div v-if="treeLoading" class="px-3 py-3 text-center" style="color: var(--text-tertiary)">Loading…</div>
+            <div v-else-if="treeError" class="px-3 py-3 text-center" style="color: var(--text-tertiary)">{{ treeError }}</div>
+            <ul v-else class="py-1 font-mono">
+              <template v-for="node in treeRoot" :key="node.path">
+                <li>
+                  <button
+                    @click="toggleTreeNode(node)"
+                    class="w-full text-left px-3 py-0.5 hover:bg-white/5 transition-colors flex items-center gap-1"
+                    :style="{ color: 'var(--text-secondary)' }"
+                  >
+                    <span v-if="node.isDir">{{ node.expanded ? '▾' : '▸' }}</span>
+                    <input
+                      v-else
+                      type="checkbox"
+                      class="mr-1"
+                      :checked="selectedTreeFiles.has(node.path)"
+                      @click.stop="toggleTreeNode(node)"
+                    />
+                    <span :title="node.path">{{ node.name }}</span>
+                  </button>
+                  <ul v-if="node.isDir && node.expanded && node.children" class="pl-4">
+                    <li v-for="child in node.children" :key="child.path">
+                      <button
+                        @click="toggleTreeNode(child)"
+                        class="w-full text-left px-3 py-0.5 hover:bg-white/5 transition-colors flex items-center gap-1"
+                        :style="{ color: 'var(--text-secondary)' }"
+                      >
+                        <span v-if="child.isDir">{{ child.expanded ? '▾' : '▸' }}</span>
+                        <input
+                          v-else
+                          type="checkbox"
+                          class="mr-1"
+                          :checked="selectedTreeFiles.has(child.path)"
+                          @click.stop="toggleTreeNode(child)"
+                        />
+                        <span :title="child.path">{{ child.name }}</span>
+                      </button>
+                    </li>
+                  </ul>
+                </li>
+              </template>
+            </ul>
+          </div>
+          <p v-if="selectedTreeFiles.size > 0" class="text-xs" style="color: var(--text-tertiary)">
+            {{ selectedTreeFiles.size }} file{{ selectedTreeFiles.size === 1 ? '' : 's' }} selected — click Analyze.
+          </p>
         </div>
 
         <!-- Git mode -->

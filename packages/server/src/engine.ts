@@ -1030,8 +1030,14 @@ export class AnalysisEngine {
     };
   }
 
-  findPaths(from: string, to: string, maxDepth: number = 10, edgeKinds?: string[]) {
-    return findPathsFn(this.graph, from, to, { maxDepth, edgeKinds });
+  findPaths(
+    from: string,
+    to: string,
+    maxDepth: number = 10,
+    edgeKinds?: string[],
+    direction: 'forward' | 'reverse' = 'forward',
+  ) {
+    return findPathsFn(this.graph, from, to, { maxDepth, edgeKinds, direction });
   }
 
   getAnalysisOverlays() {

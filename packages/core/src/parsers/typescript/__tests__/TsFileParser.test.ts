@@ -376,4 +376,43 @@ export interface OrderResponse {
       expect(paths).toContain('pinia');
     });
   });
+
+  // Phase 10-2 — universal node metadata. Every node a parser emits carries
+  // lineCount and packageCount; consumers must never have to ?? 0 these.
+  describe('universal lineCount/packageCount metadata', () => {
+    const src = `
+import { ref } from 'vue';
+import axios from 'axios';
+import { useUserStore } from './stores/userStore';
+import { useUserStore as useUserStoreAlias } from './stores/userStore';
+
+export function useFoo() {
+  axios.get('/api/foo');
+  return ref(0);
+}
+`;
+    const result = parser.parse('/test/useFoo.ts', src, {});
+
+    it('every node has numeric lineCount and packageCount', () => {
+      for (const node of result.nodes) {
+        const m = node.metadata as Record<string, unknown>;
+        expect(typeof m.lineCount).toBe('number');
+        expect(typeof m.packageCount).toBe('number');
+      }
+    });
+
+    it('module node lineCount equals file line count', () => {
+      const main = result.nodes.find(n => n.kind === 'vue-composable');
+      const m = main!.metadata as Record<string, unknown>;
+      // src has 11 lines (newlines + 1)
+      expect(m.lineCount).toBe(11);
+    });
+
+    it('packageCount collapses subpath imports to one bucket', () => {
+      const main = result.nodes.find(n => n.kind === 'vue-composable');
+      const m = main!.metadata as Record<string, unknown>;
+      // distinct top-level: vue, axios, "."  (relative bucket)
+      expect(m.packageCount).toBe(3);
+    });
+  });
 });

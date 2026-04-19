@@ -45,13 +45,19 @@ export async function impactCommand(
     changedFiles = parseGitDiff(config.projectRoot, 'HEAD');
   }
 
+  // Phase 10-7 — both PR-comment formats reuse formatPrReport; only the
+  // marker prefix differs. Treat both as "report" for control-flow purposes.
+  const isReportFormat = options.format === 'github-pr' || options.format === 'gitlab-mr';
+  const reportFormat = options.format === 'gitlab-mr' ? 'gitlab-mr' : 'github-pr';
+
   if (changedFiles.length === 0) {
-    if (options.format === 'github-pr') {
+    if (isReportFormat) {
       // Always print *something* for the PR-comment workflow.
       console.log(formatPrReport({
         changedFiles: [],
         impact: { summary: { changed: 0, direct: 0, transitive: 0, endpoints: 0, tables: 0 }, changedNodes: [], directImpact: [], transitiveImpact: [], affectedEndpoints: [], affectedTables: [] } as unknown as ImpactSummary,
         ruleViolationDelta: 0,
+        format: reportFormat,
       }));
       return;
     }
@@ -59,7 +65,7 @@ export async function impactCommand(
     return;
   }
 
-  if (options.format !== 'github-pr') {
+  if (!isReportFormat) {
     console.log(`\n🔍 Analyzing impact of ${changedFiles.length} changed file(s)...\n`);
   }
 
@@ -89,18 +95,24 @@ export async function impactCommand(
         );
         return !m.waived;
       });
-      report = { changes: filtered, byCode: filtered.reduce((acc, c) => { acc[c.code] = (acc[c.code] ?? 0) + 1; return acc; }, { B1: 0, B2: 0, B3: 0, B4: 0 } as typeof report.byCode) };
+      report = {
+        changes: filtered,
+        byCode: filtered.reduce((acc, c) => { acc[c.code] = (acc[c.code] ?? 0) + 1; return acc; }, { B1: 0, B2: 0, B3: 0, B4: 0 } as typeof report.byCode),
+        // Phase 10-4 — preserve rename pairs after waiver filtering.
+        renamed: report.renamed,
+      };
       breakingMarkdown = renderBreakingMarkdown(report.changes);
     }
     store.close();
   }
 
-  if (options.format === 'github-pr') {
+  if (isReportFormat) {
     console.log(formatPrReport({
       changedFiles,
       impact: impact as unknown as ImpactSummary,
       ruleViolationDelta: 0,
       breakingRisksMarkdown: breakingMarkdown,
+      format: reportFormat,
     }));
     return;
   }

@@ -1,4 +1,4 @@
-import type { ArchitectureRule, NodeKind } from '../graph/types.js';
+import type { ArchitectureRule, NodeKind, LayerMetadataPredicate } from '../graph/types.js';
 
 // Phase 7b-3 — F3 Layer DSL.
 //
@@ -21,6 +21,16 @@ import type { ArchitectureRule, NodeKind } from '../graph/types.js';
 export interface LayerDefinition {
   name: string;
   match: NodeKind[];
+  /**
+   * Phase 10-5 — additional metadata predicate. A node belongs to this
+   * layer iff its `kind` is in `match` AND every key of `where` equals
+   * the node's `metadata[key]`. Predicate values are string or boolean
+   * only (booleans help with parser-emitted flags like `isBarrel`).
+   *
+   * Use case: split `spring-service` into "service-application" vs
+   * "service-infrastructure" by `metadata.isRepository: true`.
+   */
+  where?: LayerMetadataPredicate;
 }
 
 export interface LayerRule {
@@ -95,6 +105,8 @@ export function compileLayerRules(
           to: toLayer.match,
           severity: 'error',
           message: lr.message ?? `Layer policy: ${lr.from} cannot depend on ${lr.to}`,
+          ...(fromLayer.where ? { fromWhere: fromLayer.where } : {}),
+          ...(toLayer.where ? { toWhere: toLayer.where } : {}),
         }
       : {
           id: `layer-dsl:${lr.from}→only-${lr.to}`,
@@ -103,6 +115,8 @@ export function compileLayerRules(
           allowed: toLayer.match,
           severity: 'error',
           message: lr.message ?? `Layer policy: ${lr.from} may depend only on ${lr.to}`,
+          ...(fromLayer.where ? { fromWhere: fromLayer.where } : {}),
+          ...(toLayer.where ? { toWhere: toLayer.where } : {}),
         };
 
     const key = tupleKey(compiled);

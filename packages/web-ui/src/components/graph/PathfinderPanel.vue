@@ -55,6 +55,9 @@ const showOptions = ref(false);
 const edgeKindList = Object.keys(EDGE_STYLES) as EdgeKind[];
 const activeEdgeKinds = ref<Set<EdgeKind>>(new Set(edgeKindList));
 const sortMode = ref<'length' | 'score'>('length');
+// Phase 10-1 — direction toggle. forward = from → to via out-edges (callers→callees);
+// reverse = from → to via in-edges (consumer-back-to-producer chain).
+const direction = ref<'forward' | 'reverse'>('forward');
 
 let fromDebounce: ReturnType<typeof setTimeout>;
 let toDebounce: ReturnType<typeof setTimeout>;
@@ -112,6 +115,9 @@ async function findPaths() {
     // Only send edgeKinds if not all are selected
     if (activeEdgeKinds.value.size < edgeKindList.length) {
       url += `&edgeKinds=${[...activeEdgeKinds.value].join(',')}`;
+    }
+    if (direction.value === 'reverse') {
+      url += `&dir=reverse`;
     }
     const res = await apiFetch(url);
     const data = await res.json();
@@ -318,6 +324,31 @@ function clear() {
             <input type="checkbox" v-model="shortestOnly" class="rounded" />
             Shortest paths only
           </label>
+          <!-- Phase 10-1: direction toggle -->
+          <div>
+            <label class="block mb-1" style="color: var(--text-secondary)">Direction:</label>
+            <div class="inline-flex rounded-md overflow-hidden text-[10px]"
+                 style="border: 1px solid var(--border-subtle)">
+              <button
+                type="button"
+                @click="direction = 'forward'"
+                class="px-2 py-0.5 transition-colors"
+                :style="{
+                  background: direction === 'forward' ? 'var(--accent-blue)' : 'transparent',
+                  color: direction === 'forward' ? '#fff' : 'var(--text-tertiary)'
+                }"
+              >Forward</button>
+              <button
+                type="button"
+                @click="direction = 'reverse'"
+                class="px-2 py-0.5 transition-colors"
+                :style="{
+                  background: direction === 'reverse' ? 'var(--accent-blue)' : 'transparent',
+                  color: direction === 'reverse' ? '#fff' : 'var(--text-tertiary)'
+                }"
+              >Reverse</button>
+            </div>
+          </div>
           <div>
             <label class="block mb-1" style="color: var(--text-secondary)">Edge types:</label>
             <div class="flex flex-wrap gap-1">

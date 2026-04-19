@@ -28,6 +28,13 @@ export interface BreakingChange {
 export interface BreakingChangesReport {
   changes: BreakingChange[];
   byCode: Record<BreakingCode, number>;
+  /**
+   * Phase 10-4 — DTO fields detected as a rename pair (same simple
+   * className, same field name) by `SignatureStore.diff`'s rename
+   * heuristic. These are excluded from the B1 count even though the
+   * before-record still appears in `diff.removed`.
+   */
+  renamed: Array<{ before: SignatureRecord; after: SignatureRecord }>;
 }
 
 function emptyByCode(): Record<BreakingCode, number> {
@@ -42,9 +49,16 @@ export function detectBreakingChanges(diff: SignatureDiff): BreakingChangesRepor
   const changes: BreakingChange[] = [];
   const byCode = emptyByCode();
 
+  // Phase 10-4 — IDs that the rename heuristic paired up. Skip B1 for these
+  // so a class moved between packages doesn't loud-fail every field as
+  // "removed". The companion `added` records remain (so the new id is
+  // visible) — they aren't a breaking change either, just a rename.
+  const renamedRemovedIds = new Set<string>();
+  for (const pair of diff.renamed ?? []) renamedRemovedIds.add(pair.before.id);
+
   // B1 — removed DTO fields.
   for (const r of diff.removed) {
-    if (r.kind === 'dto-field') {
+    if (r.kind === 'dto-field' && !renamedRemovedIds.has(r.id)) {
       changes.push({
         code: 'B1',
         severity: 'error',
@@ -140,5 +154,5 @@ export function detectBreakingChanges(diff: SignatureDiff): BreakingChangesRepor
     }
   }
 
-  return { changes, byCode };
+  return { changes, byCode, renamed: diff.renamed ?? [] };
 }

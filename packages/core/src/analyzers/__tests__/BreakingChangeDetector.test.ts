@@ -148,4 +148,51 @@ describe('BreakingChangeDetector (Phase 8-2/3/4)', () => {
     expect(report.changes).toHaveLength(0);
     expect(report.byCode).toEqual({ B1: 0, B2: 0, B3: 0, B4: 0 });
   });
+
+  // Phase 10-4 — class-rename heuristic must suppress B1 for moved fields.
+  it('does not fire B1 for fields paired by the rename heuristic', () => {
+    const g1 = new DependencyGraph();
+    g1.addNode(dto('com.old.UserDto', [
+      { name: 'id', typeRef: 'Long' },
+      { name: 'email', typeRef: 'String' },
+    ]));
+    store.snapshot('v1', g1);
+
+    const g2 = new DependencyGraph();
+    g2.addNode(dto('com.new.UserDto', [
+      { name: 'id', typeRef: 'Long' },
+      { name: 'email', typeRef: 'String' },
+    ]));
+    store.snapshot('v2', g2);
+
+    const report = detectBreakingChanges(store.diff('v1', 'v2'));
+    expect(report.byCode.B1).toBe(0);
+    expect(report.renamed).toHaveLength(2);
+    // No B1 change emitted for the paired ids
+    const b1Ids = report.changes.filter(c => c.code === 'B1').map(c => c.signatureId);
+    expect(b1Ids).not.toContain('com.old.UserDto#id');
+    expect(b1Ids).not.toContain('com.old.UserDto#email');
+  });
+
+  it('still fires B1 for genuinely removed (unpaired) fields when a class is renamed and shrinks', () => {
+    const g1 = new DependencyGraph();
+    g1.addNode(dto('com.old.UserDto', [
+      { name: 'id', typeRef: 'Long' },
+      { name: 'deprecated', typeRef: 'String' },
+    ]));
+    store.snapshot('v1', g1);
+
+    const g2 = new DependencyGraph();
+    g2.addNode(dto('com.new.UserDto', [
+      { name: 'id', typeRef: 'Long' },
+    ]));
+    store.snapshot('v2', g2);
+
+    const report = detectBreakingChanges(store.diff('v1', 'v2'));
+    // 1 paired rename (id), 1 truly removed field (deprecated) -> B1 = 1
+    expect(report.renamed).toHaveLength(1);
+    expect(report.byCode.B1).toBe(1);
+    const b1 = report.changes.find(c => c.code === 'B1')!;
+    expect(b1.signatureId).toBe('com.old.UserDto#deprecated');
+  });
 });

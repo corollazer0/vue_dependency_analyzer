@@ -58,7 +58,19 @@ export async function loadConfig(dir: string, options: CliOptions): Promise<Anal
 
 export async function runAnalysis(
   config: AnalysisConfig & { projectRoot: string },
-  options?: { noCache?: boolean; onProgress?: (info: ProgressInfo) => void },
+  options?: {
+    noCache?: boolean;
+    onProgress?: (info: ProgressInfo) => void;
+    /**
+     * Phase 10-3 — signaturesOnly skips the cross-boundary linker (api-call,
+     * MyBatis, DTO-flow, etc.) and the post-parse analyzers (circular,
+     * orphan). The graph still contains every parser-emitted node/edge so
+     * SignatureStore.snapshot can extract DTO signatures unchanged. The 35%
+     * wall-time goal comes from cutting linker + analyzer cost on large
+     * monorepos where parsing dominates but the linker is non-trivial.
+     */
+    signaturesOnly?: boolean;
+  },
 ): Promise<AnalysisResult> {
   const graph = new DependencyGraph();
   graph.metadata.projectRoot = config.projectRoot;
@@ -154,12 +166,16 @@ export async function runAnalysis(
     cache.save();
   }
 
-  // Cross-boundary resolution
-  const resolver = new CrossBoundaryResolver(config, config.projectRoot);
-  resolver.resolve(graph);
+  let circularDeps: string[][] = [];
+  let orphans: string[] = [];
+  if (!options?.signaturesOnly) {
+    // Cross-boundary resolution
+    const resolver = new CrossBoundaryResolver(config, config.projectRoot);
+    resolver.resolve(graph);
 
-  const circularDeps = findCircularDependencies(graph);
-  const orphans = findOrphanNodes(graph).map(n => `${n.kind}: ${n.label}`);
+    circularDeps = findCircularDependencies(graph);
+    orphans = findOrphanNodes(graph).map(n => `${n.kind}: ${n.label}`);
+  }
 
   // Release the persistent worker pool so the CLI process can exit.
   parser.dispose();

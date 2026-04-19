@@ -642,6 +642,68 @@ describe('Server API', () => {
       expect(emptyBody.count).toBe(0);
       expect(emptyBody.paths).toEqual([]);
     });
+
+    // Phase 10-6 — file-tree picker endpoint.
+    it('GET /api/files/tree returns repo-relative entries with depth=1 by default', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/files/tree' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('root');
+      expect(body).toHaveProperty('entries');
+      expect(Array.isArray(body.entries)).toBe(true);
+      // Some fixtures live in projectRoot — at least one entry expected.
+      expect(body.entries.length).toBeGreaterThan(0);
+      // Depth=1: dir entries should not carry `children`.
+      const dirs = body.entries.filter((e: any) => e.isDir);
+      for (const d of dirs) expect(d).not.toHaveProperty('children');
+    });
+
+    it('GET /api/files/tree?root=… stays inside projectRoot (path-jail)', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/files/tree?root=' + encodeURIComponent('../../../') });
+      expect(res.statusCode).toBe(400);
+    });
+
+    // Phase 10-1 — contract freeze: /api/graph/paths?dir=reverse must return the
+    // same shape as forward (paths[][], count: number) so clients can safely opt-in
+    // by adding the `dir` parameter without changing their decode path.
+    it('should accept dir=reverse and return the same response shape as forward', async () => {
+      const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const graph = JSON.parse(graphRes.body);
+      if (graph.edges.length === 0) return;
+
+      const edge = graph.edges[0];
+      const sourceEnc = encodeURIComponent(edge.source);
+      const targetEnc = encodeURIComponent(edge.target);
+
+      const forward = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${sourceEnc}&to=${targetEnc}&dir=forward`,
+      });
+      // For reverse, swap roles: from = downstream, to = upstream — the answer
+      // is the same path written end-to-end as forward.
+      const reverse = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${targetEnc}&to=${sourceEnc}&dir=reverse`,
+      });
+
+      expect(forward.statusCode).toBe(200);
+      expect(reverse.statusCode).toBe(200);
+
+      const forwardBody = JSON.parse(forward.body);
+      const reverseBody = JSON.parse(reverse.body);
+      // Shape parity (the freeze):
+      expect(reverseBody).toHaveProperty('paths');
+      expect(reverseBody).toHaveProperty('count');
+      expect(Array.isArray(reverseBody.paths)).toBe(true);
+      expect(typeof reverseBody.count).toBe('number');
+      if (reverseBody.paths.length > 0) {
+        expect(Array.isArray(reverseBody.paths[0])).toBe(true);
+        expect(typeof reverseBody.paths[0][0]).toBe('string');
+      }
+
+      // Sanity: at least one direction returned a path for this seed edge.
+      expect(forwardBody.count + reverseBody.count).toBeGreaterThan(0);
+    });
   });
 
   // ─── GET /api/graph/matrix ───

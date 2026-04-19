@@ -61,10 +61,22 @@ jobs:
       - name: Run render-time harness
         id: harness
         run: |
-          npx -w @vda/bench tsx src/cli/harness.ts \
-            --nodes 5000 \
-            --filter-kind vue-component \
-            --out-json bench-report.json
+          # Phase 10-8 — strict mode runs the axe-core audit too so the gate
+          # below has data to enforce. Default mode skips the audit to keep
+          # PR-side runs warn-only and fast.
+          if [ "${{ inputs.strict }}" = "true" ]; then
+            npx -w @vda/bench tsx src/cli/harness.ts \
+              --nodes 5000 \
+              --filter-kind vue-component \
+              --audit \
+              --audit-out audit.json \
+              --out-json bench-report.json
+          else
+            npx -w @vda/bench tsx src/cli/harness.ts \
+              --nodes 5000 \
+              --filter-kind vue-component \
+              --out-json bench-report.json
+          fi
 
       - name: Parse report + format PR comment body
         id: report
@@ -108,12 +120,23 @@ jobs:
         run: |
           node -e "
             const r = require('./bench-report.json');
-            const bad = r.gate.G1_verdict !== 'MET' || r.gate.G2_verdict !== 'MET';
+            // Phase 10-8 — A1 axe critical=0 joins G1/G2 in the strict gate.
+            const bad =
+              r.gate.G1_verdict !== 'MET' ||
+              r.gate.G2_verdict !== 'MET' ||
+              r.gate.A1_verdict !== 'MET';
             if (bad) {
               console.error('FAIL: ' + JSON.stringify(r.gate));
               process.exit(1);
             }
           "
+
+      - name: Upload axe audit artifact
+        if: always() && hashFiles('audit.json') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: axe-audit-${{ github.run_id }}
+          path: audit.json
 
       - name: Upload bench report artifact
         uses: actions/upload-artifact@v4

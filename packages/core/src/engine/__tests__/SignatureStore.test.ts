@@ -164,4 +164,68 @@ describe('SignatureStore (Phase 8-1)', () => {
     expect(records[0].id).toBe('users.id');
     stripped.close();
   });
+
+  // Phase 10-4 — file-rename heuristic. When a class moves package
+  // (com.old.UserDto → com.new.UserDto) every field id changes; the
+  // rename pass pairs them so B1 doesn't fire on every field.
+  describe('Phase 10-4 rename heuristic', () => {
+    it('pairs dto-fields whose simple className + field name match 1:1 across snapshots', () => {
+      const g1 = new DependencyGraph();
+      g1.addNode(dtoNode('com.old.pkg.UserDto', [
+        { name: 'id', typeRef: 'Long' },
+        { name: 'email', typeRef: 'String', nullable: true },
+      ]));
+      store.snapshot('before', g1);
+
+      const g2 = new DependencyGraph();
+      g2.addNode(dtoNode('com.new.pkg.UserDto', [
+        { name: 'id', typeRef: 'Long' },
+        { name: 'email', typeRef: 'String', nullable: true },
+      ]));
+      store.snapshot('after', g2);
+
+      const diff = store.diff('before', 'after');
+      expect(diff.renamed).toHaveLength(2);
+      const renamedIds = diff.renamed.map(p => `${p.before.id}→${p.after.id}`).sort();
+      expect(renamedIds).toEqual([
+        'com.old.pkg.UserDto#email→com.new.pkg.UserDto#email',
+        'com.old.pkg.UserDto#id→com.new.pkg.UserDto#id',
+      ]);
+
+      // After-records carry previousId so consumers pair in O(1).
+      const afterEmail = diff.added.find(r => r.id === 'com.new.pkg.UserDto#email')!;
+      expect(afterEmail.previousId).toBe('com.old.pkg.UserDto#email');
+    });
+
+    it('does not pair when 2+ added candidates share the same (className, fieldName)', () => {
+      // Two new packages both define UserDto.id — ambiguous, leave split.
+      const g1 = new DependencyGraph();
+      g1.addNode(dtoNode('com.old.pkg.UserDto', [{ name: 'id', typeRef: 'Long' }]));
+      store.snapshot('before', g1);
+
+      const g2 = new DependencyGraph();
+      g2.addNode(dtoNode('com.a.pkg.UserDto', [{ name: 'id', typeRef: 'Long' }]));
+      g2.addNode(dtoNode('com.b.pkg.UserDto', [{ name: 'id', typeRef: 'Long' }]));
+      store.snapshot('after', g2);
+
+      const diff = store.diff('before', 'after');
+      expect(diff.renamed).toHaveLength(0);
+      expect(diff.removed.map(r => r.id)).toEqual(['com.old.pkg.UserDto#id']);
+      expect(diff.added).toHaveLength(2);
+    });
+
+    it('leaves a same-id field in modified[] (not renamed)', () => {
+      const g1 = new DependencyGraph();
+      g1.addNode(dtoNode('com.x.UserDto', [{ name: 'id', typeRef: 'Long' }]));
+      store.snapshot('before', g1);
+
+      const g2 = new DependencyGraph();
+      g2.addNode(dtoNode('com.x.UserDto', [{ name: 'id', typeRef: 'Integer' }])); // type change
+      store.snapshot('after', g2);
+
+      const diff = store.diff('before', 'after');
+      expect(diff.renamed).toHaveLength(0);
+      expect(diff.modified).toHaveLength(1);
+    });
+  });
 });

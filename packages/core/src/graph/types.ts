@@ -110,6 +110,14 @@ export interface ServiceConfig {
   type: 'vue' | 'spring-boot';
 }
 
+/**
+ * Phase 10-5 — metadata predicate compiled from a layer's `where:` clause.
+ * Each entry must equal the node's `metadata[key]` for the layer to match.
+ * Strings and booleans are the only supported value types — DSL configs are
+ * authored by hand and we want a tight surface so review is easy.
+ */
+export type LayerMetadataPredicate = Record<string, string | boolean>;
+
 export interface ArchitectureRule {
   id?: string;
   type: 'deny-circular' | 'deny-direct' | 'allow-only' | 'max-depth' | 'max-dependents';
@@ -120,6 +128,13 @@ export interface ArchitectureRule {
   value?: number;
   severity?: 'error' | 'warning';
   message?: string;
+  /**
+   * Phase 10-5 — when set, the rule's `from` side must additionally match
+   * every entry of this metadata predicate. Used by Layer DSL `where:`.
+   */
+  fromWhere?: LayerMetadataPredicate;
+  /** Same as fromWhere, applied to `to` (deny-direct) / `allowed` (allow-only). */
+  toWhere?: LayerMetadataPredicate;
 }
 
 export interface RuleViolation {

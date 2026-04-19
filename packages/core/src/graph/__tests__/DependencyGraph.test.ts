@@ -254,6 +254,27 @@ describe('query', () => {
     expect(paths[0]).toEqual(['A', 'B', 'C', 'D']);
   });
 
+  // Phase 10-1
+  it('findPaths reverse mode should walk in-edges from `from` toward `to`', () => {
+    // forward A→B→C→D; reverse from D→…→A walks in-edges
+    const paths = findPaths(graph, 'D', 'A', { direction: 'reverse' });
+    expect(paths).toHaveLength(1);
+    // Path lists ids visited starting at `from`; each step is a real graph edge.
+    expect(paths[0]).toEqual(['D', 'C', 'B', 'A']);
+  });
+
+  // Phase 10-1 — contract freeze: response shape (paths[][]) is identical between
+  // direction=forward and direction=reverse so any consumer (server, UI) can
+  // ignore direction in result handling.
+  it('findPaths reverse and forward return the same response shape', () => {
+    const forward = findPaths(graph, 'A', 'D', { direction: 'forward' });
+    const reverse = findPaths(graph, 'D', 'A', { direction: 'reverse' });
+    expect(Array.isArray(forward)).toBe(true);
+    expect(Array.isArray(reverse)).toBe(true);
+    expect(forward.every(p => Array.isArray(p) && p.every(s => typeof s === 'string'))).toBe(true);
+    expect(reverse.every(p => Array.isArray(p) && p.every(s => typeof s === 'string'))).toBe(true);
+  });
+
   it('subgraphAround should extract local subgraph', () => {
     const sub = subgraphAround(graph, 'B', 1);
     expect(sub.getNodeCount()).toBe(4); // A, B, C, E

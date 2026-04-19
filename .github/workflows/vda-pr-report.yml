@@ -40,6 +40,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Self-test workflow syntax with act --dryrun (graceful skip)
+        # Phase 10-9 — early bail on yaml-level workflow regressions.
+        # `act` isn't installed on default GitHub runners, so the script
+        # prints a notice and exits 0 in CI; locally `act` users get the
+        # full validation. Keep this *before* the long build steps so
+        # broken syntax fails fast.
+        run: scripts/validate-workflow.sh vda-pr-report
+
       - name: Build CLI + core
         run: npx turbo run build --filter=@vda/cli
 

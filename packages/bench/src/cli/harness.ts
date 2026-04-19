@@ -65,9 +65,12 @@ async function main() {
   log(`serving http://127.0.0.1:${server.port}/?harness=1`);
 
   try {
+    // Phase 10-8 — --audit toggles axe-core injection.
+    const audit = args.audit === 'true';
     const result = await runMeasurement({
       baseUrl: `http://127.0.0.1:${server.port}`,
       filterKind,
+      audit,
     });
     const report = {
       fixture: fixturePath,
@@ -80,6 +83,15 @@ async function main() {
         G2_filterMs: result.filterMs,
         G2_budget: 200,
         G2_verdict: result.filterMs < 200 ? 'MET' : 'NOT MET',
+        // Phase 10-8 — A1 axe-core a11y gate (critical = 0). Only included
+        // when --audit was passed. Verdict 'SKIPPED' when audit was off.
+        ...(result.axe
+          ? {
+              A1_axeCritical: result.axe.violations.critical,
+              A1_axeBudget: 0,
+              A1_verdict: result.axe.violations.critical === 0 ? 'MET' : 'NOT MET',
+            }
+          : { A1_verdict: 'SKIPPED' }),
       },
       result,
     };
@@ -88,6 +100,13 @@ async function main() {
     if (args['out-json']) {
       writeFileSync(resolve(args['out-json']), JSON.stringify(report, null, 2));
       log(`wrote ${args['out-json']}`);
+    }
+    // Phase 10-8 — separate audit.json so CI can gate on it without re-parsing
+    // the perf report. Always written when --audit was set.
+    if (audit && result.axe) {
+      const auditOut = args['audit-out'] ?? 'audit.json';
+      writeFileSync(resolve(auditOut), JSON.stringify(result.axe, null, 2));
+      log(`wrote ${auditOut}`);
     }
     log(`G1=${result.firstPaintMs}ms (${report.gate.G1_verdict})  G2=${result.filterMs}ms (${report.gate.G2_verdict})`);
   } finally {

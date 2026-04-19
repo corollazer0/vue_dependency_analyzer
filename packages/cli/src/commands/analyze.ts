@@ -29,6 +29,10 @@ export async function analyzeCommand(
   const { graph, stats } = await runAnalysis(config, {
     noCache,
     onProgress: showProgress,
+    // Phase 10-3 — when emitting a signatures-only snapshot we skip the
+    // cross-boundary linker + analyzer stages. SignatureStore.snapshot reads
+    // parser-emitted nodes directly, so the snapshot is identical.
+    signaturesOnly: options.signaturesOnly,
   });
 
   // Clear progress line
