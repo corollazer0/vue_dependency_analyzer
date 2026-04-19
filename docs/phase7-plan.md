@@ -11,21 +11,21 @@
 > - T0-03 CLI getStats node/edge 분리 → ✅ 해결
 > - T1-01 @Mapper interface → ✅ 해결
 > - T1-02 vue-router `route-renders` → ✅ v2 7a-6 (PR-A `e8f5538`)
-> - T1-03 Event virtual edges → 🚧 v2 7a-7 (부분 해결, 전수 검증 필요)
+> - T1-03 Event virtual edges → ✅ v2 7a-7 (`@TransactionalEventListener` + `@EventListener(X.class)` forms)
 > - T1-04 worker_threads 병렬 → ✅ Phase 2-2
 > - T1-05 services[] MSA → ✅ Phase 2-6
 > - T2-01/02 DTO flow + consistency → ✅ Phase 4 전체
-> - T2-03 storeToRefs 구독 필드 → 🚧 v2 7a-8
-> - T2-04 캐시 성능 테스트 보강 → 🚧 v2 7a (E2E 로 흡수)
+> - T2-03 storeToRefs 구독 필드 → ✅ v2 7a-8 (`subscribedFields` on uses-store edge)
+> - T2-04 캐시 성능 테스트 보강 → ✅ v2 7a-10 (CLI E2E exposes & fixes `--no-cache` bug)
 > - T3-01 watch resources/ → ✅ 해결
 > - T3-02 vda init tsconfig 재귀 → 📦 v2 범위 밖 (정합성 이상 없음)
 > - T3-03 분석 취소 → ✅ 해결 (AbortController)
-> - T3-04 CLI 전용 테스트 → 🚧 v2 7a-10
+> - T3-04 CLI 전용 테스트 → ✅ v2 7a-10 (spawn-based e2e-cli.test.ts)
 > - T3-05 fixture 고도화 → ✅ test-project-ecommerce 로 대체
-> - T3-06 A11y → 🚧 v2 7a-9
+> - T3-06 A11y → ✅ v2 7a-9 (ARIA tablist/tabpanel + aria-labels; axe-core CI deferred)
 > - T4-01 E2E smoke → ✅ e2e-fixture.test.ts 존재
-> - T4-02 Server API E2E → 🚧 v2 7a-10
-> - T4-03 CLI E2E → 🚧 v2 7a-10
+> - T4-02 Server API E2E → ✅ v2 7a-10 (api.test.ts 60-test surface coverage)
+> - T4-03 CLI E2E → ✅ v2 7a-10
 >
 > 아래 본문은 **참고용 원본 보존**이며 실행 기준은 v2 를 따른다.
 
