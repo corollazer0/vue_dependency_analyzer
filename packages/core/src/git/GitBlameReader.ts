@@ -34,21 +34,35 @@ export interface GitBlameRecord {
 }
 
 export interface GitBlameMap {
-  /** Repo-relative file path (with `/` separators) → blame record. */
+  /**
+   * Path relative to `gitToplevel` (with `/` separators) → blame record.
+   * `git log --name-only` emits paths relative to the repo top, so we keep
+   * them in that form and let `lookup(blame, absPath)` translate from
+   * absolute to the right key.
+   */
   byFile: Map<string, GitBlameRecord>;
   /** True when the repo is shallow — coverage is best-effort. */
   shallow: boolean;
+  /** Absolute path to the git repo top. Empty when not a git repo. */
+  gitToplevel: string;
 }
 
-const EMPTY: GitBlameMap = { byFile: new Map(), shallow: false };
+const EMPTY: GitBlameMap = { byFile: new Map(), shallow: false, gitToplevel: '' };
 
-function repoIsGit(projectRoot: string): boolean {
-  // `.git` may be a directory or a file (worktrees). Both work for `git log`.
-  return existsSync(resolve(projectRoot, '.git'));
+function findGitToplevel(start: string): string | null {
+  // Walk up looking for `.git` (dir or file). Mirrors what git itself does
+  // so we don't have to spawn another process just to find the toplevel.
+  let dir = resolve(start);
+  while (true) {
+    if (existsSync(resolve(dir, '.git'))) return dir;
+    const parent = resolve(dir, '..');
+    if (parent === dir) return null;
+    dir = parent;
+  }
 }
 
-function repoIsShallow(projectRoot: string): boolean {
-  return existsSync(resolve(projectRoot, '.git', 'shallow'));
+function repoIsShallow(toplevel: string): boolean {
+  return existsSync(resolve(toplevel, '.git', 'shallow'));
 }
 
 /**
@@ -63,7 +77,8 @@ export function readGitBlame(
   opts: { pathPrefixes?: string[] } = {},
 ): GitBlameMap {
   const root = resolve(projectRoot);
-  if (!repoIsGit(root)) return EMPTY;
+  const toplevel = findGitToplevel(root);
+  if (!toplevel) return EMPTY;
 
   // Format: SHA<TAB>ISO-DATE<TAB>AUTHOR  followed by --name-only file list.
   // Using `%x09` (TAB) as separator survives author names containing spaces.
@@ -77,12 +92,12 @@ export function readGitBlame(
     '--name-only',
     '--pretty=format:%x01%H%x09%aI%x09%an',
   ];
-  // -- separator + path prefixes restrict the log scope.
+  // -- separator + path prefixes restrict the log scope. Pathspec is
+  // relative to gitToplevel, not projectRoot.
   if (opts.pathPrefixes && opts.pathPrefixes.length > 0) {
     args.push('--');
     for (const p of opts.pathPrefixes) {
-      // Convert absolute paths to repo-relative; pathspec must be relative.
-      const rel = relative(root, resolve(root, p));
+      const rel = relative(toplevel, resolve(root, p));
       if (rel && !rel.startsWith('..')) args.push(rel);
     }
   }
@@ -90,7 +105,7 @@ export function readGitBlame(
   let stdout: string;
   try {
     stdout = execSync(`git ${args.map(a => (/[\s'"]/.test(a) ? `'${a}'` : a)).join(' ')}`, {
-      cwd: root,
+      cwd: toplevel,
       encoding: 'utf-8',
       timeout: 60_000,
       // 50K-file repos can produce ~25 MB of `git log --name-only` output.
@@ -131,12 +146,25 @@ export function readGitBlame(
     }
   }
 
-  return { byFile, shallow: repoIsShallow(root) };
+  return { byFile, shallow: repoIsShallow(toplevel), gitToplevel: toplevel };
 }
 
 /**
- * Convert an absolute file path back to the repo-relative key
- * `readGitBlame` uses. Helper for callers that hold absolute paths.
+ * Convert an absolute file path to the key the blame map uses (= path
+ * relative to the git toplevel, with `/` separators). When the file lives
+ * outside the repo or `blame` came from a non-git project, returns null
+ * so callers can skip the lookup cleanly.
+ */
+export function blameLookupKey(blame: GitBlameMap, absPath: string): string | null {
+  if (!blame.gitToplevel) return null;
+  const rel = relative(blame.gitToplevel, resolve(absPath));
+  if (!rel || rel.startsWith('..')) return null;
+  return rel.split(sep).join('/');
+}
+
+/**
+ * Backwards-compat helper from the first draft. Prefer `blameLookupKey`
+ * which uses the toplevel from the blame map directly.
  */
 export function repoRelative(projectRoot: string, absPath: string): string {
   return relative(resolve(projectRoot), resolve(absPath)).split(sep).join('/');

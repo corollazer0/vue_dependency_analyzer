@@ -26,6 +26,7 @@ program
   .option('--signatures-only', 'Skip reporting and persist a SignatureStore snapshot only')
   .option('--label <name>', 'Snapshot label for --signatures-only (default: main)')
   .option('--otel-traces <file>', 'Inject p95Ms / errorRate from an OTLP JSON trace export (Phase 9-12)')
+  .option('--with-git-blame', 'Stamp lastTouchedAt/lastAuthor/commitCount/lastCommitSha onto every node (Phase 11-2)')
   .option('--no-cache', 'Disable parse cache')
   .action(analyzeCommand);
 

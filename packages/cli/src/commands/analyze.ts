@@ -3,7 +3,7 @@ import { SignatureStore, readOtelTraces, type ProgressInfo } from '@vda/core';
 
 export async function analyzeCommand(
   dir: string,
-  options: CliOptions & { cache?: boolean; signaturesOnly?: boolean; label?: string; otelTraces?: string },
+  options: CliOptions & { cache?: boolean; signaturesOnly?: boolean; label?: string; otelTraces?: string; withGitBlame?: boolean },
 ): Promise<void> {
   const config = await loadConfig(dir, options);
   console.log(`\n🔍 Analyzing project: ${dir}\n`);
@@ -33,6 +33,9 @@ export async function analyzeCommand(
     // cross-boundary linker + analyzer stages. SignatureStore.snapshot reads
     // parser-emitted nodes directly, so the snapshot is identical.
     signaturesOnly: options.signaturesOnly,
+    // Phase 11-2 — stamp git blame metadata onto every node. Skipped by
+    // default to keep the warm path fast; opt-in via --with-git-blame.
+    withGitBlame: options.withGitBlame,
   });
 
   // Clear progress line
