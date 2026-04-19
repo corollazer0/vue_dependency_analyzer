@@ -113,4 +113,63 @@ describe('MyBatisXmlParser', () => {
       expect((stmt.metadata as any).parameterTypeSimple).toBe('CreateOrderRequest');
     });
   });
+
+  // Phase 13-1..3 — referencedColumns + dynamicColumnCount on every statement.
+  describe('Phase 13: extractStatementColumns', () => {
+    it('captures SELECT projection columns + WHERE refs as referencedColumns', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<mapper namespace="com.example.UserMapper">
+  <select id="findByEmail" resultType="com.example.User">
+    SELECT id, email, display_name, created_at FROM users WHERE email = #{email} AND active = true
+  </select>
+</mapper>`;
+      const result = new MyBatisXmlParser().parse('/test/UserMapper.xml', xml, {});
+      const stmt = result.nodes.find(n => n.kind === 'mybatis-statement')!;
+      const cols = (stmt.metadata as any).referencedColumns as string[];
+      expect(cols).toEqual(expect.arrayContaining(['id', 'email', 'display_name', 'created_at', 'active']));
+      expect((stmt.metadata as any).dynamicColumnCount).toBeUndefined();
+    });
+
+    it('counts ${...} placeholders as dynamicColumnCount', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<mapper namespace="com.example.UserMapper">
+  <select id="findOrdered" resultType="com.example.User">
+    SELECT id, email FROM users ORDER BY \${order_col}
+  </select>
+</mapper>`;
+      const result = new MyBatisXmlParser().parse('/test/UserMapper.xml', xml, {});
+      const stmt = result.nodes.find(n => n.kind === 'mybatis-statement')!;
+      expect((stmt.metadata as any).dynamicColumnCount).toBe(1);
+    });
+
+    it('unions <if> branch columns into the referenced set', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<mapper namespace="com.example.UserMapper">
+  <select id="findFiltered" resultType="com.example.User">
+    SELECT id FROM users
+    <where>
+      <if test="email != null">AND email = #{email}</if>
+      <if test="role != null">AND role = #{role}</if>
+    </where>
+  </select>
+</mapper>`;
+      const result = new MyBatisXmlParser().parse('/test/UserMapper.xml', xml, {});
+      const stmt = result.nodes.find(n => n.kind === 'mybatis-statement')!;
+      const cols = (stmt.metadata as any).referencedColumns as string[];
+      expect(cols).toEqual(expect.arrayContaining(['id', 'email', 'role']));
+    });
+
+    it('captures INSERT INTO column lists', () => {
+      const xml = `<?xml version="1.0" encoding="UTF-8"?>
+<mapper namespace="com.example.UserMapper">
+  <insert id="create" parameterType="com.example.User">
+    INSERT INTO users (id, email, display_name) VALUES (#{id}, #{email}, #{displayName})
+  </insert>
+</mapper>`;
+      const result = new MyBatisXmlParser().parse('/test/UserMapper.xml', xml, {});
+      const stmt = result.nodes.find(n => n.kind === 'mybatis-statement')!;
+      const cols = (stmt.metadata as any).referencedColumns as string[];
+      expect(cols).toEqual(expect.arrayContaining(['id', 'email', 'display_name']));
+    });
+  });
 });

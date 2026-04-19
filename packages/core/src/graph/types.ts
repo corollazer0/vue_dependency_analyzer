@@ -199,6 +199,13 @@ export interface GraphMetadata {
    * means "not in shallow history" not "never touched".
    */
   gitBlameShallow?: boolean;
+  /**
+   * Phase 13-6 — count of Flyway migrations that fed db-table.metadata.columns.
+   * 0 (or undefined) when ddl.migrations option was not provided.
+   */
+  ddlMigrationCount?: number;
+  /** Phase 13-6 — count of db-table nodes that received columns metadata. */
+  ddlTablesStamped?: number;
 }
 
 export interface ParseResult {

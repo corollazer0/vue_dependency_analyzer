@@ -87,6 +87,13 @@ export class MyBatisXmlParser implements FileParser {
         fieldMappings = extractInlineColumnMappings(sqlBody);
       }
 
+      // Phase 13-1..3 — pull every column identifier the statement references
+      // (best-effort) so BreakingChangeDetector B4 can compare against the
+      // DDL snapshot. Captures static SELECT/SET/WHERE/INSERT cols, unions
+      // <if test="..."> branch columns, and tags ${...} placeholders for the
+      // "dynamic" confidence marker.
+      const colInfo = extractStatementColumns(sqlBody);
+
       const stmtNodeId = `mybatis-statement:${namespace}.${statementId}`;
       const stmtMeta: Record<string, unknown> = { statementType, statementId, namespace };
       if (resultMapType) stmtMeta.resultMapType = resultMapType;
@@ -96,6 +103,8 @@ export class MyBatisXmlParser implements FileParser {
         stmtMeta.parameterType = parameterTypeRef;
         stmtMeta.parameterTypeSimple = parameterTypeRef.split('.').pop();
       }
+      if (colInfo.columns.length > 0) stmtMeta.referencedColumns = colInfo.columns;
+      if (colInfo.dynamicColumnCount > 0) stmtMeta.dynamicColumnCount = colInfo.dynamicColumnCount;
 
       nodes.push({
         id: stmtNodeId,
@@ -278,3 +287,88 @@ function splitTopLevel(s: string): string[] {
 function snakeToCamel(s: string): string {
   return s.replace(/_([a-z])/gi, (_, c) => c.toUpperCase());
 }
+
+/**
+ * Phase 13-1..3 — extract column identifiers a MyBatis statement touches.
+ *
+ * Rules:
+ *   - SELECT projection (incl. AS aliases): take the column part.
+ *   - WHERE / SET / GROUP BY / ORDER BY / INSERT INTO (cols): take bare
+ *     identifiers; filter SQL keywords + parameter binds (`#{x}`).
+ *   - <if test="..."> branches are unioned (best-effort: we keep the body
+ *     text as-is so any column ref inside fires).
+ *   - `${dyn_col}` placeholders count toward `dynamicColumnCount` — caller
+ *     can flag the confidence as low.
+ *
+ * Best-effort: regex-based, not an AST. Misses CTEs, sub-selects with
+ * different aliases, etc. — phase15+ would replace with a SQL parser.
+ */
+export function extractStatementColumns(sql: string): {
+  columns: string[];
+  dynamicColumnCount: number;
+} {
+  const cleaned = sql
+    .replace(/<!\[CDATA\[|\]\]>/g, '')
+    .replace(/--.*$/gm, '')
+    .replace(/\/\*[\s\S]*?\*\//g, '');
+  // Count dynamic placeholders BEFORE we strip them.
+  const dynamicMatches = cleaned.match(/\$\{[^}]+\}/g);
+  const dynamicColumnCount = dynamicMatches ? dynamicMatches.length : 0;
+
+  // Strip parameter binds and string literals to keep only structural SQL.
+  const stripped = cleaned
+    .replace(/#\{[^}]+\}/g, ':p')
+    .replace(/\$\{[^}]+\}/g, 'DYN')
+    .replace(/'[^']*'/g, "''")
+    // Strip XML tags except their text bodies — <if><foreach><choose> etc.
+    .replace(/<\/?\w+[^>]*?>/g, ' ');
+
+  const columns = new Set<string>();
+
+  function addToken(t: string): void {
+    const lower = t.toLowerCase();
+    if (lower.length === 0 || SQL_KEYWORDS.has(lower) || EXTENDED_SQL_KEYWORDS.has(lower)) return;
+    if (lower === 'dyn' || lower === ':p') return;
+    if (/^\d+$/.test(lower)) return;
+    columns.add(lower);
+  }
+
+  // SELECT projection.
+  for (const m of stripped.matchAll(/\bSELECT\s+([\s\S]+?)\bFROM\b/gi)) {
+    const proj = m[1];
+    if (/^\s*\*\s*$/.test(proj)) continue;
+    for (const part of splitTopLevel(proj)) {
+      const expr = part.trim();
+      const asMatch = expr.match(/^([\w.]+)\s+(?:AS\s+)?(\w+)$/i);
+      if (asMatch) { addToken(asMatch[1].split('.').pop() ?? ''); continue; }
+      const bare = expr.match(/^([\w.]+)$/);
+      if (bare) addToken(bare[1].split('.').pop() ?? '');
+    }
+  }
+  // WHERE / SET / ORDER BY / GROUP BY identifiers — take any IDENT followed
+  // by an operator. This over-captures (table aliases) but column-level
+  // false positives are filtered by the SQL_KEYWORDS set.
+  for (const m of stripped.matchAll(/(\b\w+(?:\.\w+)?)\s*(=|!=|<>|>=|<=|>|<|\bLIKE\b|\bIN\b|\bIS\b|\bBETWEEN\b)/gi)) {
+    addToken(m[1].split('.').pop() ?? '');
+  }
+  // INSERT INTO table (col1, col2, ...)
+  for (const m of stripped.matchAll(/\bINSERT\s+INTO\s+\w+\s*\(([^)]+)\)/gi)) {
+    for (const part of splitTopLevel(m[1])) addToken(part.trim());
+  }
+  // UPDATE table SET col = ?
+  for (const m of stripped.matchAll(/\bSET\s+([\s\S]+?)(?:\bWHERE\b|$)/gi)) {
+    for (const part of splitTopLevel(m[1])) {
+      const eq = part.split('=')[0].trim();
+      addToken(eq.split('.').pop() ?? '');
+    }
+  }
+  return { columns: [...columns].sort(), dynamicColumnCount };
+}
+
+const EXTENDED_SQL_KEYWORDS = new Set([
+  'insert', 'into', 'update', 'delete', 'from', 'where', 'set', 'values',
+  'and', 'or', 'not', 'null', 'order', 'group', 'having', 'limit', 'offset',
+  'union', 'all', 'exists', 'case', 'when', 'then', 'else', 'end', 'as',
+  'on', 'in', 'is', 'like', 'between', 'distinct', 'asc', 'desc', 'count',
+  'sum', 'min', 'max', 'avg', 'true', 'false',
+]);

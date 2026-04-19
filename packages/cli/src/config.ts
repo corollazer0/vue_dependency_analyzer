@@ -10,6 +10,7 @@ import {
   readGitBlame,
   blameLookupKey,
   buildMsaServiceGraph,
+  readFlywayMigrations,
   type AnalysisConfig,
   type ProgressInfo,
 } from '@vda/core';
@@ -81,6 +82,14 @@ export async function runAnalysis(
      * phase11-benchmark.md.
      */
     withGitBlame?: boolean;
+    /**
+     * Phase 13-6 — F11 schema drift. When `ddl.migrations` is set, the
+     * Flyway migration sequence under that path is parsed + cumulatively
+     * applied; the resulting per-table column lists are stamped onto
+     * matching db-table nodes' `metadata.columns`. Path is relative to
+     * projectRoot.
+     */
+    ddl?: { migrations?: string };
   },
 ): Promise<AnalysisResult> {
   const graph = new DependencyGraph();
@@ -191,6 +200,30 @@ export async function runAnalysis(
     // + inter-service edges. Skipped when signaturesOnly because the linker
     // hasn't run (api-call-site → spring-endpoint edges aren't resolved).
     buildMsaServiceGraph(graph, config.services);
+  }
+
+  // Phase 13-6 — DDL injection. Reads Flyway migrations + stamps the
+  // cumulative table shape onto db-table nodes. The signature-only path
+  // also benefits because BreakingChangeDetector B4 reads
+  // db-table.metadata.columns directly.
+  if (options?.ddl?.migrations) {
+    const migDir = resolve(config.projectRoot, options.ddl.migrations);
+    const snap = readFlywayMigrations(migDir);
+    if (snap.tables.size > 0) {
+      let touched = 0;
+      for (const node of graph.getAllNodes()) {
+        if (node.kind !== 'db-table') continue;
+        const tableName = ((node.metadata as Record<string, unknown>).tableName as string | undefined) ?? node.label;
+        const cols = snap.tables.get(tableName.toLowerCase());
+        if (!cols) continue;
+        const md = (node.metadata ??= {}) as Record<string, unknown>;
+        md.columns = cols;
+        md.ddlSource = 'flyway';
+        touched += 1;
+      }
+      graph.metadata.ddlMigrationCount = snap.migrations.length;
+      graph.metadata.ddlTablesStamped = touched;
+    }
   }
 
   // Phase 11-2 — F8 git blame stamp. Single batch git log; fail-soft when no

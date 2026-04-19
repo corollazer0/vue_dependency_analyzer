@@ -7,6 +7,8 @@ import { initCommand } from './commands/init.js';
 import { lintCommand } from './commands/lint.js';
 import { snapshotCommand } from './commands/snapshot.js';
 import { diffCommand } from './commands/diff.js';
+import { schemaSnapshotCommand } from './commands/schemaSnapshot.js';
+import { schemaDiffCommand } from './commands/schemaDiff.js';
 import { impactCommand } from './commands/impact.js';
 import { decommissionCommand } from './commands/decommission.js';
 
@@ -99,6 +101,25 @@ program
   .option('--config <path>', 'Config file path', '.vdarc.json')
   .option('--json', 'Print the diff record as JSON')
   .action((range, options) => diffCommand(options.dir ?? '.', range, options));
+
+program
+  .command('schema-snapshot')
+  .description('Persist a schema snapshot from Flyway migrations (Phase 13-8)')
+  .argument('[dir]', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--label <name>', 'Snapshot label (default: today YYYY-MM-DD)')
+  .option('--migrations <path>', 'Flyway migrations directory (default: db/migrations)')
+  .option('--json', 'Print the persisted snapshot summary as JSON')
+  .action(schemaSnapshotCommand);
+
+program
+  .command('schema-diff')
+  .description('Diff two schema snapshots (Phase 13-8). Range syntax: <from>..<to>')
+  .argument('[range]', 'Schema snapshot range, e.g. v1..v2')
+  .option('--dir <path>', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--json', 'Print the diff record as JSON')
+  .action((range, options) => schemaDiffCommand(range, options));
 
 program
   .command('init')

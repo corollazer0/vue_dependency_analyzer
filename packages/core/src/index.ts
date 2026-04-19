@@ -37,6 +37,13 @@ export {
   UNASSIGNED_SERVICE_ID,
   type MsaBuildResult,
 } from './analyzers/MsaServiceGraphBuilder.js';
+export { parseSqlDdl, type SqlColumn, type SqlDdlOp } from './parsers/sql/SqlDdlParser.js';
+export {
+  readFlywayMigrations,
+  applyMigrations,
+  type FlywayMigrationFile,
+  type FlywaySnapshot,
+} from './parsers/sql/FlywayMigrationParser.js';
 export {
   SignatureStore,
   type SignatureKind,
@@ -45,6 +52,13 @@ export {
   type SignatureDiff,
   type SignatureStoreOptions,
 } from './engine/SignatureStore.js';
+export {
+  SchemaSnapshotStore,
+  diffSchemas,
+  type SchemaSnapshotRow,
+  type SchemaDiff,
+  type SchemaSnapshotStoreOptions,
+} from './engine/SchemaSnapshotStore.js';
 export {
   ArchSnapshotStore,
   diffSnapshots,
