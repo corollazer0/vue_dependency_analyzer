@@ -564,3 +564,64 @@ describe.skipIf(!hasTestProject)('E2E: Full test-project analysis', () => {
     });
   });
 });
+
+// === Phase 10-10 — synthetic anti-pattern fixtures: 4-tag gate ===
+// Loads test-project-ecommerce/.phase9-fixtures/anti-patterns/ on its own
+// (no need for the rest of the ecommerce fixture) and asserts every one of
+// the four AntiPatternClassifier tags fires at least once. This strictens
+// the Phase 9b gate (≥3) to ≥4 now that parser metadata.lineCount /
+// packageCount land on every node (Phase 10-2).
+const apFixturesDir = resolve(
+  import.meta.dirname,
+  '../../../../test-project-ecommerce/.phase9-fixtures/anti-patterns',
+);
+const hasApFixtures = existsSync(apFixturesDir);
+
+describe.skipIf(!hasApFixtures)('Phase 10-10: anti-pattern 4-tag gate (synthetic fixtures)', () => {
+  let apGraph: DependencyGraph;
+
+  beforeAll(async () => {
+    const { glob } = await import('glob');
+    const files = (await glob(resolve(apFixturesDir, '**/*.ts'), { absolute: true }))
+      .filter(f => !f.endsWith('.d.ts'))
+      .sort();
+    const parser = new ParallelParser({ projectRoot: apFixturesDir }, undefined, apFixturesDir);
+    const result = await parser.parseAll(files);
+    apGraph = new DependencyGraph();
+    for (const n of result.nodes) apGraph.addNode(n);
+    for (const e of result.edges) apGraph.addEdge(e);
+
+    // Run the cross-boundary resolver so the `unresolved:./hub` /
+    // `unresolved:./sink` import edges become real edges to the hub /
+    // sink module nodes — without this, hub/sink fan-in stays at 0.
+    const resolver = new CrossBoundaryResolver(
+      { projectRoot: apFixturesDir, vueRoot: apFixturesDir, aliases: {} } as any,
+      apFixturesDir,
+    );
+    resolver.resolve(apGraph);
+    parser.dispose();
+  }, 30000);
+
+  it('hub.ts has fan-in ≥ 10 (entry-hub)', () => {
+    const hub = apGraph.getAllNodes().find(n => n.filePath.endsWith('/hub.ts'));
+    expect(hub).toBeDefined();
+    expect(apGraph.getInEdges(hub!.id).length).toBeGreaterThanOrEqual(10);
+  });
+
+  it('sink.ts has fan-in ≥ 8 and fan-out 0 (utility-sink)', () => {
+    const sink = apGraph.getAllNodes().find(n => n.filePath.endsWith('/sink.ts'));
+    expect(sink).toBeDefined();
+    expect(apGraph.getInEdges(sink!.id).length).toBeGreaterThanOrEqual(8);
+    expect(apGraph.getOutEdges(sink!.id).length).toBe(0);
+  });
+
+  it('classifies all 4 anti-pattern tags (4-tag gate)', async () => {
+    const { classifyAntiPatterns } = await import('../index.js');
+    const result = classifyAntiPatterns(apGraph);
+    const hit = (Object.entries(result.totals.byTag) as Array<[string, number]>)
+      .filter(([, n]) => n >= 1)
+      .map(([t]) => t)
+      .sort();
+    expect(hit).toEqual(['cyclic-cluster', 'entry-hub', 'god-object', 'utility-sink']);
+  });
+});
