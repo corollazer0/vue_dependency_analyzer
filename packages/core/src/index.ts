@@ -18,6 +18,8 @@ export { NativeBridgeLinker } from './linkers/NativeBridgeLinker.js';
 export { CrossBoundaryResolver } from './linkers/CrossBoundaryResolver.js';
 export { MyBatisLinker } from './linkers/MyBatisLinker.js';
 export { DtoFlowLinker } from './linkers/DtoFlowLinker.js';
+export type { DtoFieldChain, DtoFieldChainEntry } from './linkers/DtoFlowLinker.js';
+export type { ResultMap, ResultMapping } from './parsers/java/MyBatisXmlParser.js';
 
 // Analyzers
 export { findCircularDependencies } from './analyzers/CircularDependencyAnalyzer.js';
@@ -27,9 +29,17 @@ export type { ComplexityScore } from './analyzers/ComplexityScorer.js';
 export { analyzeImpact } from './analyzers/ImpactAnalyzer.js';
 export type { ImpactResult } from './analyzers/ImpactAnalyzer.js';
 export { checkDtoConsistency } from './analyzers/DtoConsistencyChecker.js';
-export type { DtoMismatch } from './analyzers/DtoConsistencyChecker.js';
+export type { DtoMismatch, FieldDetail } from './analyzers/DtoConsistencyChecker.js';
+export { evaluateRules } from './analyzers/RuleEngine.js';
+export { detectCommunities, groupNodesByCommunity } from './analyzers/CommunityDetector.js';
+export type { CommunityDetectionOptions, CommunityResult } from './analyzers/CommunityDetector.js';
+
+// Git
+export { parseGitDiff, getUncommittedFiles } from './git/GitDiffParser.js';
+export { analyzeChangeImpact } from './git/ChangeImpactAnalyzer.js';
+export type { ChangeImpact } from './git/ChangeImpactAnalyzer.js';
 
 // Engine
 export { ParallelParser, parseFile } from './engine/ParallelParser.js';
-export type { ProgressInfo, ProgressCallback, ParallelParseResult } from './engine/ParallelParser.js';
+export type { ProgressInfo, ProgressCallback, ParallelParseResult, ParsedFileEntry } from './engine/ParallelParser.js';
 export { ParseCache } from './engine/ParseCache.js';

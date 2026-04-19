@@ -1,7 +1,13 @@
 <script setup lang="ts">
 import { ref } from 'vue';
+import { useGraphStore } from '@/stores/graphStore';
+import { apiFetch } from '@/api/client';
+import { EDGE_STYLES } from '@/types/graph';
+import type { EdgeKind } from '@/types/graph';
 
 const emit = defineEmits<{ close: [] }>();
+const graphStore = useGraphStore();
+const selectedPathIndex = ref<number | null>(null);
 
 const fromQuery = ref('');
 const toQuery = ref('');
@@ -16,6 +22,13 @@ const pathCount = ref(0);
 const loading = ref(false);
 const searched = ref(false);
 
+// Options
+const maxDepth = ref(15);
+const shortestOnly = ref(false);
+const showOptions = ref(false);
+const edgeKindList = Object.keys(EDGE_STYLES) as EdgeKind[];
+const activeEdgeKinds = ref<Set<EdgeKind>>(new Set(edgeKindList));
+
 let fromDebounce: ReturnType<typeof setTimeout>;
 let toDebounce: ReturnType<typeof setTimeout>;
 
@@ -27,7 +40,7 @@ function searchFrom(q: string) {
   fromDebounce = setTimeout(async () => {
     if (!q.trim()) { fromResults.value = []; return; }
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       fromResults.value = data.results || [];
     } catch { fromResults.value = []; }
@@ -42,7 +55,7 @@ function searchTo(q: string) {
   toDebounce = setTimeout(async () => {
     if (!q.trim()) { toResults.value = []; return; }
     try {
-      const res = await fetch(`/api/search?q=${encodeURIComponent(q)}`);
+      const res = await apiFetch(`/api/search?q=${encodeURIComponent(q)}`);
       const data = await res.json();
       toResults.value = data.results || [];
     } catch { toResults.value = []; }
@@ -68,17 +81,49 @@ async function findPaths() {
   loading.value = true;
   searched.value = true;
   try {
-    const res = await fetch(
-      `/api/graph/paths?from=${encodeURIComponent(selectedFrom.value)}&to=${encodeURIComponent(selectedTo.value)}&maxDepth=15`
-    );
+    let url = `/api/graph/paths?from=${encodeURIComponent(selectedFrom.value)}&to=${encodeURIComponent(selectedTo.value)}&maxDepth=${maxDepth.value}`;
+    // Only send edgeKinds if not all are selected
+    if (activeEdgeKinds.value.size < edgeKindList.length) {
+      url += `&edgeKinds=${[...activeEdgeKinds.value].join(',')}`;
+    }
+    const res = await apiFetch(url);
     const data = await res.json();
-    paths.value = data.paths || [];
-    pathCount.value = data.count ?? paths.value.length;
+    let resultPaths: string[][] = data.paths || [];
+    if (shortestOnly.value && resultPaths.length > 1) {
+      const minLen = Math.min(...resultPaths.map(p => p.length));
+      resultPaths = resultPaths.filter(p => p.length === minLen);
+    }
+    paths.value = resultPaths;
+    pathCount.value = resultPaths.length;
   } catch {
     paths.value = [];
     pathCount.value = 0;
   } finally {
     loading.value = false;
+  }
+}
+
+function nodeLabel(nodeId: string): string {
+  const node = graphStore.graphData?.nodes.find(n => n.id === nodeId);
+  return node?.label ?? nodeId.split(':').pop() ?? nodeId;
+}
+
+function edgeKindBetween(fromId: string, toId: string): string | null {
+  const edge = graphStore.graphData?.edges.find(
+    e => e.source === fromId && e.target === toId
+  );
+  return edge?.kind ?? null;
+}
+
+function edgeColor(kind: string): string {
+  return (EDGE_STYLES as Record<string, { color: string }>)[kind]?.color ?? '#666';
+}
+
+function highlightPath(index: number) {
+  selectedPathIndex.value = index;
+  const path = paths.value[index];
+  if (path) {
+    graphStore.highlightedPath = path;
   }
 }
 
@@ -94,6 +139,8 @@ function clear() {
   paths.value = [];
   pathCount.value = 0;
   searched.value = false;
+  selectedPathIndex.value = null;
+  graphStore.highlightedPath = [];
 }
 </script>
 
@@ -191,6 +238,52 @@ function clear() {
           </div>
         </div>
 
+        <!-- Options toggle -->
+        <button
+          @click="showOptions = !showOptions"
+          class="w-full text-left text-xs py-1 transition-colors"
+          style="color: var(--text-tertiary)"
+        >{{ showOptions ? '▾' : '▸' }} Options</button>
+
+        <!-- Options panel -->
+        <div v-if="showOptions" class="space-y-2 rounded-md p-3 text-xs" style="background: var(--surface-primary); border: 1px solid var(--border-subtle)">
+          <div class="flex items-center gap-3">
+            <label style="color: var(--text-secondary)">Max depth:</label>
+            <input
+              type="range" :min="3" :max="25" v-model.number="maxDepth"
+              class="flex-1 h-1 rounded-lg appearance-none cursor-pointer"
+              style="accent-color: var(--accent-blue)"
+            />
+            <span class="w-6 text-right" style="color: var(--text-primary)">{{ maxDepth }}</span>
+          </div>
+          <label class="flex items-center gap-2 cursor-pointer" style="color: var(--text-secondary)">
+            <input type="checkbox" v-model="shortestOnly" class="rounded" />
+            Shortest paths only
+          </label>
+          <div>
+            <label class="block mb-1" style="color: var(--text-secondary)">Edge types:</label>
+            <div class="flex flex-wrap gap-1">
+              <label
+                v-for="kind in edgeKindList" :key="kind"
+                class="flex items-center gap-1 px-1.5 py-0.5 rounded cursor-pointer text-xs"
+                :style="{
+                  background: activeEdgeKinds.has(kind) ? EDGE_STYLES[kind].color + '25' : 'transparent',
+                  color: activeEdgeKinds.has(kind) ? EDGE_STYLES[kind].color : 'var(--text-tertiary)',
+                  border: '1px solid ' + (activeEdgeKinds.has(kind) ? EDGE_STYLES[kind].color + '50' : 'var(--border-subtle)'),
+                }"
+              >
+                <input
+                  type="checkbox"
+                  :checked="activeEdgeKinds.has(kind)"
+                  @change="activeEdgeKinds.has(kind) ? activeEdgeKinds.delete(kind) : activeEdgeKinds.add(kind)"
+                  class="hidden"
+                />
+                {{ kind }}
+              </label>
+            </div>
+          </div>
+        </div>
+
         <!-- Find button -->
         <button
           @click="findPaths"
@@ -221,8 +314,13 @@ function clear() {
             <div
               v-for="(path, i) in paths"
               :key="i"
-              class="rounded-md px-3 py-2 text-xs"
-              style="background: var(--surface-primary); border: 1px solid var(--border-subtle)"
+              class="rounded-md px-3 py-2 text-xs cursor-pointer transition-colors"
+              :style="{
+                background: selectedPathIndex === i ? 'rgba(52, 152, 219, 0.15)' : 'var(--surface-primary)',
+                border: selectedPathIndex === i ? '1px solid rgba(52, 152, 219, 0.5)' : '1px solid var(--border-subtle)',
+              }"
+              @click="highlightPath(i)"
+              title="Click to highlight on graph"
             >
               <span class="font-mono" style="color: var(--text-tertiary)">#{{ i + 1 }}</span>
               <span class="ml-2" style="color: var(--text-secondary)">{{ path.length - 1 }} hop{{ path.length - 1 === 1 ? '' : 's' }}</span>
@@ -231,8 +329,16 @@ function clear() {
                   <span
                     class="px-1.5 py-0.5 rounded text-xs"
                     style="background: var(--surface-elevated); color: var(--text-primary)"
-                  >{{ node }}</span>
-                  <span v-if="j < path.length - 1" style="color: var(--text-tertiary)">&rarr;</span>
+                    :title="node"
+                  >{{ nodeLabel(node) }}</span>
+                  <template v-if="j < path.length - 1">
+                    <span
+                      v-if="edgeKindBetween(node, path[j + 1])"
+                      class="text-xs px-1"
+                      :style="{ color: edgeColor(edgeKindBetween(node, path[j + 1])!) }"
+                    >{{ edgeKindBetween(node, path[j + 1]) }} →</span>
+                    <span v-else style="color: var(--text-tertiary)">→</span>
+                  </template>
                 </template>
               </div>
             </div>

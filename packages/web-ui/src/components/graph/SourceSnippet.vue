@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
+import { apiFetch } from '@/api/client';
 
 const props = defineProps<{ show: boolean }>();
 const emit = defineEmits<{ close: [] }>();
@@ -11,7 +12,7 @@ async function loadSnippet(file: string, line: number) {
   loading.value = true;
   filePath.value = file;
   try {
-    const res = await fetch(`/api/source-snippet?file=${encodeURIComponent(file)}&line=${line}&context=5`);
+    const res = await apiFetch(`/api/source-snippet?file=${encodeURIComponent(file)}&line=${line}&context=5`);
     const data = await res.json();
     lines.value = data.lines || [];
   } catch {

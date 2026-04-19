@@ -91,6 +91,37 @@ describe('DependencyGraph', () => {
     expect(graph.getEdgeCount()).toBe(0);
   });
 
+  // Phase 2-7
+  it('removeByFile should return the 1-hop dependent file paths', () => {
+    graph.addNode(makeNode('A', 'vue-component', '/a.vue'));
+    graph.addNode(makeNode('B', 'vue-component', '/b.vue'));
+    graph.addNode(makeNode('C', 'vue-component', '/c.vue'));
+    graph.addNode(makeNode('D', 'vue-component', '/a.vue')); // sibling in /a.vue
+    // /b.vue and /c.vue both import /a.vue (B→A, C→A); D→A is intra-file
+    graph.addEdge(makeEdge('B', 'A'));
+    graph.addEdge(makeEdge('C', 'A'));
+    graph.addEdge(makeEdge('D', 'A'));
+
+    const dependents = graph.removeByFile('/a.vue').sort();
+    expect(dependents).toEqual(['/b.vue', '/c.vue']);
+    // Intra-file edges (D→A) must not surface as a dependent — D was removed too.
+    expect(graph.hasNode('D')).toBe(false);
+  });
+
+  it('removeByFile should return empty list when the file has no nodes', () => {
+    expect(graph.removeByFile('/missing.vue')).toEqual([]);
+  });
+
+  it('removeByFile should not return the same dependent twice', () => {
+    graph.addNode(makeNode('A', 'vue-component', '/a.vue'));
+    graph.addNode(makeNode('B', 'vue-component', '/b.vue'));
+    graph.addEdge(makeEdge('A', 'B', 'imports'));
+    graph.addEdge(makeEdge('A', 'B', 'uses-component'));
+
+    const deps = graph.removeByFile('/b.vue');
+    expect(deps).toEqual(['/a.vue']);
+  });
+
   it('should merge graphs', () => {
     graph.addNode(makeNode('A'));
     const other = new DependencyGraph();
@@ -99,6 +130,57 @@ describe('DependencyGraph', () => {
 
     graph.merge(other);
     expect(graph.getNodeCount()).toBe(2);
+    expect(graph.getEdgeCount()).toBe(1);
+  });
+
+  // Phase 2-4
+  it('should index edges by kind and keep the index in sync on remove', () => {
+    graph.addNode(makeNode('A'));
+    graph.addNode(makeNode('B'));
+    graph.addNode(makeNode('C'));
+    graph.addEdge(makeEdge('A', 'B', 'imports'));
+    graph.addEdge(makeEdge('A', 'C', 'imports'));
+    graph.addEdge(makeEdge('B', 'C', 'uses-store'));
+
+    expect(graph.getEdgesByKind('imports')).toHaveLength(2);
+    expect(graph.getEdgesByKind('uses-store')).toHaveLength(1);
+    expect(graph.getEdgesByKind('api-call')).toHaveLength(0);
+
+    // Remove a node and confirm the index drops both endpoint-bearing edges
+    graph.removeNode('A');
+    expect(graph.getEdgesByKind('imports')).toHaveLength(0);
+    expect(graph.getEdgesByKind('uses-store')).toHaveLength(1);
+
+    // Direct edge removal also keeps the index honest
+    const remaining = graph.getEdgesByKind('uses-store')[0];
+    graph.removeEdge(remaining.id);
+    expect(graph.getEdgesByKind('uses-store')).toHaveLength(0);
+  });
+
+  it('should expose O(1) in/out-degree counts', () => {
+    graph.addNode(makeNode('A'));
+    graph.addNode(makeNode('B'));
+    graph.addNode(makeNode('C'));
+    graph.addEdge(makeEdge('A', 'B'));
+    graph.addEdge(makeEdge('A', 'C'));
+    graph.addEdge(makeEdge('C', 'B'));
+
+    expect(graph.getOutDegree('A')).toBe(2);
+    expect(graph.getOutDegree('B')).toBe(0);
+    expect(graph.getInDegree('B')).toBe(2);
+    expect(graph.getInDegree('A')).toBe(0);
+    expect(graph.getInDegree('missing')).toBe(0);
+    expect(graph.getOutDegree('missing')).toBe(0);
+  });
+
+  it('re-adding the same edge id should not double-count in the kind index', () => {
+    graph.addNode(makeNode('A'));
+    graph.addNode(makeNode('B'));
+    const e = makeEdge('A', 'B', 'imports');
+    graph.addEdge(e);
+    graph.addEdge(e);
+    graph.addEdge(e);
+    expect(graph.getEdgesByKind('imports')).toHaveLength(1);
     expect(graph.getEdgeCount()).toBe(1);
   });
 

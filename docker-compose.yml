@@ -1,0 +1,33 @@
+services:
+  vda:
+    build: .
+    ports:
+      - "${PORT:-3333}:3333"
+    volumes:
+      # Mount your project to analyze (read-only)
+      - ./test-project-ecommerce:/data:ro
+    environment:
+      - PORT=3333
+      - VDA_AUTH_ENABLED=${VDA_AUTH_ENABLED:-false}
+      - VDA_ADMIN_USER=${VDA_ADMIN_USER:-admin}
+      - VDA_ADMIN_PASSWORD=${VDA_ADMIN_PASSWORD:-}
+      - VDA_JWT_SECRET=${VDA_JWT_SECRET:-}
+      - VDA_LOG_LEVEL=${VDA_LOG_LEVEL:-info}
+      - VDA_CORS_ORIGIN=${VDA_CORS_ORIGIN:-*}
+    restart: unless-stopped
+    # V8 heap is capped at 2GB via NODE_OPTIONS in the image. Give the
+    # container ~3GB so workers, parse cache and OS overhead don't push
+    # the process into OOMKill territory on 15K-20K file projects.
+    deploy:
+      resources:
+        limits:
+          memory: 3G
+        reservations:
+          memory: 1G
+    mem_limit: 3g
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3333/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 60s

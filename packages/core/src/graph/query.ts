@@ -35,10 +35,15 @@ export function reachableFrom(
   maxDepth: number = Infinity,
 ): Set<string> {
   const visited = new Set<string>();
-  const queue: Array<{ id: string; depth: number }> = [{ id: nodeId, depth: 0 }];
+  // Index-based queue (Array.shift is O(n), which made BFS O(n^2)).
+  const queueIds: string[] = [nodeId];
+  const queueDepths: number[] = [0];
+  let head = 0;
 
-  while (queue.length > 0) {
-    const { id, depth } = queue.shift()!;
+  while (head < queueIds.length) {
+    const id = queueIds[head];
+    const depth = queueDepths[head];
+    head++;
     if (visited.has(id) || depth > maxDepth) continue;
     visited.add(id);
 
@@ -52,7 +57,8 @@ export function reachableFrom(
     for (const edge of edges) {
       const nextId = direction === 'in' ? edge.source : direction === 'out' ? edge.target : (edge.source === id ? edge.target : edge.source);
       if (!visited.has(nextId)) {
-        queue.push({ id: nextId, depth: depth + 1 });
+        queueIds.push(nextId);
+        queueDepths.push(depth + 1);
       }
     }
   }
@@ -89,27 +95,50 @@ export function impactOf(
   return { nodes, edges };
 }
 
+export interface FindPathsOptions {
+  maxDepth?: number;
+  edgeKinds?: string[];
+  /** Cap total paths returned to avoid exponential blowup on hub-heavy graphs. */
+  maxResults?: number;
+}
+
+/** Default cap on paths returned from findPaths. Guards against pathological graphs. */
+export const DEFAULT_FIND_PATHS_CAP = 100;
+
 export function findPaths(
   graph: DependencyGraph,
   from: string,
   to: string,
-  maxDepth: number = 10,
+  maxDepthOrOpts: number | FindPathsOptions = 10,
 ): string[][] {
+  const opts = typeof maxDepthOrOpts === 'number'
+    ? { maxDepth: maxDepthOrOpts }
+    : maxDepthOrOpts;
+  const maxDepth = opts.maxDepth ?? 10;
+  const maxResults = opts.maxResults ?? DEFAULT_FIND_PATHS_CAP;
+  const edgeKindSet = opts.edgeKinds ? new Set(opts.edgeKinds) : null;
   const paths: string[][] = [];
+  // Set tracks membership in O(1); array preserves order for the final path copy.
+  const onPath = new Set<string>([from]);
 
-  function dfs(current: string, path: string[], depth: number): void {
-    if (depth > maxDepth) return;
+  function dfs(current: string, path: string[], depth: number): boolean {
+    if (paths.length >= maxResults) return true; // cap reached, stop exploring
+    if (depth > maxDepth) return false;
     if (current === to) {
       paths.push([...path]);
-      return;
+      return paths.length >= maxResults;
     }
     for (const edge of graph.getOutEdges(current)) {
-      if (!path.includes(edge.target)) {
-        path.push(edge.target);
-        dfs(edge.target, path, depth + 1);
-        path.pop();
-      }
+      if (edgeKindSet && !edgeKindSet.has(edge.kind)) continue;
+      if (onPath.has(edge.target)) continue;
+      onPath.add(edge.target);
+      path.push(edge.target);
+      const done = dfs(edge.target, path, depth + 1);
+      path.pop();
+      onPath.delete(edge.target);
+      if (done) return true;
     }
+    return false;
   }
 
   dfs(from, [from], 0);

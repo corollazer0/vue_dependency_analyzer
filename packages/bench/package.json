@@ -1,0 +1,23 @@
+{
+  "name": "@vda/bench",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "generate-fixture": "tsx src/cli/generate.ts",
+    "harness": "tsx src/cli/harness.ts",
+    "test": "vitest run",
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@vda/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "playwright": "^1.59.1",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

@@ -1,4 +1,37 @@
-# Phase 7: Feature Completion — 문서 약속의 코드 이행
+# Phase 7 (legacy draft, pre-Phase-Ultra)
+
+> ⚠️ **Superseded by `docs/phase-ultra/phase7-plan.md` (v2).**
+> 이 문서는 Phase-Ultra 착수 이전(2026-02~03) 에 만든 초안이다. Phase-Ultra 0-5 진행
+> 과정에서 여기 Tier 0-4 항목 상당수가 해결됐으며, 잔여 미해결 항목은 v2 에 7a 트랙으로
+> 이관됐다. 신규 F 시리즈 (F2/F3/F5/F7) 는 v2 의 7b 트랙에 정의돼 있다.
+>
+> 상태 요약:
+> - T0-01 warm-cache db-table 유실 → ✅ Phase 0-6 해결
+> - T0-02 `/api/graph/node/:id` 404 → 🚧 v2 7a-5
+> - T0-03 CLI getStats node/edge 분리 → ✅ 해결
+> - T1-01 @Mapper interface → ✅ 해결
+> - T1-02 vue-router `route-renders` → 🚧 v2 7a-6
+> - T1-03 Event virtual edges → 🚧 v2 7a-7 (부분 해결, 전수 검증 필요)
+> - T1-04 worker_threads 병렬 → ✅ Phase 2-2
+> - T1-05 services[] MSA → ✅ Phase 2-6
+> - T2-01/02 DTO flow + consistency → ✅ Phase 4 전체
+> - T2-03 storeToRefs 구독 필드 → 🚧 v2 7a-8
+> - T2-04 캐시 성능 테스트 보강 → 🚧 v2 7a (E2E 로 흡수)
+> - T3-01 watch resources/ → ✅ 해결
+> - T3-02 vda init tsconfig 재귀 → 📦 v2 범위 밖 (정합성 이상 없음)
+> - T3-03 분석 취소 → ✅ 해결 (AbortController)
+> - T3-04 CLI 전용 테스트 → 🚧 v2 7a-10
+> - T3-05 fixture 고도화 → ✅ test-project-ecommerce 로 대체
+> - T3-06 A11y → 🚧 v2 7a-9
+> - T4-01 E2E smoke → ✅ e2e-fixture.test.ts 존재
+> - T4-02 Server API E2E → 🚧 v2 7a-10
+> - T4-03 CLI E2E → 🚧 v2 7a-10
+>
+> 아래 본문은 **참고용 원본 보존**이며 실행 기준은 v2 를 따른다.
+
+---
+
+## [ORIGINAL DRAFT — 참고용]
 
 > 작전명: **Operation Deliver**
 > 원칙: 문서를 낮추지 않는다. 코드를 문서 수준까지 올린다.

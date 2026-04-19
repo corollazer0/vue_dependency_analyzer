@@ -2,8 +2,12 @@
 import { onMounted, ref, watch, computed } from 'vue';
 import { useGraphStore } from '@/stores/graphStore';
 import { useUiStore } from '@/stores/ui';
+import { apiFetch, authRequired, checkAuthStatus, logout, createAuthWebSocket } from '@/api/client';
+import LoginPage from '@/components/LoginPage.vue';
 import ForceGraphView from '@/components/graph/ForceGraphView.vue';
 import TreeView from '@/components/graph/TreeView.vue';
+import MatrixView from '@/components/graph/MatrixView.vue';
+import BottomUpView from '@/components/graph/BottomUpView.vue';
 import NodeDetail from '@/components/graph/NodeDetail.vue';
 import GraphLegend from '@/components/graph/GraphLegend.vue';
 import FilterPanel from '@/components/sidebar/FilterPanel.vue';
@@ -15,21 +19,49 @@ import ResizeHandle from '@/components/ui/ResizeHandle.vue';
 import PathfinderPanel from '@/components/graph/PathfinderPanel.vue';
 import ParseErrorPanel from '@/components/ParseErrorPanel.vue';
 import DtoConsistencyPanel from '@/components/DtoConsistencyPanel.vue';
+import UnresolvedEdgePanel from '@/components/UnresolvedEdgePanel.vue';
+import RuleViolationPanel from '@/components/RuleViolationPanel.vue';
+import ChangeImpactPanel from '@/components/ChangeImpactPanel.vue';
 
 const graphStore = useGraphStore();
 const uiStore = useUiStore();
-const activeView = ref<'graph' | 'tree'>('graph');
+const activeView = ref<'graph' | 'tree' | 'matrix' | 'bottom-up'>('graph');
 const showPathfinder = ref(false);
 const showParseErrors = ref(false);
+const showUnresolvedEdges = ref(false);
+const showRuleViolations = ref(false);
+const showChangeImpact = ref(false);
 const parseErrorCount = ref<number | null>(null);
+const unresolvedEdgeCount = ref<number | null>(null);
+const ruleViolationCount = ref<number | null>(null);
 
 async function fetchParseErrorCount() {
   try {
-    const res = await fetch('/api/analysis/parse-errors');
+    const res = await apiFetch('/api/analysis/parse-errors');
     const data = await res.json();
     parseErrorCount.value = (data.errors || []).length;
   } catch {
     parseErrorCount.value = null;
+  }
+}
+
+async function fetchUnresolvedEdgeCount() {
+  try {
+    const res = await apiFetch('/api/analysis/unresolved-edges');
+    const data = await res.json();
+    unresolvedEdgeCount.value = (data.edges || []).length;
+  } catch {
+    unresolvedEdgeCount.value = null;
+  }
+}
+
+async function fetchRuleViolationCount() {
+  try {
+    const res = await apiFetch('/api/analysis/rule-violations');
+    const data = await res.json();
+    ruleViolationCount.value = data.count ?? 0;
+  } catch {
+    ruleViolationCount.value = null;
   }
 }
 const sidebarTab = ref<'search' | 'filter'>('search');
@@ -64,12 +96,28 @@ watch(() => graphStore.selectedNodeId, (nodeId) => {
 
 watch(activeView, () => updateHash());
 
-onMounted(async () => {
+async function initApp() {
   await graphStore.fetchGraph();
   loadHashState();
   connectWebSocket();
   fetchParseErrorCount();
+  fetchUnresolvedEdgeCount();
+  fetchRuleViolationCount();
   document.addEventListener('keydown', handleKeydown);
+}
+
+onMounted(async () => {
+  const ok = await checkAuthStatus();
+  if (ok) {
+    await initApp();
+  }
+});
+
+// Re-init when auth state changes (after login)
+watch(authRequired, async (required) => {
+  if (!required) {
+    await initApp();
+  }
 });
 
 function loadHashState() {
@@ -83,15 +131,14 @@ function loadHashState() {
 
 function connectWebSocket() {
   wsStatus.value = 'connecting';
-  const protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${location.host}/ws`);
+  ws = createAuthWebSocket('/ws');
   ws.onopen = () => { wsStatus.value = 'connected'; };
   ws.onmessage = (event) => {
     const msg = JSON.parse(event.data);
     if (msg.type === 'analysis:started') { analyzing.value = true; progress.value = { processed: 0, total: msg.payload.totalFiles, currentFile: '', cachedCount: 0, elapsedMs: 0 }; }
     else if (msg.type === 'analysis:progress') { progress.value = msg.payload; }
-    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); fetchParseErrorCount(); }
-    else if (msg.type === 'graph:update') { graphStore.fetchGraph(); }
+    else if (msg.type === 'analysis:complete') { analyzing.value = false; graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); fetchRuleViolationCount(); }
+    else if (msg.type === 'graph:update') { graphStore.fetchGraph(); fetchParseErrorCount(); fetchUnresolvedEdgeCount(); fetchRuleViolationCount(); }
   };
   ws.onclose = () => { wsStatus.value = 'disconnected'; clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connectWebSocket, 3000); };
   ws.onerror = () => { ws?.close(); };
@@ -99,7 +146,7 @@ function connectWebSocket() {
 
 function cancelAnalysis() {
   analyzing.value = false;
-  fetch('/api/analyze/cancel', { method: 'POST' }).catch(() => {});
+  apiFetch('/api/analyze/cancel', { method: 'POST' }).catch(() => {});
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -110,11 +157,17 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="h-screen w-screen flex flex-col overflow-hidden" style="background: var(--surface-primary); color: var(--text-primary)">
+  <!-- Login screen -->
+  <LoginPage v-if="authRequired" />
+
+  <div v-else class="h-screen w-screen flex flex-col overflow-hidden" style="background: var(--surface-primary); color: var(--text-primary)">
     <CommandPalette />
     <DtoConsistencyPanel />
     <PathfinderPanel v-if="showPathfinder" @close="showPathfinder = false" />
     <ParseErrorPanel v-if="showParseErrors" @close="showParseErrors = false" />
+    <UnresolvedEdgePanel v-if="showUnresolvedEdges" @close="showUnresolvedEdges = false" />
+    <RuleViolationPanel v-if="showRuleViolations" @close="showRuleViolations = false" />
+    <ChangeImpactPanel v-if="showChangeImpact" @close="showChangeImpact = false" />
     <AnalysisProgress v-if="analyzing" v-bind="progress" @cancel="cancelAnalysis" />
     <OnboardingGuide v-if="appState === 'ready'" />
 
@@ -192,9 +245,10 @@ function handleKeydown(e: KeyboardEvent) {
             </button>
 
             <!-- View switcher -->
-            <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
+            <button v-for="view in [{id:'graph',label:'Graph'},{id:'tree',label:'Tree'},{id:'matrix',label:'Matrix'},{id:'bottom-up',label:'Bottom-Up'}]" :key="view.id" @click="activeView = view.id as any" class="px-3 py-1 rounded-md text-xs transition-colors" :style="{ background: activeView === view.id ? 'var(--accent-blue)' : 'var(--surface-elevated)', color: activeView === view.id ? '#fff' : 'var(--text-secondary)' }">{{ view.label }}</button>
 
             <button @click="showPathfinder = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Pathfinder</button>
+            <button @click="showChangeImpact = true" class="px-3 py-1 rounded-md text-xs transition-colors" style="background: var(--surface-elevated); color: var(--text-secondary)">Impact</button>
 
             <!-- Navigation history -->
             <div class="flex gap-0.5">
@@ -220,6 +274,8 @@ function handleKeydown(e: KeyboardEvent) {
               </div>
               <ForceGraphView v-show="activeView === 'graph'" />
               <TreeView v-show="activeView === 'tree'" />
+              <MatrixView v-show="activeView === 'matrix'" />
+              <BottomUpView v-show="activeView === 'bottom-up'" />
               <GraphLegend v-if="activeView === 'graph'" />
             </div>
 
@@ -256,6 +312,26 @@ function handleKeydown(e: KeyboardEvent) {
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
           {{ parseErrorCount }} error{{ parseErrorCount === 1 ? '' : 's' }}
+        </button>
+        <button
+          v-if="unresolvedEdgeCount !== null && unresolvedEdgeCount > 0"
+          @click="showUnresolvedEdges = true"
+          class="flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
+          style="color: #f97316"
+          title="View unresolved edges"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+          {{ unresolvedEdgeCount }} unresolved
+        </button>
+        <button
+          v-if="ruleViolationCount !== null && ruleViolationCount > 0"
+          @click="showRuleViolations = true"
+          class="flex items-center gap-1 px-1.5 py-0.5 rounded transition-colors hover:bg-white/5"
+          style="color: #ef4444"
+          title="View rule violations"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 9v4m0 4h.01M3.6 20h16.8a1 1 0 00.87-1.5L12.87 3a1 1 0 00-1.74 0L2.73 18.5A1 1 0 003.6 20z"/></svg>
+          {{ ruleViolationCount }} violation{{ ruleViolationCount === 1 ? '' : 's' }}
         </button>
         <span class="flex-1"></span>
         <span v-if="graphStore.graphData">{{ new Date(graphStore.graphData.metadata.analyzedAt).toLocaleTimeString() }}</span>

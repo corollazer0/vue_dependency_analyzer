@@ -1,13 +1,23 @@
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import compress from '@fastify/compress';
+import { constants as zlibConstants, brotliDecompressSync, gunzipSync } from 'zlib';
 import { registerGraphRoutes } from '../routes/graphRoutes.js';
 import { registerAnalysisRoutes } from '../routes/analysisRoutes.js';
 import { registerSearchRoutes } from '../routes/searchRoutes.js';
+import { registerHealthRoutes } from '../routes/healthRoutes.js';
+import { registerAuthRoutes, registerAuthHook } from '../middleware/auth.js';
+import { AuditLog, registerAuditHook } from '../middleware/auditLog.js';
 import { AnalysisEngine } from '../engine.js';
+import { loadEnv } from '../index.js';
 import { resolve } from 'path';
 
 const fixturesDir = resolve(import.meta.dirname, '../../../core/src/__fixtures__');
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Shared setup — no auth, like the original test suite
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
 describe('Server API', () => {
   let fastify: ReturnType<typeof Fastify>;
@@ -16,19 +26,149 @@ describe('Server API', () => {
   beforeAll(async () => {
     fastify = Fastify({ logger: false });
     await fastify.register(cors);
+    await fastify.register(compress, {
+      encodings: ['br', 'gzip', 'deflate'],
+      threshold: 1024,
+      brotliOptions: {
+        params: {
+          [zlibConstants.BROTLI_PARAM_QUALITY]: 4,
+          [zlibConstants.BROTLI_PARAM_MODE]: zlibConstants.BROTLI_MODE_TEXT,
+        },
+      },
+    });
 
     engine = new AnalysisEngine(fixturesDir, {}, false);
     await engine.initialize();
 
+    const auditLog = new AuditLog();
+    const env = loadEnv({ authEnabled: false });
+
+    registerHealthRoutes(fastify, engine);
+    registerAuthRoutes(fastify, env, auditLog);
+    registerAuditHook(fastify, auditLog);
     registerGraphRoutes(fastify, engine);
     registerAnalysisRoutes(fastify, engine);
     registerSearchRoutes(fastify, engine);
+
+    // Audit log endpoint
+    fastify.get('/api/admin/audit-log', async (request, reply) => {
+      const { limit } = request.query as { limit?: string };
+      return { logs: auditLog.getEntries(limit ? parseInt(limit, 10) : 50) };
+    });
 
     await fastify.ready();
   });
 
   afterAll(async () => {
     await fastify.close();
+  });
+
+  // ─── GET /health ───
+
+  describe('GET /health', () => {
+    it('should return ok status with uptime and version', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/health' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.status).toBe('ok');
+      expect(typeof body.uptime).toBe('number');
+      expect(body.uptime).toBeGreaterThanOrEqual(0);
+      expect(typeof body.version).toBe('string');
+    });
+  });
+
+  // ─── GET /health/ready ───
+
+  describe('GET /health/ready', () => {
+    it('should report ready after initialization', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/health/ready' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.ready).toBe(true);
+      expect(body.nodeCount).toBeGreaterThan(0);
+      expect(body.edgeCount).toBeGreaterThan(0);
+      expect(typeof body.analyzedAt).toBe('string');
+    });
+  });
+
+  // ─── GET /api/admin/metrics (Phase 5-6) ───
+
+  describe('GET /api/admin/metrics', () => {
+    it('returns the full metrics shape with non-negative numbers', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/admin/metrics' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+
+      // Top-level keys
+      expect(typeof body.uptime).toBe('number');
+      expect(body.uptime).toBeGreaterThanOrEqual(0);
+
+      // Memory block
+      for (const k of ['heapUsedMB', 'heapTotalMB', 'rssMB', 'externalMB', 'arrayBuffersMB']) {
+        expect(typeof body.memory[k]).toBe('number');
+        expect(body.memory[k]).toBeGreaterThanOrEqual(0);
+      }
+
+      // Peaks block — recorded at end of every runAnalysis().
+      expect(typeof body.peaks.heapPeakMB).toBe('number');
+      expect(typeof body.peaks.rssPeakMB).toBe('number');
+      expect(typeof body.peaks.lastAnalysisMs).toBe('number');
+      expect(body.peaks.heapPeakMB).toBeGreaterThan(0);
+      expect(body.peaks.lastAnalysisMs).toBeGreaterThanOrEqual(0);
+
+      // CPU block
+      expect(typeof body.cpu.userMs).toBe('number');
+      expect(typeof body.cpu.systemMs).toBe('number');
+      expect(body.cpu.userMs).toBeGreaterThanOrEqual(0);
+
+      // Graph block — nodeCount/edgeCount mirror engine.getHealthInfo().
+      expect(body.graph.nodeCount).toBeGreaterThan(0);
+      expect(body.graph.edgeCount).toBeGreaterThanOrEqual(0);
+      expect(typeof body.graph.analyzedAt).toBe('string');
+    });
+
+    it('nodeCount / edgeCount agree with /health/ready and /api/stats', async () => {
+      const metricsRes = await fastify.inject({ method: 'GET', url: '/api/admin/metrics' });
+      const healthRes = await fastify.inject({ method: 'GET', url: '/health/ready' });
+      const statsRes = await fastify.inject({ method: 'GET', url: '/api/stats' });
+
+      const m = JSON.parse(metricsRes.body);
+      const h = JSON.parse(healthRes.body);
+      const s = JSON.parse(statsRes.body);
+
+      expect(m.graph.nodeCount).toBe(h.nodeCount);
+      expect(m.graph.edgeCount).toBe(h.edgeCount);
+      expect(m.graph.nodeCount).toBe(s.totalNodes);
+      expect(m.graph.edgeCount).toBe(s.totalEdges);
+    });
+
+    it('heap peak is monotonically non-decreasing across reads', async () => {
+      // The endpoint exposes a high-water mark — two consecutive reads
+      // without an intervening analysis must not regress.
+      const first = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+      const second = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+      expect(second.peaks.heapPeakMB).toBeGreaterThanOrEqual(first.peaks.heapPeakMB);
+      expect(second.peaks.rssPeakMB).toBeGreaterThanOrEqual(first.peaks.rssPeakMB);
+      // lastAnalysisMs reflects the *most recent* analysis, which is the
+      // same one in both reads (no re-analysis happened in between).
+      expect(second.peaks.lastAnalysisMs).toBe(first.peaks.lastAnalysisMs);
+    });
+
+    it('re-analysis updates lastAnalysisMs and preserves the heap high-water mark', async () => {
+      const before = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+      // Drive a fresh analysis on the same project — duration is expected to
+      // differ but the peak must not regress below the prior observation.
+      await engine.runAnalysis();
+      const after = JSON.parse((await fastify.inject({ method: 'GET', url: '/api/admin/metrics' })).body);
+
+      expect(after.peaks.heapPeakMB).toBeGreaterThanOrEqual(before.peaks.heapPeakMB);
+      expect(after.peaks.rssPeakMB).toBeGreaterThanOrEqual(before.peaks.rssPeakMB);
+      // lastAnalysisMs reflects the new run, which could be slower or faster
+      // but must be a sane positive duration.
+      expect(after.peaks.lastAnalysisMs).toBeGreaterThanOrEqual(0);
+      expect(after.graph.nodeCount).toBe(before.graph.nodeCount);
+      expect(after.graph.edgeCount).toBe(before.graph.edgeCount);
+    });
   });
 
   // ─── GET /api/graph ───
@@ -53,6 +193,178 @@ describe('Server API', () => {
       expect(body.edges).toBeDefined();
       expect(body.clusters.length).toBeGreaterThan(0);
     });
+
+    // Phase 3-2 — Louvain cluster ids must be stable across calls (seeded RNG)
+    // and expandCluster must resolve them back to the member nodes.
+    it('clusters use Louvain community ids and round-trip through /api/graph/cluster/:id', async () => {
+      const first = await fastify.inject({ method: 'GET', url: '/api/graph?cluster=true&depth=1' });
+      expect(first.statusCode).toBe(200);
+      const body = JSON.parse(first.body);
+      const compound = body.clusters.find((c: { id: string; childCount: number }) =>
+        c.id.startsWith('cluster:c') && c.childCount >= 5,
+      );
+      expect(compound, 'expected at least one Louvain compound cluster').toBeTruthy();
+
+      // ID stability: a second call on the same graph yields the same cluster set.
+      const second = await fastify.inject({ method: 'GET', url: '/api/graph?cluster=true&depth=1' });
+      const secondIds = JSON.parse(second.body).clusters.map((c: { id: string }) => c.id).sort();
+      const firstIds = body.clusters.map((c: { id: string }) => c.id).sort();
+      expect(secondIds).toEqual(firstIds);
+
+      const expanded = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/cluster/${encodeURIComponent(compound.id)}`,
+      });
+      expect(expanded.statusCode).toBe(200);
+      const expandedBody = JSON.parse(expanded.body);
+      expect(expandedBody.nodes.length).toBe(compound.childCount);
+    });
+
+    // Phase 1-1 — brotli compression on large JSON payloads
+    it('should serve /api/graph compressed when Accept-Encoding advertises br', async () => {
+      const raw = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      expect(raw.statusCode).toBe(200);
+      expect(raw.headers['content-encoding']).toBeUndefined();
+      const uncompressedLength = Buffer.byteLength(raw.body, 'utf8');
+
+      const brRes = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'accept-encoding': 'br' },
+      });
+      expect(brRes.statusCode).toBe(200);
+      expect(brRes.headers['content-encoding']).toBe('br');
+
+      const decoded = brotliDecompressSync(brRes.rawPayload).toString('utf8');
+      expect(JSON.parse(decoded).nodes).toBeDefined();
+      // Payload must shrink dramatically — the Phase 1 gate demands -80% on /api/graph.
+      expect(brRes.rawPayload.length).toBeLessThan(uncompressedLength * 0.2);
+
+      const gzipRes = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'accept-encoding': 'gzip' },
+      });
+      expect(gzipRes.headers['content-encoding']).toBe('gzip');
+      const gunzipped = gunzipSync(gzipRes.rawPayload).toString('utf8');
+      expect(JSON.parse(gunzipped).nodes).toBeDefined();
+    });
+
+    // Phase 1-3 — dirty-flag cache + ETag revalidation
+    it('should emit an ETag and Cache-Control, and 304 on If-None-Match match', async () => {
+      const first = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      expect(first.statusCode).toBe(200);
+      const etag = first.headers.etag;
+      expect(typeof etag).toBe('string');
+      expect(first.headers['cache-control']).toMatch(/must-revalidate/);
+
+      const revalidated = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'if-none-match': etag as string },
+      });
+      expect(revalidated.statusCode).toBe(304);
+
+      const mismatched = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph',
+        headers: { 'if-none-match': 'W/"stale"' },
+      });
+      expect(mismatched.statusCode).toBe(200);
+      expect(mismatched.body).toBe(first.body);
+    });
+  });
+
+  // ─── Phase 2-3: Progressive Disclosure API ───
+
+  describe('GET /api/graph/overview', () => {
+    it('should return a tiny per-service summary under 5KB', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/overview' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.global).toBeDefined();
+      expect(typeof body.global.totalNodes).toBe('number');
+      expect(typeof body.global.totalEdges).toBe('number');
+      expect(Array.isArray(body.services)).toBe(true);
+      expect(body.services.length).toBeGreaterThan(0);
+      const sv = body.services[0];
+      expect(typeof sv.id).toBe('string');
+      expect(typeof sv.nodeCount).toBe('number');
+      expect(sv.nodesByKind).toBeDefined();
+      expect(Array.isArray(sv.topDirectories)).toBe(true);
+      // Phase 2-3 gate
+      expect(Buffer.byteLength(res.body, 'utf8')).toBeLessThan(5 * 1024);
+    });
+
+    it('should be cacheable via the same ETag mechanism as /api/graph', async () => {
+      const first = await fastify.inject({ method: 'GET', url: '/api/graph/overview' });
+      const etag = first.headers.etag as string;
+      expect(typeof etag).toBe('string');
+      const revalidated = await fastify.inject({
+        method: 'GET',
+        url: '/api/graph/overview',
+        headers: { 'if-none-match': etag },
+      });
+      expect(revalidated.statusCode).toBe(304);
+    });
+  });
+
+  describe('GET /api/graph/service/:id', () => {
+    it('should return the subset of nodes tagged with the given serviceId (404 if unknown)', async () => {
+      // The fixtures dir has no configured services, so all nodes carry serviceId='__root__'.
+      const ok = await fastify.inject({ method: 'GET', url: '/api/graph/service/__root__' });
+      expect(ok.statusCode).toBe(200);
+      const body = JSON.parse(ok.body);
+      expect(body.nodes.length).toBeGreaterThan(0);
+      // Every edge in the subgraph must have both endpoints inside the node set
+      const ids = new Set(body.nodes.map((n: { id: string }) => n.id));
+      for (const e of body.edges) {
+        expect(ids.has(e.source)).toBe(true);
+        expect(ids.has(e.target)).toBe(true);
+      }
+
+      const missing = await fastify.inject({ method: 'GET', url: '/api/graph/service/does-not-exist' });
+      expect(missing.statusCode).toBe(404);
+    });
+  });
+
+  describe('GET /api/graph/directory', () => {
+    it('should require a path query parameter', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/directory' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('should return only nodes whose filePath sits under the requested directory', async () => {
+      // Pick any node whose filePath has at least one directory component below projectRoot
+      const all = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const allBody = JSON.parse(all.body);
+      const projectRoot = allBody.metadata.projectRoot as string;
+      const sample = allBody.nodes.find((n: { filePath: string }) =>
+        n.filePath.startsWith(projectRoot + '/') &&
+        n.filePath.slice(projectRoot.length + 1).includes('/')
+      );
+      expect(sample, 'fixture should contain at least one nested file').toBeDefined();
+      const rel = sample.filePath.slice(projectRoot.length + 1).split('/').slice(0, -1).join('/');
+
+      const res = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/directory?path=${encodeURIComponent(rel)}`,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.nodes.length).toBeGreaterThan(0);
+      // Every returned node must live under the requested directory
+      const absPrefix = projectRoot + '/' + rel + '/';
+      for (const n of body.nodes) {
+        expect(n.filePath.startsWith(absPrefix) || n.filePath === absPrefix.slice(0, -1)).toBe(true);
+      }
+      // Subset invariant on edges
+      const ids = new Set(body.nodes.map((n: { id: string }) => n.id));
+      for (const e of body.edges) {
+        expect(ids.has(e.source)).toBe(true);
+        expect(ids.has(e.target)).toBe(true);
+      }
+    });
   });
 
   // ─── GET /api/graph/node?id= ───
@@ -61,7 +373,6 @@ describe('Server API', () => {
     it('should return node detail for any node ID including file paths', async () => {
       const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
       const { nodes } = JSON.parse(graphRes.body);
-      // Test with a node that has file path in ID (slash-containing)
       const fileNode = nodes.find((n: any) => n.id.includes('/')) || nodes[0];
       const id = encodeURIComponent(fileNode.id);
 
@@ -123,7 +434,6 @@ describe('Server API', () => {
 
   describe('GET /api/graph/paths', () => {
     it('should return paths between two connected nodes', async () => {
-      // Get graph to find connected nodes
       const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
       const { edges } = JSON.parse(graphRes.body);
       if (edges.length === 0) return;
@@ -195,6 +505,153 @@ describe('Server API', () => {
     });
   });
 
+  // ─── GET /api/analysis/unresolved-edges ───
+
+  describe('GET /api/analysis/unresolved-edges', () => {
+    it('should return unresolved edges array', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/unresolved-edges' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.edges).toBeDefined();
+      expect(Array.isArray(body.edges)).toBe(true);
+    });
+
+    it('should exclude external package imports', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/unresolved-edges' });
+      const body = JSON.parse(res.body);
+      for (const edge of body.edges) {
+        if (edge.importPath) {
+          const isExternal = !edge.importPath.startsWith('.') && !edge.importPath.startsWith('@/') && !edge.importPath.startsWith('~');
+          expect(isExternal).toBe(false);
+        }
+      }
+    });
+
+    it('should include sourceLabel and prefix fields', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/unresolved-edges' });
+      const body = JSON.parse(res.body);
+      if (body.edges.length > 0) {
+        const edge = body.edges[0];
+        expect(edge).toHaveProperty('sourceLabel');
+        expect(edge).toHaveProperty('prefix');
+        expect(edge).toHaveProperty('edgeKind');
+        expect(['unresolved', 'component', 'store', 'composable']).toContain(edge.prefix);
+      }
+    });
+  });
+
+  // ─── GET /api/graph/paths with edgeKinds ───
+
+  describe('GET /api/graph/paths with edgeKinds', () => {
+    it('should accept edgeKinds query parameter', async () => {
+      const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const graph = JSON.parse(graphRes.body);
+      if (graph.nodes.length < 2) return;
+
+      const from = encodeURIComponent(graph.nodes[0].id);
+      const to = encodeURIComponent(graph.nodes[1].id);
+
+      const res = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${from}&to=${to}&maxDepth=5&edgeKinds=imports,uses-component`,
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('paths');
+      expect(body).toHaveProperty('count');
+      expect(Array.isArray(body.paths)).toBe(true);
+    });
+
+    it('should treat empty edgeKinds query as no allowed edge kinds', async () => {
+      const graphRes = await fastify.inject({ method: 'GET', url: '/api/graph' });
+      const graph = JSON.parse(graphRes.body);
+      if (graph.edges.length === 0) return;
+
+      const from = encodeURIComponent(graph.edges[0].source);
+      const to = encodeURIComponent(graph.edges[0].target);
+
+      const allRes = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${from}&to=${to}&maxDepth=5`,
+      });
+      const emptyRes = await fastify.inject({
+        method: 'GET',
+        url: `/api/graph/paths?from=${from}&to=${to}&maxDepth=5&edgeKinds=`,
+      });
+
+      expect(allRes.statusCode).toBe(200);
+      expect(emptyRes.statusCode).toBe(200);
+
+      const allBody = JSON.parse(allRes.body);
+      const emptyBody = JSON.parse(emptyRes.body);
+
+      expect(allBody.count).toBeGreaterThan(0);
+      expect(emptyBody.count).toBe(0);
+      expect(emptyBody.paths).toEqual([]);
+    });
+  });
+
+  // ─── GET /api/graph/matrix ───
+
+  describe('GET /api/graph/matrix', () => {
+    it('should return matrix data with modules and 2D array', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/graph/matrix?depth=2' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('modules');
+      expect(body).toHaveProperty('matrix');
+      expect(body).toHaveProperty('edgeDetails');
+      expect(Array.isArray(body.modules)).toBe(true);
+      expect(Array.isArray(body.matrix)).toBe(true);
+      if (body.modules.length > 0) {
+        expect(body.matrix.length).toBe(body.modules.length);
+        expect(body.matrix[0].length).toBe(body.modules.length);
+      }
+    });
+  });
+
+  // ─── POST /api/analysis/change-impact ───
+
+  describe('POST /api/analysis/change-impact', () => {
+    it('should return impact analysis for given files', async () => {
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/analysis/change-impact',
+        payload: { files: ['useAuth.ts'] },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('summary');
+      expect(body).toHaveProperty('changedNodes');
+      expect(body).toHaveProperty('directImpact');
+      expect(body).toHaveProperty('transitiveImpact');
+      expect(body.summary).toHaveProperty('changed');
+    });
+
+    it('should return 400 when files array is missing', async () => {
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/analysis/change-impact',
+        payload: {},
+      });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  // ─── GET /api/analysis/rule-violations ───
+
+  describe('GET /api/analysis/rule-violations', () => {
+    it('should return violations array with count', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/rule-violations' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('violations');
+      expect(body).toHaveProperty('count');
+      expect(Array.isArray(body.violations)).toBe(true);
+      expect(body.count).toBe(body.violations.length);
+    });
+  });
+
   // ─── POST /api/analyze ───
 
   describe('POST /api/analyze', () => {
@@ -204,5 +661,249 @@ describe('Server API', () => {
       const body = JSON.parse(res.body);
       expect(body.status).toBe('complete');
     });
+  });
+
+  // ─── POST /api/auth/login (auth disabled) ───
+
+  describe('POST /api/auth/login (auth disabled)', () => {
+    it('should return null token when auth is disabled', async () => {
+      const res = await fastify.inject({
+        method: 'POST',
+        url: '/api/auth/login',
+        payload: { username: 'admin', password: 'test' },
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.token).toBeNull();
+      expect(body.message).toBe('Authentication is disabled');
+    });
+  });
+
+  // ─── GET /api/auth/me (auth disabled) ───
+
+  describe('GET /api/auth/me (auth disabled)', () => {
+    it('should report auth disabled', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/auth/me' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.authEnabled).toBe(false);
+      expect(body.user).toBeNull();
+    });
+  });
+
+  // ─── GET /api/admin/audit-log ───
+
+  describe('GET /api/admin/audit-log', () => {
+    it('should return audit log entries', async () => {
+      // First trigger some auditable actions
+      await fastify.inject({ method: 'GET', url: '/api/stats' });
+      await fastify.inject({ method: 'GET', url: '/api/graph' });
+
+      const res = await fastify.inject({ method: 'GET', url: '/api/admin/audit-log' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.logs).toBeDefined();
+      expect(Array.isArray(body.logs)).toBe(true);
+      expect(body.logs.length).toBeGreaterThan(0);
+
+      // Verify entry structure
+      const entry = body.logs[0];
+      expect(entry).toHaveProperty('timestamp');
+      expect(entry).toHaveProperty('user');
+      expect(entry).toHaveProperty('action');
+      expect(entry).toHaveProperty('target');
+      expect(entry).toHaveProperty('ip');
+    });
+
+    it('should respect limit parameter', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/admin/audit-log?limit=1' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.logs.length).toBeLessThanOrEqual(1);
+    });
+  });
+});
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Auth-enabled test suite
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+describe('Server API (auth enabled)', () => {
+  let fastify: ReturnType<typeof Fastify>;
+  let engine: AnalysisEngine;
+  const TEST_PASSWORD = 'test-secret-password';
+
+  beforeAll(async () => {
+    fastify = Fastify({ logger: false });
+    await fastify.register(cors);
+
+    engine = new AnalysisEngine(fixturesDir, {}, false);
+    await engine.initialize();
+
+    const auditLog = new AuditLog();
+    const env = loadEnv({
+      authEnabled: true,
+      jwtSecret: 'test-jwt-secret-key',
+      adminUser: 'admin',
+      adminPassword: TEST_PASSWORD,
+    });
+
+    await registerAuthHook(fastify, env);
+    registerAuditHook(fastify, auditLog);
+    registerHealthRoutes(fastify, engine);
+    registerAuthRoutes(fastify, env, auditLog);
+    registerGraphRoutes(fastify, engine);
+    registerAnalysisRoutes(fastify, engine);
+    registerSearchRoutes(fastify, engine);
+
+    fastify.get('/api/admin/audit-log', async (request, reply) => {
+      const { limit } = request.query as { limit?: string };
+      return { logs: auditLog.getEntries(limit ? parseInt(limit, 10) : 50) };
+    });
+
+    await fastify.ready();
+  });
+
+  afterAll(async () => {
+    await fastify.close();
+  });
+
+  // ─── Health endpoints are public ───
+
+  it('GET /health should not require auth', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.status).toBe('ok');
+  });
+
+  it('GET /health/ready should not require auth', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/health/ready' });
+    expect(res.statusCode).toBe(200);
+  });
+
+  // ─── Protected endpoints return 401 without token ───
+
+  it('GET /api/graph should return 401 without token', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/graph' });
+    expect(res.statusCode).toBe(401);
+    const body = JSON.parse(res.body);
+    expect(body.error).toBe('Unauthorized');
+  });
+
+  it('GET /api/stats should return 401 without token', async () => {
+    const res = await fastify.inject({ method: 'GET', url: '/api/stats' });
+    expect(res.statusCode).toBe(401);
+  });
+
+  // ─── Login flow ───
+
+  it('POST /api/auth/login with wrong credentials should return 401', async () => {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: 'wrong' },
+    });
+    expect(res.statusCode).toBe(401);
+    const body = JSON.parse(res.body);
+    expect(body.error).toBe('Invalid credentials');
+  });
+
+  it('POST /api/auth/login with missing fields should return 400', async () => {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: {},
+    });
+    expect(res.statusCode).toBe(400);
+  });
+
+  it('POST /api/auth/login with correct credentials should return JWT', async () => {
+    const res = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(typeof body.token).toBe('string');
+    expect(body.token.length).toBeGreaterThan(0);
+  });
+
+  // ─── Authenticated requests ───
+
+  it('should access protected API with valid token', async () => {
+    // Login first
+    const loginRes = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    const { token } = JSON.parse(loginRes.body);
+
+    // Access protected endpoint
+    const res = await fastify.inject({
+      method: 'GET',
+      url: '/api/graph',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.nodes).toBeDefined();
+    expect(body.nodes.length).toBeGreaterThan(0);
+  });
+
+  it('GET /api/auth/me should return user info with valid token', async () => {
+    const loginRes = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    const { token } = JSON.parse(loginRes.body);
+
+    const res = await fastify.inject({
+      method: 'GET',
+      url: '/api/auth/me',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.authEnabled).toBe(true);
+    expect(body.user.username).toBe('admin');
+    expect(body.user.role).toBe('admin');
+  });
+
+  // ─── Audit log records auth events ───
+
+  it('audit log should record login events', async () => {
+    // Trigger a failed login
+    await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'hacker', password: 'wrong' },
+    });
+
+    // Trigger a successful login
+    const loginRes = await fastify.inject({
+      method: 'POST',
+      url: '/api/auth/login',
+      payload: { username: 'admin', password: TEST_PASSWORD },
+    });
+    const { token } = JSON.parse(loginRes.body);
+
+    // Read audit log
+    const res = await fastify.inject({
+      method: 'GET',
+      url: '/api/admin/audit-log',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body.logs.length).toBeGreaterThan(0);
+
+    // Should have login:success and login:failed entries
+    const actions = body.logs.map((l: any) => l.action);
+    expect(actions).toContain('login:success');
+    expect(actions).toContain('login:failed');
   });
 });

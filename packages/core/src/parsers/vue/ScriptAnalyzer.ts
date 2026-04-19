@@ -28,6 +28,8 @@ export function analyzeScript(
   // Track variable assignments: varName -> store composable name
   // e.g. "userStore" -> "useUserStore"
   const storeVarMap = new Map<string, string>();
+  // Track import sources: importedName -> importPath (to distinguish external vs project composables)
+  const importSourceMap = new Map<string, string>();
 
   const scriptKind = lang === 'ts' || lang === 'tsx' ? ts.ScriptKind.TS : ts.ScriptKind.JS;
 
@@ -49,6 +51,11 @@ export function analyzeScript(
       const importPath = node.moduleSpecifier.text;
       const importedNames = getImportedNames(node);
       const line = sourceFile.getLineAndCharacterOfPosition(node.getStart()).line + 1;
+
+      // Track where each name was imported from
+      for (const name of importedNames) {
+        importSourceMap.set(name, importPath);
+      }
 
       edges.push({
         id: `${componentNodeId}:imports:${importPath}`,
@@ -82,16 +89,20 @@ export function analyzeScript(
           storeVarMap.set(parent.name.text, callText);
         }
       }
-      // Composable: useXxx() (but not useXxxStore)
+      // Composable: useXxx() (but not useXxxStore, and not external package composables)
       else if (/^use[A-Z]\w+$/.test(callText) && !/Store$/.test(callText)) {
-        edges.push({
-          id: `${componentNodeId}:uses-composable:${callText}`,
-          source: componentNodeId,
-          target: `composable:${callText}`,
-          kind: 'uses-composable',
-          metadata: { composableName: callText },
-          loc: { filePath, line, column: 0 },
-        });
+        const importSource = importSourceMap.get(callText);
+        const isExternal = importSource && !importSource.startsWith('.') && !importSource.startsWith('@/') && !importSource.startsWith('~');
+        if (!isExternal) {
+          edges.push({
+            id: `${componentNodeId}:uses-composable:${callText}`,
+            source: componentNodeId,
+            target: `composable:${callText}`,
+            kind: 'uses-composable',
+            metadata: { composableName: callText },
+            loc: { filePath, line, column: 0 },
+          });
+        }
       }
 
       // API calls: axios.get/post/put/delete/patch

@@ -51,8 +51,8 @@ export class CrossBoundaryResolver {
   }
 
   private resolveImports(graph: DependencyGraph): void {
-    const unresolvedEdges = graph.getAllEdges().filter(
-      e => e.kind === 'imports' && e.target.startsWith('unresolved:')
+    const unresolvedEdges = graph.getEdgesByKind('imports').filter(
+      e => e.target.startsWith('unresolved:')
     );
 
     for (const edge of unresolvedEdges) {
@@ -74,6 +74,7 @@ export class CrossBoundaryResolver {
             ...edge,
             id: `${edge.source}:imports:${targetNodes[0].id}`,
             target: targetNodes[0].id,
+            metadata: { ...edge.metadata, confidence: 'high' },
           };
           graph.addEdge(newEdge);
         }
@@ -86,50 +87,71 @@ export class CrossBoundaryResolver {
     this.resolveStoreReferences(graph);
     // Resolve composable references
     this.resolveComposableReferences(graph);
+    // Resolve route-renders targets
+    this.resolveRouteRenders(graph);
   }
 
   private resolveComponentReferences(graph: DependencyGraph): void {
-    const componentEdges = graph.getAllEdges().filter(
-      e => e.kind === 'uses-component' && e.target.startsWith('component:')
+    const componentEdges = graph.getEdgesByKind('uses-component').filter(
+      e => e.target.startsWith('component:')
     );
+    if (componentEdges.length === 0) return;
+
+    // Pre-index vue-components by label once — the prior pattern rescanned
+    // every node on every edge (O(edges × nodes)).
+    const componentsByLabel = new Map<string, GraphNode>();
+    for (const node of graph.nodesIter()) {
+      if (node.kind === 'vue-component') componentsByLabel.set(node.label, node);
+    }
 
     for (const edge of componentEdges) {
       const componentName = (edge.metadata.componentName as string) || '';
-      // Find a vue-component node whose label matches
-      const match = graph.getAllNodes().find(
-        n => n.kind === 'vue-component' && n.label === componentName
-      );
+      const match = componentsByLabel.get(componentName);
       if (match) {
         graph.removeEdge(edge.id);
         graph.addEdge({
           ...edge,
           id: `${edge.source}:uses-component:${match.id}`,
           target: match.id,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }
   }
 
   private resolveStoreReferences(graph: DependencyGraph): void {
-    const storeEdges = graph.getAllEdges().filter(
-      e => e.kind === 'uses-store' && e.target.startsWith('store:')
+    const storeEdges = graph.getEdgesByKind('uses-store').filter(
+      e => e.target.startsWith('store:')
     );
+    if (storeEdges.length === 0) return;
+
+    // Single sweep over nodes: bucket by exported function name + by label,
+    // so the inner loop becomes O(1) lookups.
+    const storeByExportedName = new Map<string, GraphNode>();
+    const piniaStores: GraphNode[] = [];
+    for (const node of graph.nodesIter()) {
+      if (node.kind !== 'pinia-store') continue;
+      piniaStores.push(node);
+      const exports = (node.metadata.exportedFunctions as string[] | undefined) ?? [];
+      for (const name of exports) storeByExportedName.set(name, node);
+    }
 
     for (const edge of storeEdges) {
       const storeName = (edge.metadata.storeName as string) || '';
-      // Find a pinia-store node whose exported functions include this store name
-      const match = graph.getAllNodes().find(
-        n => n.kind === 'pinia-store' && (
-          (n.metadata.exportedFunctions as string[] || []).includes(storeName) ||
-          n.label.toLowerCase().includes(storeName.replace(/^use/, '').replace(/Store$/, '').toLowerCase())
-        )
-      );
+      let match = storeByExportedName.get(storeName);
+      if (!match) {
+        const needle = storeName.replace(/^use/, '').replace(/Store$/, '').toLowerCase();
+        // Fallback label-substring match preserves the legacy heuristic for
+        // stores that don't export a useXxx function by that exact name.
+        match = piniaStores.find(n => n.label.toLowerCase().includes(needle));
+      }
       if (match) {
         graph.removeEdge(edge.id);
         graph.addEdge({
           ...edge,
           id: `${edge.source}:uses-store:${match.id}`,
           target: match.id,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }
@@ -145,7 +167,7 @@ export class CrossBoundaryResolver {
    *   - Re-target the parent's `listens-event` edge to the event node
    */
   private resolveEmitListeners(graph: DependencyGraph): void {
-    const listenEdges = graph.getAllEdges().filter(e => e.kind === 'listens-event' && e.target.startsWith('component:'));
+    const listenEdges = graph.getEdgesByKind('listens-event').filter(e => e.target.startsWith('component:'));
 
     // Build a map: resolved child component id -> set of emitted event names
     const childEmitsMap = new Map<string, Set<string>>();
@@ -168,18 +190,16 @@ export class CrossBoundaryResolver {
 
     // Also build from resolved uses-component edges
     const parentToChildren = new Map<string, Map<string, string>>(); // parent -> (componentName -> childNodeId)
-    for (const edge of graph.getAllEdges()) {
-      if (edge.kind === 'uses-component') {
-        const childNodeId = edge.target.startsWith('component:')
-          ? labelToNodeId.get(edge.target.replace('component:', ''))
-          : edge.target;
-        if (childNodeId) {
-          if (!parentToChildren.has(edge.source)) {
-            parentToChildren.set(edge.source, new Map());
-          }
-          const componentName = edge.metadata.componentName as string;
-          parentToChildren.get(edge.source)!.set(componentName, childNodeId);
+    for (const edge of graph.edgesByKindIter('uses-component')) {
+      const childNodeId = edge.target.startsWith('component:')
+        ? labelToNodeId.get(edge.target.replace('component:', ''))
+        : edge.target;
+      if (childNodeId) {
+        if (!parentToChildren.has(edge.source)) {
+          parentToChildren.set(edge.source, new Map());
         }
+        const componentName = edge.metadata.componentName as string;
+        parentToChildren.get(edge.source)!.set(componentName, childNodeId);
       }
     }
 
@@ -291,8 +311,8 @@ export class CrossBoundaryResolver {
       }
     }
 
-    const edgesToResolve = graph.getAllEdges().filter(e =>
-      e.kind === 'spring-injects' && !graph.hasNode(e.target)
+    const edgesToResolve = graph.getEdgesByKind('spring-injects').filter(
+      e => !graph.hasNode(e.target)
     );
 
     for (const edge of edgesToResolve) {
@@ -306,6 +326,7 @@ export class CrossBoundaryResolver {
           ...edge,
           id: `${edge.source}:spring-injects:${realNodeId}`,
           target: realNodeId,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }
@@ -328,28 +349,93 @@ export class CrossBoundaryResolver {
     for (const repo of repositories) {
       const domain = repo.label.replace('Repository', '');
 
+      // O(out-degree) edge-existence check vs. the prior O(|E|) full scan.
+      const repoOutTargets = new Set(graph.getOutEdges(repo.id).map((e) => e.target));
+
       // Find matching @Mapper interface
       const mapper = mappers.find(m => m.label === domain + 'Mapper');
-      if (mapper && !graph.getAllEdges().some(e => e.source === repo.id && e.target === mapper.id)) {
+      if (mapper && !repoOutTargets.has(mapper.id)) {
         graph.addEdge({
           id: `${repo.id}:spring-injects:${mapper.id}`,
           source: repo.id,
           target: mapper.id,
           kind: 'spring-injects',
-          metadata: { viaDomainMatch: true },
+          metadata: { viaDomainMatch: true, confidence: 'low' },
         });
       }
 
       // Also link directly to mybatis-mapper if no @Mapper interface exists
       if (!mapper) {
         const mbMapper = mybatisMappers.find(m => m.label === domain + 'Mapper');
-        if (mbMapper && !graph.getAllEdges().some(e => e.source === repo.id && e.target === mbMapper.id)) {
+        if (mbMapper && !repoOutTargets.has(mbMapper.id)) {
           graph.addEdge({
             id: `${repo.id}:spring-injects:${mbMapper.id}`,
             source: repo.id,
             target: mbMapper.id,
             kind: 'spring-injects',
-            metadata: { viaDomainMatch: true },
+            metadata: { viaDomainMatch: true, confidence: 'low' },
+          });
+        }
+      }
+    }
+  }
+
+  /**
+   * Resolve route-renders edges:
+   * - `unresolved:` prefixed targets (lazy imports) → resolve via ImportResolver
+   * - `component:` prefixed targets (static refs) → match by vue-component label
+   */
+  private resolveRouteRenders(graph: DependencyGraph): void {
+    // 1. Resolve lazy route-renders (unresolved: prefix)
+    const unresolvedRouteEdges = graph.getEdgesByKind('route-renders').filter(
+      e => e.target.startsWith('unresolved:')
+    );
+
+    for (const edge of unresolvedRouteEdges) {
+      const importPath = edge.metadata.importPath as string;
+      if (!importPath) continue;
+
+      const sourceNode = graph.getNode(edge.source);
+      if (!sourceNode) continue;
+
+      const resolvedFile = this.importResolver.resolve(importPath, sourceNode.filePath);
+      if (resolvedFile) {
+        const targetNodes = graph.getNodesByFile(resolvedFile);
+        if (targetNodes.length > 0) {
+          graph.removeEdge(edge.id);
+          graph.addEdge({
+            ...edge,
+            id: `${edge.source}:route-renders:${targetNodes[0].id}`,
+            target: targetNodes[0].id,
+            metadata: { ...edge.metadata, confidence: 'high' },
+          });
+        }
+      }
+    }
+
+    // 2. Resolve static route-renders (component: prefix). Re-fetch the kind
+    // bucket — pass 1 may have rewritten edge ids, so the earlier snapshot is stale.
+    const staticRouteEdges = graph.getEdgesByKind('route-renders').filter(
+      e => e.target.startsWith('component:')
+    );
+
+    if (staticRouteEdges.length > 0) {
+      // Reuse the component label index — same vue-component pool as the
+      // uses-component resolver.
+      const componentsByLabel = new Map<string, GraphNode>();
+      for (const node of graph.nodesIter()) {
+        if (node.kind === 'vue-component') componentsByLabel.set(node.label, node);
+      }
+      for (const edge of staticRouteEdges) {
+        const componentName = (edge.metadata.componentName as string) || edge.target.replace('component:', '');
+        const match = componentsByLabel.get(componentName);
+        if (match) {
+          graph.removeEdge(edge.id);
+          graph.addEdge({
+            ...edge,
+            id: `${edge.source}:route-renders:${match.id}`,
+            target: match.id,
+            metadata: { ...edge.metadata, confidence: 'medium' },
           });
         }
       }
@@ -357,24 +443,35 @@ export class CrossBoundaryResolver {
   }
 
   private resolveComposableReferences(graph: DependencyGraph): void {
-    const composableEdges = graph.getAllEdges().filter(
-      e => e.kind === 'uses-composable' && e.target.startsWith('composable:')
+    const composableEdges = graph.getEdgesByKind('uses-composable').filter(
+      e => e.target.startsWith('composable:')
     );
+    if (composableEdges.length === 0) return;
+
+    const composableByExportedName = new Map<string, GraphNode>();
+    const composableByLabel = new Map<string, GraphNode>();
+    for (const node of graph.nodesIter()) {
+      if (node.kind !== 'vue-composable') continue;
+      composableByLabel.set(node.label, node);
+      const exports = (node.metadata.exportedFunctions as string[] | undefined) ?? [];
+      for (const name of exports) composableByExportedName.set(name, node);
+    }
 
     for (const edge of composableEdges) {
       const composableName = (edge.metadata.composableName as string) || '';
-      const match = graph.getAllNodes().find(
-        n => n.kind === 'vue-composable' && (
-          (n.metadata.exportedFunctions as string[] || []).includes(composableName) ||
-          n.label === composableName.replace(/^use/, '').charAt(0).toLowerCase() + composableName.replace(/^use/, '').slice(1)
-        )
-      );
+      let match = composableByExportedName.get(composableName);
+      if (!match) {
+        const stripped = composableName.replace(/^use/, '');
+        const normalised = stripped.charAt(0).toLowerCase() + stripped.slice(1);
+        match = composableByLabel.get(normalised);
+      }
       if (match) {
         graph.removeEdge(edge.id);
         graph.addEdge({
           ...edge,
           id: `${edge.source}:uses-composable:${match.id}`,
           target: match.id,
+          metadata: { ...edge.metadata, confidence: 'medium' },
         });
       }
     }

@@ -1,7 +1,9 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, afterAll } from 'vitest';
 import { ParallelParser, parseFile } from '../ParallelParser.js';
 import type { ProgressInfo } from '../ParallelParser.js';
 import { resolve } from 'path';
+import { mkdtempSync, mkdirSync, writeFileSync, rmSync } from 'fs';
+import { tmpdir } from 'os';
 
 const fixturesDir = resolve(import.meta.dirname, '../../__fixtures__');
 
@@ -134,5 +136,39 @@ describe('ParallelParser', () => {
 
     expect(result.nodes.length).toBeGreaterThan(0);
     expect(result.errors).toHaveLength(0);
+  });
+
+  describe('serviceId tagging', () => {
+    const tmpRoot = mkdtempSync(resolve(tmpdir(), 'vda-svc-'));
+    mkdirSync(resolve(tmpRoot, 'services/api'), { recursive: true });
+    mkdirSync(resolve(tmpRoot, 'services/api-gateway'), { recursive: true });
+    const apiFile = resolve(tmpRoot, 'services/api/a.ts');
+    const gatewayFile = resolve(tmpRoot, 'services/api-gateway/g.ts');
+    writeFileSync(apiFile, 'export const a = 1;');
+    writeFileSync(gatewayFile, 'export const g = 1;');
+
+    afterAll(() => rmSync(tmpRoot, { recursive: true, force: true }));
+
+    it('attributes prefix-sharing siblings to the most specific service regardless of config order', async () => {
+      // `services/api` is listed first; the buggy implementation matched it
+      // for `services/api-gateway/g.ts` via raw startsWith.
+      const parser = new ParallelParser(
+        {
+          projectRoot: tmpRoot,
+          services: [
+            { id: 'api', root: 'services/api', type: 'spring-boot' },
+            { id: 'api-gateway', root: 'services/api-gateway', type: 'spring-boot' },
+          ],
+        },
+        1,
+        tmpRoot,
+      );
+      const result = await parser.parseAll([apiFile, gatewayFile]);
+
+      const apiNode = result.nodes.find((n) => n.filePath === apiFile);
+      const gatewayNode = result.nodes.find((n) => n.filePath === gatewayFile);
+      expect(apiNode?.metadata.serviceId).toBe('api');
+      expect(gatewayNode?.metadata.serviceId).toBe('api-gateway');
+    });
   });
 });

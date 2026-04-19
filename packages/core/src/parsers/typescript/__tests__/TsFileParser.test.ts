@@ -141,6 +141,176 @@ export default createRouter({ history: createWebHistory(), routes })
     });
   });
 
+  describe('alias lazy routes (const X = () => import(...))', () => {
+    const aliasRouterContent = `
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+
+const HomeView = () => import('@/components/dashboard/DashboardPage.vue')
+const LoginView = () => import('@/components/auth/Login.vue')
+const ProductListView = () => import('@/components/product/ProductList.vue')
+
+const routes: RouteRecordRaw[] = [
+  { path: '/', component: HomeView },
+  { path: '/login', component: LoginView },
+  { path: '/products', component: ProductListView },
+  { path: '/about', component: () => import('@/views/About.vue') },
+]
+
+export default createRouter({ history: createWebHistory(), routes })
+`;
+    const result = parser.parse('/test/router/index.ts', aliasRouterContent, {});
+
+    it('should resolve alias references to unresolved: import paths', () => {
+      const routeEdges = result.edges.filter(e => e.kind === 'route-renders');
+      // 3 alias lazy + 1 inline lazy = 4 total
+      expect(routeEdges).toHaveLength(4);
+
+      // All should be unresolved: (not component:)
+      for (const edge of routeEdges) {
+        expect(edge.target).toMatch(/^unresolved:/);
+      }
+    });
+
+    it('should preserve import paths from aliases', () => {
+      const lazyEdges = result.edges.filter(e => e.kind === 'route-renders');
+      const paths = lazyEdges.map(e => (e.metadata as any).importPath);
+      expect(paths).toContain('@/components/dashboard/DashboardPage.vue');
+      expect(paths).toContain('@/components/auth/Login.vue');
+      expect(paths).toContain('@/components/product/ProductList.vue');
+      expect(paths).toContain('@/views/About.vue');
+    });
+
+    it('should mark alias field on alias-resolved edges', () => {
+      const aliasEdges = result.edges.filter(
+        e => e.kind === 'route-renders' && (e.metadata as any).alias,
+      );
+      expect(aliasEdges.length).toBe(3);
+      const aliases = aliasEdges.map(e => (e.metadata as any).alias);
+      expect(aliases).toContain('HomeView');
+      expect(aliases).toContain('LoginView');
+      expect(aliases).toContain('ProductListView');
+    });
+
+    it('should not create duplicate edges for the same import path', () => {
+      const paths = result.edges
+        .filter(e => e.kind === 'route-renders')
+        .map(e => (e.metadata as any).importPath);
+      expect(new Set(paths).size).toBe(paths.length);
+    });
+  });
+
+  describe('interface and type extraction', () => {
+    it('should extract exported interfaces with fields', () => {
+      const content = `
+export interface UserResponse {
+  id: number;
+  username: string;
+  email: string;
+}
+
+export interface ProductResponse {
+  id: number;
+  title: string;
+  price: number;
+}
+`;
+      const result = parser.parse('/test/types/api.ts', content, {});
+      const mainNode = result.nodes.find(n => n.kind === 'ts-module');
+      expect(mainNode).toBeDefined();
+      const meta = mainNode!.metadata as any;
+      expect(meta.interfaces).toHaveLength(2);
+      expect(meta.interfaces[0].name).toBe('UserResponse');
+      expect(meta.interfaces[0].fields).toEqual(['id', 'username', 'email']);
+      expect(meta.interfaces[0].fieldTypes).toHaveLength(3);
+      expect(meta.interfaces[0].fieldTypes[0]).toEqual({ name: 'id', type: 'number', optional: false });
+      expect(meta.interfaces[1].name).toBe('ProductResponse');
+      expect(meta.interfaces[1].fields).toEqual(['id', 'title', 'price']);
+      expect(meta.exportedTypes).toHaveLength(2);
+    });
+
+    it('should extract exported type aliases with object shape', () => {
+      const content = `
+export type OrderItem = {
+  productId: number;
+  quantity: number;
+  unitPrice: number;
+};
+`;
+      const result = parser.parse('/test/types/order.ts', content, {});
+      const mainNode = result.nodes.find(n => n.kind === 'ts-module');
+      const meta = mainNode!.metadata as any;
+      expect(meta.interfaces).toHaveLength(1);
+      expect(meta.interfaces[0].name).toBe('OrderItem');
+      expect(meta.interfaces[0].fields).toEqual(['productId', 'quantity', 'unitPrice']);
+      expect(meta.interfaces[0].fieldTypes).toHaveLength(3);
+      expect(meta.exportedTypes).toHaveLength(1);
+    });
+
+    it('should separate exported and non-exported interfaces', () => {
+      const content = `
+interface InternalConfig {
+  debug: boolean;
+  timeout: number;
+}
+
+export interface PublicApi {
+  name: string;
+  version: string;
+}
+`;
+      const result = parser.parse('/test/types/mixed.ts', content, {});
+      const mainNode = result.nodes.find(n => n.kind === 'ts-module');
+      const meta = mainNode!.metadata as any;
+      expect(meta.interfaces).toHaveLength(2);
+      expect(meta.exportedTypes).toHaveLength(1);
+      expect(meta.exportedTypes[0].name).toBe('PublicApi');
+    });
+
+    it('should not set metadata when no interfaces exist', () => {
+      const content = `export function hello() { return 'world'; }`;
+      const result = parser.parse('/test/utils.ts', content, {});
+      const mainNode = result.nodes.find(n => n.kind === 'ts-module');
+      const meta = mainNode!.metadata as any;
+      expect(meta.interfaces).toBeUndefined();
+      expect(meta.exportedTypes).toBeUndefined();
+    });
+
+    it('should extract multiple exported interfaces (DTO-style)', () => {
+      const content = `
+export interface UserResponse {
+  id: number
+  username: string
+  email: string
+  displayName: string
+}
+
+export interface ProductResponse {
+  id: number
+  title: string
+  price: number
+  stock: number
+}
+
+export interface OrderResponse {
+  id: number
+  userId: number
+  totalAmount: number
+  status: string
+}
+`;
+      const result = parser.parse('/test/types/api.ts', content, {});
+      const mainNode = result.nodes.find(n => n.kind === 'ts-module');
+      const meta = mainNode!.metadata as any;
+      expect(meta.interfaces).toHaveLength(3);
+      expect(meta.exportedTypes).toHaveLength(3);
+      const names = meta.interfaces.map((i: any) => i.name);
+      expect(names).toContain('UserResponse');
+      expect(names).toContain('ProductResponse');
+      expect(names).toContain('OrderResponse');
+      expect(meta.interfaces[0].fields).toEqual(['id', 'username', 'email', 'displayName']);
+    });
+  });
+
   describe('store file (userStore.ts)', () => {
     const content = readFileSync(resolve(fixturesDir, 'stores/userStore.ts'), 'utf-8');
     const result = parser.parse('/test/stores/userStore.ts', content, {});
