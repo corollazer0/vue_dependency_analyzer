@@ -53,6 +53,13 @@ export {
   type SignatureStoreOptions,
 } from './engine/SignatureStore.js';
 export {
+  SchemaSnapshotStore,
+  diffSchemas,
+  type SchemaSnapshotRow,
+  type SchemaDiff,
+  type SchemaSnapshotStoreOptions,
+} from './engine/SchemaSnapshotStore.js';
+export {
   ArchSnapshotStore,
   diffSnapshots,
   type ArchSnapshot,
