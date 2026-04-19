@@ -849,6 +849,24 @@ export class AnalysisEngine {
   }
 
   /**
+   * Phase 9-9 — F9 anti-pattern classifier exposed for UI consumption.
+   * Reads `complexityThresholds` from the loaded config so users can
+   * dial sensitivity per-project.
+   */
+  async getAntiPatterns(): Promise<{
+    byNodeId: Record<string, string[]>;
+    totals: { byTag: Record<string, number> };
+    suggestions: Record<string, string>;
+  }> {
+    const { classifyAntiPatterns } = await import('@vda/core');
+    const thresholds = (this.config as any).complexityThresholds;
+    const result = classifyAntiPatterns(this.graph, thresholds ? { thresholds } : undefined);
+    const byNodeId: Record<string, string[]> = {};
+    for (const [id, tags] of result.byNodeId.entries()) byNodeId[id] = tags;
+    return { byNodeId, totals: result.totals, suggestions: result.suggestions };
+  }
+
+  /**
    * Phase 9-3 — F4 Feature Slice.
    *
    * Reuses Phase 7b-1's `reachableFromEntrypoints` (with the entry

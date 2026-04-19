@@ -1,9 +1,9 @@
 import { runAnalysis, loadConfig, type CliOptions } from '../config.js';
-import { SignatureStore, type ProgressInfo } from '@vda/core';
+import { SignatureStore, readOtelTraces, type ProgressInfo } from '@vda/core';
 
 export async function analyzeCommand(
   dir: string,
-  options: CliOptions & { cache?: boolean; signaturesOnly?: boolean; label?: string },
+  options: CliOptions & { cache?: boolean; signaturesOnly?: boolean; label?: string; otelTraces?: string },
 ): Promise<void> {
   const config = await loadConfig(dir, options);
   console.log(`\n🔍 Analyzing project: ${dir}\n`);
@@ -33,6 +33,38 @@ export async function analyzeCommand(
 
   // Clear progress line
   if (lastLine) process.stdout.write('\r' + ' '.repeat(lastLine.length) + '\r');
+
+  // Phase 9-12 — `--otel-traces <file>` injects p95Ms/errorRate/
+  // traceCount onto matching spring-endpoint metadata so downstream
+  // serializers + reports surface live latency context. Read-only —
+  // we never push data back to the APM system (plan §6 anti-suggestion).
+  if (options.otelTraces) {
+    const known = new Set<string>();
+    for (const n of graph.getAllNodes()) {
+      if (n.kind !== 'spring-endpoint') continue;
+      const md = n.metadata as { httpMethod?: string; path?: string };
+      if (md.httpMethod && md.path) known.add(`${md.httpMethod} ${md.path}`);
+    }
+    const otel = readOtelTraces(options.otelTraces, known);
+    let injected = 0;
+    for (const n of graph.getAllNodes()) {
+      if (n.kind !== 'spring-endpoint') continue;
+      const md = n.metadata as { httpMethod?: string; path?: string; p95Ms?: number; errorRate?: number; traceCount?: number };
+      const key = md.httpMethod && md.path ? `${md.httpMethod} ${md.path}` : null;
+      if (!key) continue;
+      const stats = otel.byEndpoint.get(key);
+      if (!stats) continue;
+      md.p95Ms = stats.p95Ms;
+      md.errorRate = stats.errorRate;
+      md.traceCount = stats.traceCount;
+      injected += 1;
+    }
+    const matchRate = otel.totalSpans > 0
+      ? (otel.totalSpans - otel.unmatchedTraceCount) / otel.totalSpans
+      : 0;
+    console.log(`📡 OTel traces: ${injected} endpoint(s) annotated, ${otel.unmatchedTraceCount}/${otel.totalSpans} unmatched (${(matchRate * 100).toFixed(0)}% matched).`);
+    console.log('   ℹ  Read-only — we consume the OTLP JSON, the APM system handles collection.');
+  }
 
   // Phase 8-11 — `--signatures-only` skips reporting + JSON dump and
   // just persists the snapshot under `--label <name>`. The full
