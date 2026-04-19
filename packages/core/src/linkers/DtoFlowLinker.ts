@@ -27,74 +27,58 @@ export interface DtoFieldChain {
 }
 
 /**
- * Scan Controller/Service method signatures for DTO type references
- * and create `dto-flows` edges between nodes that share the same DTO class name.
+ * Wire DTO-related nodes into a canonical 4-tier chain (Phase 7a-2):
+ *
+ *   spring-endpoint → spring-dto → mybatis-statement → db-table
+ *                            ↑
+ *                            ts-module / vue-component (frontend interface)
+ *
+ * Earlier versions emitted `dto-flows` between any pair of nodes that
+ * referenced the same DTO type, which produced noisy
+ * `spring-endpoint → spring-endpoint` edges. The all-pairs loop is gone;
+ * every emitted edge now has a tier and one well-defined direction.
  */
 export class DtoFlowLinker {
   link(graph: DependencyGraph): GraphEdge[] {
     const newEdges: GraphEdge[] = [];
 
-    // Collect DTO type references per node
-    // Map: dtoName -> Set<nodeId>
-    const dtoToNodes = new Map<string, Set<string>>();
+    // Index DTOs by class name (label). Pure DTO nodes are `spring-dto` —
+    // legacy `spring-service` + isDto metadata is no longer recognised.
+    const dtoByName = new Map<string, GraphNode>();
+    for (const node of graph.nodesIter()) {
+      if (node.kind === 'spring-dto') dtoByName.set(node.label, node);
+    }
 
-    for (const node of graph.getAllNodes()) {
+    // Tier 1: spring-endpoint → spring-dto for every DTO type referenced
+    // on the endpoint signature (return type or any param type).
+    for (const node of graph.nodesIter()) {
+      if (node.kind !== 'spring-endpoint') continue;
       const dtoNames = new Set<string>();
-
-      if (node.kind === 'spring-endpoint') {
-        // Check return type and param types for DTO names
-        const returnType = node.metadata.returnType as string | undefined;
-        const paramTypes = node.metadata.paramTypes as string[] | undefined;
-
-        if (returnType) {
-          const extracted = extractDtoName(returnType);
-          if (extracted) dtoNames.add(extracted);
-        }
-        if (paramTypes) {
-          for (const pt of paramTypes) {
-            const extracted = extractDtoName(pt);
-            if (extracted) dtoNames.add(extracted);
-          }
+      const returnType = node.metadata.returnType as string | undefined;
+      const paramTypes = node.metadata.paramTypes as string[] | undefined;
+      if (returnType) {
+        const n = extractDtoName(returnType);
+        if (n) dtoNames.add(n);
+      }
+      if (paramTypes) {
+        for (const pt of paramTypes) {
+          const n = extractDtoName(pt);
+          if (n) dtoNames.add(n);
         }
       }
-
-      if (node.kind === 'spring-service' && node.metadata.isDto) {
-        dtoNames.add(node.label);
-      }
-
       for (const dtoName of dtoNames) {
-        if (!dtoToNodes.has(dtoName)) {
-          dtoToNodes.set(dtoName, new Set());
-        }
-        dtoToNodes.get(dtoName)!.add(node.id);
-      }
-    }
-
-    // Also check controller nodes: look at their endpoint children for DTO refs
-    // and link controllers to DTO service nodes
-    for (const [dtoName, nodeIds] of dtoToNodes) {
-      const ids = Array.from(nodeIds);
-      // Create dto-flows edges between all pairs
-      for (let i = 0; i < ids.length; i++) {
-        for (let j = i + 1; j < ids.length; j++) {
-          const edgeId = `${ids[i]}:dto-flows:${ids[j]}`;
-          // Avoid duplicate edges
-          if (graph.getEdge(edgeId)) continue;
-
-          const edge: GraphEdge = {
-            id: edgeId,
-            source: ids[i],
-            target: ids[j],
-            kind: 'dto-flows',
-            metadata: { dtoName },
-          };
-          newEdges.push(edge);
+        const dto = dtoByName.get(dtoName);
+        if (!dto) continue;
+        const edge = this.makeChainEdge(node.id, dto.id, { dtoName, tier: 'endpoint-dto' });
+        if (edge && !graph.getEdge(edge.id)) {
           graph.addEdge(edge);
+          newEdges.push(edge);
         }
       }
     }
 
-    // 3-tier chain edges: frontend TS interface ↔ backend DTO ↔ MyBatis statement
+    // Tiers 2 & 3: frontend ts-module/vue-component → spring-dto and
+    // spring-dto → mybatis-statement, with field-level metadata.
     const chains = this.buildFieldChains(graph);
     for (const chain of chains) {
       const entriesMeta = chain.entries;
@@ -163,12 +147,10 @@ export class DtoFlowLinker {
   buildFieldChains(graph: DependencyGraph): DtoFieldChain[] {
     const chains: DtoFieldChain[] = [];
 
-    // 1. Index backend DTO nodes by class name
+    // 1. Index backend DTO nodes by class name (Phase 7a-2: spring-dto)
     const backendDtos = new Map<string, GraphNode>();
-    for (const node of graph.getAllNodes()) {
-      if (node.kind === 'spring-service' && node.metadata.isDto) {
-        backendDtos.set(node.label, node);
-      }
+    for (const node of graph.nodesIter()) {
+      if (node.kind === 'spring-dto') backendDtos.set(node.label, node);
     }
 
     // 2. Index frontend TS interface definitions by name → node that hosts the interface
@@ -255,7 +237,7 @@ export class DtoFlowLinker {
         const mapping = mappingsByProperty.get(bf.name);
         entries.push({
           fieldName: bf.name,
-          backendType: bf.type,
+          backendType: bf.typeRef,
           backendNullable: bf.nullable,
           jsonName: bf.jsonName,
           frontendType: ff?.type,
@@ -292,9 +274,12 @@ export class DtoFlowLinker {
   }
 }
 
+// Mirrors `SpringDtoField` (Phase 7a-12) so the linker can pull the
+// frozen DTO metadata without dragging the public type into its
+// internal field-chain helpers.
 interface BackendField {
   name: string;
-  type: string;
+  typeRef: string;
   nullable?: boolean;
   jsonName?: string;
 }

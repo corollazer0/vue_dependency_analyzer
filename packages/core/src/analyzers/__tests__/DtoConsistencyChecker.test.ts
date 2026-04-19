@@ -16,18 +16,18 @@ describe('DtoConsistencyChecker', () => {
       [
         // Backend DTO with 4 fields
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
             fields: [
-              { name: 'id', type: 'Long' },
-              { name: 'name', type: 'String' },
-              { name: 'email', type: 'String' },
-              { name: 'createdAt', type: 'String' },
+              { name: 'id', typeRef: 'Long' },
+              { name: 'name', typeRef: 'String' },
+              { name: 'email', typeRef: 'String' },
+              { name: 'createdAt', typeRef: 'String' },
             ],
           },
         },
@@ -91,16 +91,16 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
             fields: [
-              { name: 'id', type: 'Long' },
-              { name: 'name', type: 'String' },
+              { name: 'id', typeRef: 'Long' },
+              { name: 'name', typeRef: 'String' },
             ],
           },
         },
@@ -158,16 +158,16 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
             fields: [
-              { name: 'id', type: 'Long' },
-              { name: 'name', type: 'String' },
+              { name: 'id', typeRef: 'Long' },
+              { name: 'name', typeRef: 'String' },
             ],
           },
         },
@@ -221,17 +221,17 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
             fields: [
-              { name: 'id', type: 'Long' },
-              { name: 'name', type: 'String' },
-              { name: 'secret', type: 'String' },
+              { name: 'id', typeRef: 'Long' },
+              { name: 'name', typeRef: 'String' },
+              { name: 'secret', typeRef: 'String' },
             ],
           },
         },
@@ -298,17 +298,17 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/ItemDTO.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/ItemDTO.java',
+          kind: 'spring-dto',
           label: 'ItemDTO',
           filePath: '/dto/ItemDTO.java',
           metadata: {
             className: 'ItemDTO',
             isDto: true,
             fields: [
-              { name: 'id', type: 'Long' },
-              { name: 'price', type: 'BigDecimal' },
-              { name: 'secret', type: 'String' },
+              { name: 'id', typeRef: 'Long' },
+              { name: 'price', typeRef: 'BigDecimal' },
+              { name: 'secret', typeRef: 'String' },
             ],
           },
         },
@@ -382,16 +382,16 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
             fields: [
-              { name: 'id', type: 'Long', nullable: false },
-              { name: 'email', type: 'String', nullable: true },
+              { name: 'id', typeRef: 'Long', nullable: false },
+              { name: 'email', typeRef: 'String', nullable: true },
             ],
           },
         },
@@ -449,17 +449,17 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/OrderResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/OrderResponse.java',
+          kind: 'spring-dto',
           label: 'OrderResponse',
           filePath: '/dto/OrderResponse.java',
           metadata: {
             className: 'OrderResponse',
             isDto: true,
             fields: [
-              { name: 'orderId', type: 'Long' },
-              { name: 'customerName', type: 'String' },
-              { name: 'ghost', type: 'String' },
+              { name: 'orderId', typeRef: 'Long' },
+              { name: 'customerName', typeRef: 'String' },
+              { name: 'ghost', typeRef: 'String' },
             ],
           },
         },
@@ -534,15 +534,15 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/ItemDTO.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/ItemDTO.java',
+          kind: 'spring-dto',
           label: 'ItemDTO',
           filePath: '/dto/ItemDTO.java',
           loc: { filePath: '/dto/ItemDTO.java', line: 7, column: 0 },
           metadata: {
             className: 'ItemDTO',
             isDto: true,
-            fields: [{ name: 'id', type: 'Long' }, { name: 'extra', type: 'String' }],
+            fields: [{ name: 'id', typeRef: 'Long' }, { name: 'extra', typeRef: 'String' }],
           },
         },
         {
@@ -589,16 +589,16 @@ describe('DtoConsistencyChecker', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/OrderDTO.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/OrderDTO.java',
+          kind: 'spring-dto',
           label: 'OrderDTO',
           filePath: '/dto/OrderDTO.java',
           metadata: {
             className: 'OrderDTO',
             isDto: true,
             fields: [
-              { name: 'orderId', type: 'Long' },
-              { name: 'total', type: 'BigDecimal' },
+              { name: 'orderId', typeRef: 'Long' },
+              { name: 'total', typeRef: 'BigDecimal' },
             ],
           },
         },

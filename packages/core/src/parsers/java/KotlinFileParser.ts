@@ -71,6 +71,15 @@ export class KotlinFileParser implements FileParser {
               kind: 'api-serves',
               metadata: { httpMethod: method, path: endpointPath },
             });
+            // Phase 7a-1 — reverse alias so a forward DFS from the endpoint
+            // can reach the controller (and onward into services/db).
+            edges.push({
+              id: `${nodeId}:api-implements:${controllerNodeId}`,
+              source: nodeId,
+              target: controllerNodeId,
+              kind: 'api-implements',
+              metadata: { httpMethod: method, path: endpointPath },
+            });
           }
         }
       } else if (isService || isRepository || isComponent || isMapper) {

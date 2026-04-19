@@ -11,6 +11,7 @@ export type NodeKind =
   | 'spring-controller'
   | 'spring-endpoint'
   | 'spring-service'
+  | 'spring-dto'
   | 'native-bridge'
   | 'native-method'
   | 'mybatis-mapper'
@@ -31,6 +32,7 @@ export type EdgeKind =
   | 'listens-event'
   | 'api-call'
   | 'api-serves'
+  | 'api-implements'
   | 'native-call'
   | 'route-renders'
   | 'spring-injects'
@@ -61,6 +63,38 @@ export interface GraphEdge {
   kind: EdgeKind;
   metadata: Record<string, unknown>;
   loc?: SourceLocation;
+}
+
+// ─── Phase 7a-12 — SpringDtoNode interface freeze ───────────────────────
+//
+// Phase 8 SignatureStore locks onto this exact shape to compute stable
+// `fqn#fieldName` ids and detect breaking DTO changes. Add new optional
+// fields if you must; never rename or remove these without bumping the
+// contract.
+
+export interface SpringDtoField {
+  name: string;
+  typeRef: string;
+  nullable?: boolean;
+  jsonName?: string;
+}
+
+export interface SpringDtoNodeMetadata {
+  fqn: string;
+  fields: SpringDtoField[];
+  sourceRef: SourceLocation;
+  className?: string;
+  packageName?: string;
+  [key: string]: unknown;
+}
+
+export interface SpringDtoNode extends GraphNode {
+  kind: 'spring-dto';
+  metadata: SpringDtoNodeMetadata;
+}
+
+export function isSpringDtoNode(node: GraphNode): node is SpringDtoNode {
+  return node.kind === 'spring-dto';
 }
 
 export interface ParseError {

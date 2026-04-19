@@ -199,6 +199,55 @@ export default createRouter({ history: createWebHistory(), routes })
     });
   });
 
+  describe('routePath / routeName metadata (Phase 7a-6)', () => {
+    const ecommerceRouter = `
+import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+
+const HomeView = () => import('@/components/dashboard/DashboardPage.vue')
+const LoginView = () => import('@/components/auth/Login.vue')
+const RegisterView = () => import('@/components/auth/Register.vue')
+
+const routes: RouteRecordRaw[] = [
+  { path: '/', name: 'home', component: HomeView, meta: { requiresAuth: true } },
+  { path: '/login', name: 'login', component: LoginView, meta: { requiresAuth: false } },
+  { path: '/register', name: 'register', component: RegisterView, meta: { requiresAuth: false } },
+  { path: '/about', component: () => import('@/views/About.vue') },
+]
+
+export default createRouter({ history: createWebHistory(), routes })
+`;
+    const result = parser.parse('/test/router/index.ts', ecommerceRouter, {});
+
+    it('attaches routePath / routeName to alias-lazy edges', () => {
+      const edges = result.edges.filter(e => e.kind === 'route-renders');
+      const home = edges.find(e => (e.metadata as any).alias === 'HomeView')!;
+      expect(home).toBeDefined();
+      expect((home.metadata as any).routePath).toBe('/');
+      expect((home.metadata as any).routeName).toBe('home');
+
+      const login = edges.find(e => (e.metadata as any).alias === 'LoginView')!;
+      expect((login.metadata as any).routePath).toBe('/login');
+      expect((login.metadata as any).routeName).toBe('login');
+    });
+
+    it('attaches routePath to inline-lazy edges that omit name', () => {
+      const edges = result.edges.filter(e => e.kind === 'route-renders');
+      const about = edges.find(e => (e.metadata as any).importPath === '@/views/About.vue')!;
+      expect(about).toBeDefined();
+      expect((about.metadata as any).routePath).toBe('/about');
+      expect((about.metadata as any).routeName).toBeUndefined();
+    });
+
+    it('does not leak path/name across routes when meta:{…} is in between', () => {
+      const edges = result.edges.filter(e => e.kind === 'route-renders');
+      const register = edges.find(e => (e.metadata as any).alias === 'RegisterView')!;
+      // Should pick `/register`, not the previous `/login` even though
+      // a `meta: { requiresAuth: false }` block sits between them.
+      expect((register.metadata as any).routePath).toBe('/register');
+      expect((register.metadata as any).routeName).toBe('register');
+    });
+  });
+
   describe('interface and type extraction', () => {
     it('should extract exported interfaces with fields', () => {
       const content = `

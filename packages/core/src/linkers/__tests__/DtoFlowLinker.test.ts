@@ -29,14 +29,14 @@ describe('DtoFlowLinker', () => {
           },
         },
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
-            fields: [{ name: 'id', type: 'Long' }],
+            fields: [{ name: 'id', typeRef: 'Long' }],
           },
         },
       ],
@@ -66,14 +66,14 @@ describe('DtoFlowLinker', () => {
           },
         },
         {
-          id: 'spring-service:/dto/CreateUserRequest.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/CreateUserRequest.java',
+          kind: 'spring-dto',
           label: 'CreateUserRequest',
           filePath: '/dto/CreateUserRequest.java',
           metadata: {
             className: 'CreateUserRequest',
             isDto: true,
-            fields: [{ name: 'name', type: 'String' }],
+            fields: [{ name: 'name', typeRef: 'String' }],
           },
         },
       ],
@@ -103,14 +103,14 @@ describe('DtoFlowLinker', () => {
           },
         },
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
-            fields: [{ name: 'id', type: 'Long' }],
+            fields: [{ name: 'id', typeRef: 'Long' }],
           },
         },
       ],
@@ -149,14 +149,14 @@ describe('DtoFlowLinker', () => {
           },
         },
         {
-          id: 'spring-service:/dto/UserResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
           label: 'UserResponse',
           filePath: '/dto/UserResponse.java',
           metadata: {
             className: 'UserResponse',
             isDto: true,
-            fields: [{ name: 'id', type: 'Long' }],
+            fields: [{ name: 'id', typeRef: 'Long' }],
           },
         },
       ],
@@ -165,9 +165,51 @@ describe('DtoFlowLinker', () => {
 
     const newEdges = linker.link(graph);
 
-    // 3 nodes sharing UserResponse → 3 pairs: (ep1,ep2), (ep1,dto), (ep2,dto)
-    expect(newEdges).toHaveLength(3);
+    // Phase 7a-2: only endpoint→spring-dto edges (one per endpoint).
+    // The legacy all-pairs loop (which would have produced an
+    // endpoint↔endpoint edge here) is gone.
+    expect(newEdges).toHaveLength(2);
     expect(newEdges.every(e => e.kind === 'dto-flows')).toBe(true);
+    expect(newEdges.every(e => (e.metadata as any).tier === 'endpoint-dto')).toBe(true);
+    expect(newEdges.every(e => e.target === 'spring-dto:/dto/UserResponse.java')).toBe(true);
+  });
+
+  it('should not emit any spring-endpoint → spring-endpoint dto-flows edge (Phase 7a-2 gate)', () => {
+    const graph = buildGraph(
+      [
+        {
+          id: 'spring-endpoint:GET:/api/users',
+          kind: 'spring-endpoint',
+          label: 'GET /api/users',
+          filePath: '/UserController.java',
+          metadata: { httpMethod: 'GET', path: '/api/users', returnType: 'UserResponse', paramTypes: [] },
+        },
+        {
+          id: 'spring-endpoint:GET:/api/users/{id}',
+          kind: 'spring-endpoint',
+          label: 'GET /api/users/{id}',
+          filePath: '/UserController.java',
+          metadata: { httpMethod: 'GET', path: '/api/users/{id}', returnType: 'UserResponse', paramTypes: [] },
+        },
+        {
+          id: 'spring-dto:/dto/UserResponse.java',
+          kind: 'spring-dto',
+          label: 'UserResponse',
+          filePath: '/dto/UserResponse.java',
+          metadata: { className: 'UserResponse', fields: [{ name: 'id', typeRef: 'Long' }] },
+        },
+      ],
+      [],
+    );
+    new DtoFlowLinker().link(graph);
+
+    const noisy = graph.getAllEdges().filter((e) => {
+      if (e.kind !== 'dto-flows') return false;
+      const src = graph.getNode(e.source);
+      const tgt = graph.getNode(e.target);
+      return src?.kind === 'spring-endpoint' && tgt?.kind === 'spring-endpoint';
+    });
+    expect(noisy).toHaveLength(0);
   });
 });
 
@@ -179,17 +221,17 @@ describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
       [
         // Backend DTO
         {
-          id: 'spring-service:/dto/OrderResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/OrderResponse.java',
+          kind: 'spring-dto',
           label: 'OrderResponse',
           filePath: '/dto/OrderResponse.java',
           metadata: {
             className: 'OrderResponse',
             isDto: true,
             fields: [
-              { name: 'orderId', type: 'Long' },
-              { name: 'customerName', type: 'String' },
-              { name: 'total', type: 'BigDecimal' },
+              { name: 'orderId', typeRef: 'Long' },
+              { name: 'customerName', typeRef: 'String' },
+              { name: 'total', typeRef: 'BigDecimal' },
             ],
           },
         },
@@ -280,16 +322,16 @@ describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/OrderResponse.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/OrderResponse.java',
+          kind: 'spring-dto',
           label: 'OrderResponse',
           filePath: '/dto/OrderResponse.java',
           metadata: {
             className: 'OrderResponse',
             isDto: true,
             fields: [
-              { name: 'orderId', type: 'Long' },
-              { name: 'total', type: 'BigDecimal' },
+              { name: 'orderId', typeRef: 'Long' },
+              { name: 'total', typeRef: 'BigDecimal' },
             ],
           },
         },
@@ -333,12 +375,12 @@ describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
     expect(chainEdges.length).toBe(2);
     const frontBack = chainEdges.find(e => (e.metadata as any).tier === 'frontend-backend')!;
     expect(frontBack.source).toBe('ts-module:/src/types/order.ts');
-    expect(frontBack.target).toBe('spring-service:/dto/OrderResponse.java');
+    expect(frontBack.target).toBe('spring-dto:/dto/OrderResponse.java');
     expect(Array.isArray((frontBack.metadata as any).entries)).toBe(true);
     expect((frontBack.metadata as any).entries.length).toBe(2);
 
     const backMap = chainEdges.find(e => (e.metadata as any).tier === 'backend-mapper')!;
-    expect(backMap.source).toBe('spring-service:/dto/OrderResponse.java');
+    expect(backMap.source).toBe('spring-dto:/dto/OrderResponse.java');
     expect(backMap.target).toBe('mybatis-statement:com.example.mapper.OrderMapper.findById');
   });
 
@@ -346,14 +388,14 @@ describe('DtoFlowLinker.buildFieldChains — 3-tier field linkage', () => {
     const graph = buildGraph(
       [
         {
-          id: 'spring-service:/dto/PingDTO.java',
-          kind: 'spring-service',
+          id: 'spring-dto:/dto/PingDTO.java',
+          kind: 'spring-dto',
           label: 'PingDTO',
           filePath: '/dto/PingDTO.java',
           metadata: {
             className: 'PingDTO',
             isDto: true,
-            fields: [{ name: 'msg', type: 'String' }],
+            fields: [{ name: 'msg', typeRef: 'String' }],
           },
         },
       ],

@@ -26,7 +26,10 @@ const traceTree = ref<TraceNode[]>([]);
 const affectedComponents = ref<GraphNode[]>([]);
 
 const REVERSE_SEMANTIC = new Set(['api-serves', 'mybatis-maps']);
-const SKIP_KINDS = new Set(['dto-flows']);
+// `api-implements` is the reverse alias of `api-serves` (Phase 7a-1) — the
+// REVERSE_SEMANTIC handling already pulls the controller→endpoint edge into
+// the trace; counting both kinds would duplicate every endpoint child.
+const SKIP_KINDS = new Set(['dto-flows', 'api-implements']);
 
 watch(selectedTableId, (tableId) => {
   if (!tableId || !graphStore.graphData) {

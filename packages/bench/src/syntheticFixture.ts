@@ -59,6 +59,7 @@ const DEFAULT_KIND_RATIOS: Record<NodeKind, number> = {
   'spring-controller': 0.04,
   'spring-endpoint': 0.10,
   'spring-service': 0.05,
+  'spring-dto': 0.03,
   'mybatis-mapper': 0.02,
   'mybatis-statement': 0.04,
   'db-table': 0.02,

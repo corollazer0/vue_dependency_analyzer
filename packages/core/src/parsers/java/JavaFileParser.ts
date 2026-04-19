@@ -1,4 +1,13 @@
-import type { FileParser, ParseResult, AnalysisConfig, GraphNode, GraphEdge, ParseError } from '../../graph/types.js';
+import type {
+  FileParser,
+  ParseResult,
+  AnalysisConfig,
+  GraphNode,
+  GraphEdge,
+  ParseError,
+  SpringDtoField,
+  SpringDtoNodeMetadata,
+} from '../../graph/types.js';
 import path from 'path';
 
 export class JavaFileParser implements FileParser {
@@ -42,7 +51,7 @@ export class JavaFileParser implements FileParser {
 
         for (const ep of endpoints) {
           nodes.push(ep.node);
-          edges.push(ep.edge);
+          edges.push(...ep.edges);
         }
       } else if (isService || isRepository || isMapper || isConfiguration || isComponent) {
         nodes.push({
@@ -63,22 +72,39 @@ export class JavaFileParser implements FileParser {
         }
       }
 
-      // Detect DTO classes and extract their fields
+      // Detect DTO classes and emit a first-class `spring-dto` node
+      // (Phase 7a-2). Pure DTOs no longer ride on a `spring-service` node;
+      // hybrid classes (controller/service whose name happens to end in a
+      // DTO suffix) get a sibling spring-dto node so consumers find DTO
+      // metadata in one well-known place.
       const isDto = /(?:DTO|Dto|Request|Response|VO|Summary|Detail)$/.test(className);
       if (isDto) {
-        const fields = extractDtoFields(content);
-        // If this class wasn't already added as a controller/service, add it as a spring-service with DTO metadata
-        const existingNode = nodes.find(n => n.label === className);
-        if (existingNode) {
-          existingNode.metadata.isDto = true;
-          existingNode.metadata.fields = fields;
-        } else {
+        const dtoFields = extractDtoFields(content);
+        const dtoNodeId = `spring-dto:${filePath}`;
+        if (!nodes.some(n => n.id === dtoNodeId)) {
+          // Map the loose extractor output onto the frozen SpringDtoField
+          // shape (Phase 7a-12). Phase 8 SignatureStore reads this directly.
+          const fields: SpringDtoField[] = dtoFields.map((f) => ({
+            name: f.name,
+            typeRef: f.type,
+            ...(f.nullable !== undefined ? { nullable: f.nullable } : {}),
+            ...(f.jsonName !== undefined ? { jsonName: f.jsonName } : {}),
+          }));
+          const sourceRef = { filePath, line: 1, column: 0 };
+          const metadata: SpringDtoNodeMetadata = {
+            fqn,
+            fields,
+            sourceRef,
+            className,
+            packageName,
+          };
           nodes.push({
-            id: `spring-service:${filePath}`,
-            kind: 'spring-service',
+            id: dtoNodeId,
+            kind: 'spring-dto',
             label: className,
             filePath,
-            metadata: { className, packageName, fqn, isDto: true, fields },
+            metadata,
+            loc: sourceRef,
           });
         }
       }
@@ -159,7 +185,7 @@ function extractClassInfo(content: string, filePath: string): ClassInfo | null {
 
 interface EndpointInfo {
   node: GraphNode;
-  edge: GraphEdge;
+  edges: GraphEdge[];
 }
 
 function extractEndpoints(content: string, filePath: string, basePath: string, controllerNodeId: string): EndpointInfo[] {
@@ -223,13 +249,25 @@ function addEndpoint(
       metadata: { httpMethod, path: endpointPath, handlerMethod, returnType, paramTypes },
       loc: { filePath, line, column: 0 },
     },
-    edge: {
-      id: `${controllerNodeId}:api-serves:${nodeId}`,
-      source: controllerNodeId,
-      target: nodeId,
-      kind: 'api-serves',
-      metadata: { httpMethod, path: endpointPath },
-    },
+    edges: [
+      {
+        id: `${controllerNodeId}:api-serves:${nodeId}`,
+        source: controllerNodeId,
+        target: nodeId,
+        kind: 'api-serves',
+        metadata: { httpMethod, path: endpointPath },
+      },
+      // Reverse alias: lets a forward DFS from spring-endpoint reach back
+      // into the controller (and onward to services/mappers/db-table).
+      // Phase 7a-1 — Pathfinder direction fix.
+      {
+        id: `${nodeId}:api-implements:${controllerNodeId}`,
+        source: nodeId,
+        target: controllerNodeId,
+        kind: 'api-implements',
+        metadata: { httpMethod, path: endpointPath },
+      },
+    ],
   });
 }
 

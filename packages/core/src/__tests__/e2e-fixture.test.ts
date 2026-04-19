@@ -275,12 +275,22 @@ describe.skipIf(!hasTestProject)('E2E: Full test-project analysis', () => {
 
   // === DTO nodes ===
   it('should detect DTO nodes with fields', () => {
-    const dtos = graph.getAllNodes().filter(n =>
-      n.kind === 'spring-service' && n.metadata.isDto
-    );
+    // Phase 7a-2 — DTOs are first-class spring-dto kind now.
+    const dtos = graph.getAllNodes().filter(n => n.kind === 'spring-dto');
     expect(dtos.length).toBeGreaterThan(0);
     const withFields = dtos.filter(d => (d.metadata.fields as any[])?.length > 0);
     expect(withFields.length).toBeGreaterThan(0);
+  });
+
+  // === Phase 7a-2 gate: no noisy endpoint↔endpoint dto-flows edges ===
+  it('should not emit dto-flows edges between two spring-endpoint nodes', () => {
+    const offenders = graph.getAllEdges().filter(e => {
+      if (e.kind !== 'dto-flows') return false;
+      const src = graph.getNode(e.source);
+      const tgt = graph.getNode(e.target);
+      return src?.kind === 'spring-endpoint' && tgt?.kind === 'spring-endpoint';
+    });
+    expect(offenders).toHaveLength(0);
   });
 
   // === API call sites ===
@@ -389,6 +399,103 @@ describe.skipIf(!hasTestProject)('E2E: Full test-project analysis', () => {
 
       // At least 70% should be resolved (unresolved are framework beans)
       expect(resolved.length / springInjects.length).toBeGreaterThan(0.7);
+    });
+  });
+
+  // === Phase 7a PR-A gate (Pathfinder direction) ===
+  //
+  // The legacy `api-serves` edge only flowed controller → endpoint, so a
+  // forward DFS from a vue-component dead-ended at the spring-endpoint
+  // and could never reach the controller / services / db-table downstream
+  // (the user reproduction was `RegisterPage → db-table:users` returning
+  // 0 paths). 7a-1 introduced the `api-implements` reverse alias.
+  //
+  // Picking specific seed pairs (vs. iterating N×M) keeps the gate
+  // deterministic and bounded — `findPaths` is O(branch^maxDepth) on
+  // hub-heavy graphs, so accidental long DFS bursts would dwarf the
+  // entire suite.
+  describe('Phase 7a PR-A: Pathfinder forward reach (api-implements)', () => {
+    function pickSeedPair(): { vue: string; endpoint: string; controller: string } | null {
+      // Walk api-call edges (source = file node, target = api-call-site or
+      // spring-endpoint depending on stage) to find a vue-component that
+      // ultimately points at a spring-endpoint whose controller exists.
+      for (const apiCall of graph.getAllEdges()) {
+        if (apiCall.kind !== 'api-call') continue;
+        const src = graph.getNode(apiCall.source);
+        const tgt = graph.getNode(apiCall.target);
+        if (src?.kind !== 'vue-component') continue;
+        if (tgt?.kind !== 'spring-endpoint') {
+          // Two-hop case: vue-component → api-call-site → spring-endpoint
+          if (tgt?.kind !== 'api-call-site') continue;
+          const second = graph.getOutEdges(tgt.id).find(
+            e => e.kind === 'api-call' && graph.getNode(e.target)?.kind === 'spring-endpoint',
+          );
+          if (!second) continue;
+          const ep = second.target;
+          const impl = graph.getOutEdges(ep).find(e => e.kind === 'api-implements');
+          if (!impl) continue;
+          return { vue: src.id, endpoint: ep, controller: impl.target };
+        }
+        const impl = graph.getOutEdges(tgt.id).find(e => e.kind === 'api-implements');
+        if (!impl) continue;
+        return { vue: src.id, endpoint: tgt.id, controller: impl.target };
+      }
+      return null;
+    }
+
+    it('vue-component → spring-controller has at least one forward path', () => {
+      const seed = pickSeedPair();
+      expect(seed, 'no vue→endpoint→controller seed in fixture').not.toBeNull();
+      const paths = findPaths(graph, seed!.vue, seed!.controller, 8, );
+      expect(paths.length).toBeGreaterThan(0);
+    });
+
+    it('vue-component → db-table has at least one forward path', () => {
+      const apiCallSources = new Set(
+        graph.getAllEdges()
+          .filter(e => e.kind === 'api-call')
+          .map(e => e.source),
+      );
+      const vueComponents = graph.getAllNodes().filter(
+        n => n.kind === 'vue-component' && apiCallSources.has(n.id),
+      );
+      const tables = graph.getAllNodes().filter(n => n.kind === 'db-table');
+      expect(tables.length).toBeGreaterThan(0);
+
+      // Cap at the first 5 vue-components × all tables — earlier runs
+      // hit a positive case in <10ms; the cap just bounds the worst case.
+      let totalPaths = 0;
+      const sample = vueComponents.slice(0, 5);
+      outer: for (const vc of sample) {
+        for (const t of tables) {
+          const paths = findPaths(graph, vc.id, t.id, 14);
+          totalPaths += paths.length;
+          if (totalPaths > 0) break outer;
+        }
+      }
+      expect(totalPaths).toBeGreaterThan(0);
+    });
+
+    it('the seed vue → controller path traverses api-implements', () => {
+      // Sanity: api-implements is the only forward edge linking
+      // spring-endpoint to spring-controller. Any path including a
+      // controller must therefore include the alias.
+      const seed = pickSeedPair();
+      expect(seed).not.toBeNull();
+      const paths = findPaths(graph, seed!.vue, seed!.controller, 8);
+      expect(paths.length).toBeGreaterThan(0);
+      for (const p of paths) {
+        for (let i = 0; i < p.length - 1; i++) {
+          const src = graph.getNode(p[i]);
+          const tgt = graph.getNode(p[i + 1]);
+          if (src?.kind === 'spring-endpoint' && tgt?.kind === 'spring-controller') {
+            const edge = graph.getOutEdges(p[i]).find(
+              e => e.target === p[i + 1] && e.kind === 'api-implements',
+            );
+            expect(edge, `expected api-implements between ${p[i]} → ${p[i + 1]}`).toBeDefined();
+          }
+        }
+      }
     });
   });
 });

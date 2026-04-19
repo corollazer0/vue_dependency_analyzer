@@ -241,6 +241,52 @@ function extractHttpMethod(callText: string): string {
 function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]): void {
   let match: RegExpExecArray | null;
 
+  // Step 0 (Phase 7a-6): build a positional index of `path: '...'` and
+  // `name: '...'` literals so each route-renders edge can carry the route
+  // path and named-route id alongside the component reference.
+  type RouteFieldHit = { value: string; index: number };
+  const pathHits: RouteFieldHit[] = [];
+  const nameHits: RouteFieldHit[] = [];
+  const pathFieldPattern = /\bpath\s*:\s*['"]([^'"]+)['"]/g;
+  while ((match = pathFieldPattern.exec(content)) !== null) {
+    pathHits.push({ value: match[1], index: match.index });
+  }
+  const nameFieldPattern = /\bname\s*:\s*['"]([^'"]+)['"]/g;
+  while ((match = nameFieldPattern.exec(content)) !== null) {
+    nameHits.push({ value: match[1], index: match.index });
+  }
+  // For a `component:` at offset C, pick the closest preceding `path:` (the
+  // route literal's path is always declared before its component). Then a
+  // `name:` only counts if it sits *between* that path and the component —
+  // otherwise the previous route's name would leak onto an unnamed route.
+  const PROXIMITY = 400;
+  function nearestPathBefore(at: number): { value: string; index: number } | undefined {
+    let best: { value: string; index: number } | undefined;
+    for (const h of pathHits) {
+      if (h.index >= at) break;
+      if (at - h.index <= PROXIMITY) best = h;
+    }
+    return best;
+  }
+  function nameBetween(after: number, before: number): string | undefined {
+    let last: string | undefined;
+    for (const h of nameHits) {
+      if (h.index <= after) continue;
+      if (h.index >= before) break;
+      last = h.value;
+    }
+    return last;
+  }
+  function routeMeta(componentIdx: number): { routePath?: string; routeName?: string } {
+    const path = nearestPathBefore(componentIdx);
+    if (!path) return {};
+    const name = nameBetween(path.index, componentIdx);
+    return {
+      routePath: path.value,
+      ...(name !== undefined ? { routeName: name } : {}),
+    };
+  }
+
   // Step 1: Build alias map from "const Xxx = () => import('...')" declarations
   const aliasToPath = new Map<string, string>();
   const aliasPattern = /const\s+([A-Z]\w+)\s*=\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/g;
@@ -259,7 +305,11 @@ function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]):
       source: nodeId,
       target: `unresolved:${importPath}`,
       kind: 'route-renders',
-      metadata: { importPath, isLazy: true },
+      metadata: {
+        importPath,
+        isLazy: true,
+        ...routeMeta(match.index),
+      },
     });
   }
 
@@ -268,6 +318,7 @@ function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]):
   while ((match = staticPattern.exec(content)) !== null) {
     const componentName = match[1];
     const aliasPath = aliasToPath.get(componentName);
+    const meta = routeMeta(match.index);
 
     if (aliasPath && !handledPaths.has(aliasPath)) {
       // Alias resolves to a lazy import — emit as unresolved with the real path
@@ -277,7 +328,12 @@ function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]):
         source: nodeId,
         target: `unresolved:${aliasPath}`,
         kind: 'route-renders',
-        metadata: { importPath: aliasPath, isLazy: true, alias: componentName },
+        metadata: {
+          importPath: aliasPath,
+          isLazy: true,
+          alias: componentName,
+          ...meta,
+        },
       });
     } else if (!aliasPath) {
       // Truly static (imported at top level), keep component: prefix
@@ -286,7 +342,10 @@ function parseRouteRenders(content: string, nodeId: string, edges: GraphEdge[]):
         source: nodeId,
         target: `component:${componentName}`,
         kind: 'route-renders',
-        metadata: { componentName },
+        metadata: {
+          componentName,
+          ...meta,
+        },
       });
     }
     // If aliasPath is already handled, skip (dedup)
