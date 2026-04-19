@@ -131,6 +131,16 @@ export interface RuleViolation {
   edgeIds: string[];
 }
 
+export interface FeatureSliceConfig {
+  /** Stable feature id — used in URL and storage. */
+  id: string;
+  /** Repo-relative entry file (e.g. `src/pages/Checkout.vue`). */
+  entry: string;
+  /** Optional human description shown in the UI. */
+  description?: string;
+  tags?: string[];
+}
+
 export interface AnalysisConfig {
   vueRoot?: string;
   springBootRoot?: string;
@@ -142,6 +152,8 @@ export interface AnalysisConfig {
   exclude?: string[];
   nativeBridges?: string[];
   rules?: ArchitectureRule[];
+  /** Phase 9-1 — F4 Feature Slice declarations. */
+  features?: FeatureSliceConfig[];
 }
 
 export interface GraphMetadata {

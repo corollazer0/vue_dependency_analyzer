@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync, readdirSync, statSync } from 'fs';
 import { resolve, join, relative, parse as pathParse } from 'path';
-import type { AnalysisConfig, ServiceConfig } from '@vda/core';
+import type { AnalysisConfig, ServiceConfig, FeatureSliceConfig } from '@vda/core';
 
 export async function initCommand(dir: string): Promise<void> {
   const projectRoot = resolve(dir);
@@ -61,6 +61,21 @@ export async function initCommand(dir: string): Promise<void> {
   if (!vueRoot && springRoots.length === 0) {
     console.log('   ⚠️  No Vue or Spring Boot project detected.');
     console.log('   Creating a minimal config. Edit .vdarc.json to set paths.\n');
+  }
+
+  // Phase 9-2 — heuristic features[] from router files.
+  if (vueRoot) {
+    const features = heuristicFeaturesFromRouter(vueRoot);
+    if (features.length > 0) {
+      config.features = features;
+      console.log(`   ✅ Heuristic features (${features.length}) — review before commit:`);
+      for (const f of features) console.log(`      - ${f.id}: ${f.entry}`);
+    }
+  }
+  if (services.length > 1) {
+    console.log('');
+    console.log('   ⚠️  MSA 환경 감지: F10 미구현 상태에서 heuristic feature 정확도 < 50% 예상.');
+    console.log('       수동 검토 강력 권장. 각 feature 의 entry 가 도메인 경계와 맞는지 확인하세요.');
   }
 
   // Write config
@@ -244,6 +259,86 @@ function findUp(filename: string, fromDir: string): string | null {
     dir = join(dir, '..');
   }
   return null;
+}
+
+// Phase 9-2 helper — pull `path: '...'` + `component: …` pairs from the
+// router file and propose one feature per unique top-level path segment.
+// Always tagged with `// review: heuristic` in the description so the
+// user knows this needs hand-curation (especially in MSA setups, where
+// router-based feature partitioning is meaningless on the backend).
+function heuristicFeaturesFromRouter(vueRoot: string): FeatureSliceConfig[] {
+  const candidates = [
+    join(vueRoot, 'router', 'index.ts'),
+    join(vueRoot, 'router', 'index.js'),
+    join(vueRoot, 'router.ts'),
+    join(vueRoot, 'router.js'),
+    join(vueRoot, 'routes.ts'),
+    join(vueRoot, 'routes.js'),
+  ];
+  const routerPath = candidates.find(p => existsSync(p));
+  if (!routerPath) return [];
+
+  let content: string;
+  try {
+    content = readFileSync(routerPath, 'utf-8');
+  } catch {
+    return [];
+  }
+
+  // path -> { aliasName | inlineImport }
+  const aliasToImport = new Map<string, string>();
+  const aliasRe = /const\s+([A-Z]\w+)\s*=\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = aliasRe.exec(content)) !== null) {
+    aliasToImport.set(m[1], m[2]);
+  }
+
+  // Pair `path: '...'` with the closest following `component: …` to build
+  // (path, importPath) tuples.
+  const pathHits: Array<{ path: string; index: number }> = [];
+  const pathRe = /\bpath\s*:\s*['"]([^'"]+)['"]/g;
+  while ((m = pathRe.exec(content)) !== null) {
+    pathHits.push({ path: m[1], index: m.index });
+  }
+
+  const tuples: Array<{ path: string; importPath: string }> = [];
+  for (const ph of pathHits) {
+    // window: 600 chars after path: — covers `meta: { … }` + the component line.
+    const window = content.slice(ph.index, ph.index + 600);
+    let importPath: string | undefined;
+    const inlineLazy = window.match(/component\s*:\s*\(\s*\)\s*=>\s*import\(\s*['"]([^'"]+)['"]\s*\)/);
+    if (inlineLazy) importPath = inlineLazy[1];
+    if (!importPath) {
+      const stat = window.match(/component\s*:\s*([A-Z]\w+)/);
+      if (stat) importPath = aliasToImport.get(stat[1]);
+    }
+    if (importPath) tuples.push({ path: ph.path, importPath });
+  }
+
+  // Group by top-level path segment ("/checkout/foo" → "checkout").
+  // First entry per segment wins as the feature entry.
+  const features: FeatureSliceConfig[] = [];
+  const seenIds = new Set<string>();
+  for (const t of tuples) {
+    const segments = t.path.split('/').filter(Boolean);
+    if (segments.length === 0) continue;
+    const id = segments[0]
+      .replace(/[^A-Za-z0-9_-]/g, '-')
+      .toLowerCase();
+    if (!id || seenIds.has(id)) continue;
+    seenIds.add(id);
+    // Resolve alias-relative paths back to vueRoot-relative for the config.
+    const importPath = t.importPath
+      .replace(/^@\//, '')
+      .replace(/^~\//, '')
+      .replace(/^\.\//, '');
+    features.push({
+      id,
+      entry: importPath,
+      description: '// review: heuristic — derived from router path segment',
+    });
+  }
+  return features;
 }
 
 function safeReaddir(dir: string): string[] {

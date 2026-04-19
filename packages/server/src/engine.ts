@@ -848,6 +848,71 @@ export class AnalysisEngine {
     return { baseline, found: true, report: { changes: filtered, byCode } };
   }
 
+  /**
+   * Phase 9-3 — F4 Feature Slice.
+   *
+   * Reuses Phase 7b-1's `reachableFromEntrypoints` (with the entry
+   * file's nodes seeded as the entrypoint) so the reachability rules
+   * (skipping `dto-flows` and `api-implements`) match the rest of
+   * the analyzer surface.
+   */
+  async getFeatureSlice(featureId: string): Promise<{
+    feature: { id: string; entry: string; description?: string; tags?: string[] } | null;
+    nodes: any[];
+    edges: any[];
+  } | null> {
+    const features = this.config.features ?? [];
+    const feature = features.find((f) => f.id === featureId);
+    if (!feature) return null;
+    const { reachableFromEntrypoints } = await import('@vda/core');
+    const entryAbs = resolve(this.config.projectRoot, feature.entry);
+    const entryNodes = this.graph.getNodesByFile(entryAbs);
+    if (entryNodes.length === 0) {
+      return { feature, nodes: [], edges: [] };
+    }
+    const eps = entryNodes.map((n) => ({ node: n, reason: 'app-entry' as const }));
+    const reachable = reachableFromEntrypoints(this.graph, eps);
+    const nodes = [];
+    const edges = [];
+    for (const id of reachable) {
+      const n = this.graph.getNode(id);
+      if (n) nodes.push(n);
+    }
+    for (const e of this.graph.edgesIter()) {
+      if (reachable.has(e.source) && reachable.has(e.target)) {
+        edges.push(e);
+      }
+    }
+    return { feature, nodes, edges };
+  }
+
+  /** Phase 9-6 — feature intersection helper. */
+  async getFeatureIntersections(): Promise<{
+    pairs: Array<{ a: string; b: string; sharedNodeIds: string[] }>;
+  }> {
+    const features = this.config.features ?? [];
+    const slices = new Map<string, Set<string>>();
+    for (const f of features) {
+      const slice = await this.getFeatureSlice(f.id);
+      if (!slice) continue;
+      slices.set(f.id, new Set(slice.nodes.map((n: any) => n.id)));
+    }
+    const pairs: Array<{ a: string; b: string; sharedNodeIds: string[] }> = [];
+    const ids = [...slices.keys()];
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        const a = ids[i];
+        const b = ids[j];
+        const setA = slices.get(a)!;
+        const setB = slices.get(b)!;
+        const shared: string[] = [];
+        for (const id of setA) if (setB.has(id)) shared.push(id);
+        if (shared.length > 0) pairs.push({ a, b, sharedNodeIds: shared });
+      }
+    }
+    return { pairs };
+  }
+
   getLayerCompliance(): {
     layers: Array<{ name: string; kinds: string[]; nodeIds: string[] }>;
     matrix: Array<{

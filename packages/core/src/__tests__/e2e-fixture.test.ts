@@ -402,6 +402,53 @@ describe.skipIf(!hasTestProject)('E2E: Full test-project analysis', () => {
     });
   });
 
+  // === Phase 9a gate: F4 Feature Slice ===
+  describe('Phase 9a: F4 Feature Slice (forward reachability from entry file)', () => {
+    it('renders a slice with at least 1 node for each declared feature', async () => {
+      const { collectEntrypoints, reachableFromEntrypoints } = await import('../index.js');
+      const features = (config as any).features as Array<{ id: string; entry: string }> | undefined;
+      expect(Array.isArray(features) && features!.length >= 3, '.vdarc.json features[] should declare at least 3 features').toBe(true);
+      void collectEntrypoints; // sanity: import works
+      for (const f of features!) {
+        const entryAbs = resolve(testProjectDir, f.entry);
+        const entryNodes = graph.getNodesByFile(entryAbs);
+        expect(entryNodes.length, `expected at least one graph node for ${f.id} entry ${f.entry}`).toBeGreaterThan(0);
+        const eps = entryNodes.map(n => ({ node: n, reason: 'app-entry' as const }));
+        const reachable = reachableFromEntrypoints(graph, eps);
+        expect(reachable.size, `feature ${f.id} should reach at least its entry`).toBeGreaterThanOrEqual(1);
+      }
+    });
+
+    it('cross-feature intersections expose at least 1 shared node', async () => {
+      const { reachableFromEntrypoints } = await import('../index.js');
+      const features = (config as any).features as Array<{ id: string; entry: string }>;
+      const slices = new Map<string, Set<string>>();
+      for (const f of features) {
+        const entryAbs = resolve(testProjectDir, f.entry);
+        const entryNodes = graph.getNodesByFile(entryAbs);
+        if (entryNodes.length === 0) continue;
+        const eps = entryNodes.map(n => ({ node: n, reason: 'app-entry' as const }));
+        slices.set(f.id, reachableFromEntrypoints(graph, eps));
+      }
+      // Look for at least one cross-feature pair that shares a node.
+      let foundShared = false;
+      const ids = [...slices.keys()];
+      outer: for (let i = 0; i < ids.length; i++) {
+        for (let j = i + 1; j < ids.length; j++) {
+          const a = slices.get(ids[i])!;
+          const b = slices.get(ids[j])!;
+          for (const id of a) {
+            if (b.has(id)) {
+              foundShared = true;
+              break outer;
+            }
+          }
+        }
+      }
+      expect(foundShared, 'expected at least one shared node across features (e.g. shared store / API client)').toBe(true);
+    });
+  });
+
   // === Phase 7a PR-A gate (Pathfinder direction) ===
   //
   // The legacy `api-serves` edge only flowed controller → endpoint, so a
