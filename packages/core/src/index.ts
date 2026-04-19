@@ -37,6 +37,15 @@ export {
   type Waiver,
   type WaiverMatchInput,
 } from './analyzers/WaiverEngine.js';
+export {
+  compileLayerRules,
+  mergeWithLayerRules,
+  type LayerDefinition,
+  type LayerRule,
+  type LayerDslConfig,
+  type CompiledLayerRules,
+  type DroppedRule,
+} from './analyzers/LayerDsl.js';
 export { calculateComplexity, findHubs } from './analyzers/ComplexityScorer.js';
 export type { ComplexityScore } from './analyzers/ComplexityScorer.js';
 export { analyzeImpact } from './analyzers/ImpactAnalyzer.js';
