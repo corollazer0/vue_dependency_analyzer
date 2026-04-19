@@ -643,6 +643,26 @@ describe('Server API', () => {
       expect(emptyBody.paths).toEqual([]);
     });
 
+    // Phase 10-6 — file-tree picker endpoint.
+    it('GET /api/files/tree returns repo-relative entries with depth=1 by default', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/files/tree' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body).toHaveProperty('root');
+      expect(body).toHaveProperty('entries');
+      expect(Array.isArray(body.entries)).toBe(true);
+      // Some fixtures live in projectRoot — at least one entry expected.
+      expect(body.entries.length).toBeGreaterThan(0);
+      // Depth=1: dir entries should not carry `children`.
+      const dirs = body.entries.filter((e: any) => e.isDir);
+      for (const d of dirs) expect(d).not.toHaveProperty('children');
+    });
+
+    it('GET /api/files/tree?root=… stays inside projectRoot (path-jail)', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/files/tree?root=' + encodeURIComponent('../../../') });
+      expect(res.statusCode).toBe(400);
+    });
+
     // Phase 10-1 — contract freeze: /api/graph/paths?dir=reverse must return the
     // same shape as forward (paths[][], count: number) so clients can safely opt-in
     // by adding the `dir` parameter without changing their decode path.
