@@ -158,5 +158,16 @@ describe('VueSfcParser', () => {
       expect(storeNames).toContain('useUserStore');
       expect(storeNames).toContain('useCartStore');
     });
+
+    it('attaches subscribedFields to the matching uses-store edge (Phase 7a-8)', () => {
+      const storeEdges = result.edges.filter(e => e.kind === 'uses-store');
+      const userEdge = storeEdges.find(e => (e.metadata as any).storeName === 'useUserStore')!;
+      const cartEdge = storeEdges.find(e => (e.metadata as any).storeName === 'useCartStore')!;
+      expect(userEdge).toBeDefined();
+      expect(cartEdge).toBeDefined();
+      // sorted set form — order-stable across runs
+      expect((userEdge.metadata as any).subscribedFields).toEqual(['isLoggedIn', 'role', 'userName']);
+      expect((cartEdge.metadata as any).subscribedFields).toEqual(['items', 'totalPrice']);
+    });
   });
 });
