@@ -1,0 +1,73 @@
+# Phase 11-11 — F12 nightly architecture snapshot.
+#
+# Runs `vda snapshot` against test-project once per day (UTC midnight)
+# and uploads the resulting snapshots.sqlite as an artifact. Phase 11-10
+# TimeTravelView consumes /api/analysis/snapshots — operators can drop
+# the artifact into .vda-cache/ to populate the slider locally.
+#
+# `workflow_dispatch` lets a maintainer kick a snapshot ad-hoc.
+
+name: vda-snapshot-nightly
+
+on:
+  schedule:
+    - cron: "0 0 * * *"  # 00:00 UTC daily
+  workflow_dispatch:
+    inputs:
+      label:
+        description: "Snapshot label (default: today YYYY-MM-DD)"
+        required: false
+        default: ""
+
+concurrency:
+  group: vda-snapshot-nightly
+  cancel-in-progress: false  # let prior runs finish — they're independent days
+
+permissions:
+  contents: read
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          # Fetch full history so the future Phase 11-2 git-blame stamp
+          # is accurate (no shallow boundary).
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI + core
+        run: npx turbo run build --filter=@vda/cli
+
+      - name: Self-test workflow syntax with act --dryrun (graceful skip)
+        # Same Phase 10-9 hook as vda-pr-report.yml: catches yaml-level
+        # regressions locally; no-op in CI without act.
+        run: scripts/validate-workflow.sh vda-snapshot-nightly
+
+      - name: Run snapshot
+        run: |
+          set -eo pipefail
+          LABEL="${{ inputs.label }}"
+          if [ -z "$LABEL" ]; then
+            LABEL=$(date -u +%Y-%m-%d)
+          fi
+          npx -w @vda/cli vda snapshot ./test-project --label "$LABEL" --no-cache
+          # Surface the file size so future runs can spot the R3 risk
+          # (sqlite size growth) early.
+          ls -lh ./test-project/.vda-cache/snapshots.sqlite
+
+      - name: Upload snapshot artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vda-snapshot-${{ github.run_id }}
+          path: test-project/.vda-cache/snapshots.sqlite
+          retention-days: 90

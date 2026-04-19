@@ -40,6 +40,15 @@ export {
   type SignatureStoreOptions,
 } from './engine/SignatureStore.js';
 export {
+  ArchSnapshotStore,
+  diffSnapshots,
+  type ArchSnapshot,
+  type ArchSnapshotByKind,
+  type ArchSnapshotSummary,
+  type ArchSnapshotDiff,
+  type ArchSnapshotStoreOptions,
+} from './engine/ArchSnapshotStore.js';
+export {
   detectBreakingChanges,
   type BreakingChange,
   type BreakingChangesReport,
@@ -88,6 +97,8 @@ export type { CommunityDetectionOptions, CommunityResult } from './analyzers/Com
 export { parseGitDiff, getUncommittedFiles } from './git/GitDiffParser.js';
 export { analyzeChangeImpact } from './git/ChangeImpactAnalyzer.js';
 export type { ChangeImpact } from './git/ChangeImpactAnalyzer.js';
+export { readGitBlame, repoRelative, blameLookupKey } from './git/GitBlameReader.js';
+export type { GitBlameRecord, GitBlameMap } from './git/GitBlameReader.js';
 
 // Engine
 export { ParallelParser, parseFile } from './engine/ParallelParser.js';

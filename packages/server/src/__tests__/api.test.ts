@@ -643,6 +643,27 @@ describe('Server API', () => {
       expect(emptyBody.paths).toEqual([]);
     });
 
+    // Phase 11-9 — architecture snapshot listing + diff routes.
+    it('GET /api/analysis/snapshots returns a snapshots[] array', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/snapshots' });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(Array.isArray(body.snapshots)).toBe(true);
+    });
+
+    it('GET /api/analysis/diff requires both from and to (400 otherwise)', async () => {
+      const res = await fastify.inject({ method: 'GET', url: '/api/analysis/diff' });
+      expect(res.statusCode).toBe(400);
+    });
+
+    it('GET /api/analysis/diff returns 404 when a snapshot label is missing', async () => {
+      const res = await fastify.inject({
+        method: 'GET',
+        url: '/api/analysis/diff?from=phantom-a&to=phantom-b',
+      });
+      expect(res.statusCode).toBe(404);
+    });
+
     // Phase 10-6 — file-tree picker endpoint.
     it('GET /api/files/tree returns repo-relative entries with depth=1 by default', async () => {
       const res = await fastify.inject({ method: 'GET', url: '/api/files/tree' });

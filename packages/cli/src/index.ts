@@ -5,6 +5,8 @@ import { serveCommand } from './commands/serve.js';
 import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
 import { lintCommand } from './commands/lint.js';
+import { snapshotCommand } from './commands/snapshot.js';
+import { diffCommand } from './commands/diff.js';
 import { impactCommand } from './commands/impact.js';
 import { decommissionCommand } from './commands/decommission.js';
 
@@ -26,6 +28,7 @@ program
   .option('--signatures-only', 'Skip reporting and persist a SignatureStore snapshot only')
   .option('--label <name>', 'Snapshot label for --signatures-only (default: main)')
   .option('--otel-traces <file>', 'Inject p95Ms / errorRate from an OTLP JSON trace export (Phase 9-12)')
+  .option('--with-git-blame', 'Stamp lastTouchedAt/lastAuthor/commitCount/lastCommitSha onto every node (Phase 11-2)')
   .option('--no-cache', 'Disable parse cache')
   .action(analyzeCommand);
 
@@ -72,8 +75,30 @@ program
   .option('--config <path>', 'Config file path', '.vdarc.json')
   .option('--json', 'Output as JSON')
   .option('--patterns', 'Run anti-pattern classifier instead of architecture rules (Phase 9-10)')
+  .option('--hot-spots', 'List stale (≥90d untouched) high-fan-in nodes (Phase 11-5; needs git history)')
+  .option('--stale-days <n>', 'Hot-spot staleness window in days (default 90)', v => parseInt(v, 10))
+  .option('--min-fan-in <n>', 'Hot-spot minimum fan-in (default 5)', v => parseInt(v, 10))
   .option('--no-cache', 'Disable parse cache')
   .action(lintCommand);
+
+program
+  .command('snapshot')
+  .description('Persist an architecture snapshot to .vda-cache/snapshots.sqlite (Phase 11-7)')
+  .argument('[dir]', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--label <name>', 'Snapshot label (default: today YYYY-MM-DD)')
+  .option('--json', 'Print the persisted snapshot record as JSON')
+  .option('--no-cache', 'Disable parse cache')
+  .action(snapshotCommand);
+
+program
+  .command('diff')
+  .description('Diff two architecture snapshots (Phase 11-8). Range syntax: <from>..<to>')
+  .argument('[range]', 'Snapshot range, e.g. 2026-04-01..2026-04-19')
+  .option('--dir <path>', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--json', 'Print the diff record as JSON')
+  .action((range, options) => diffCommand(options.dir ?? '.', range, options));
 
 program
   .command('init')

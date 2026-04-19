@@ -35,6 +35,20 @@ function tagColor(tag: string): string {
   return '#22c55e';
 }
 
+// Phase 11-3 — relative time helper for "Last touched". Uses native
+// Intl.RelativeTimeFormat — already in the cytoscape-bundle target.
+function formatLastTouched(iso: string): string {
+  const then = new Date(iso).getTime();
+  if (!isFinite(then)) return iso;
+  const ms = Date.now() - then;
+  const day = 86_400_000;
+  const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
+  if (ms < day) return rtf.format(-Math.round(ms / 3_600_000), 'hour');
+  if (ms < 30 * day) return rtf.format(-Math.round(ms / day), 'day');
+  if (ms < 365 * day) return rtf.format(-Math.round(ms / (30 * day)), 'month');
+  return rtf.format(-Math.round(ms / (365 * day)), 'year');
+}
+
 function viewSource(filePath: string, line: number) {
   showSnippet.value = true;
   snippetRef.value?.loadSnippet(filePath, line);
@@ -280,6 +294,32 @@ watch(() => graphStore.selectedNode, (node) => {
              :style="{ background: 'rgba(0,0,0,0.25)', borderLeft: `3px solid ${tagColor(t)}` }">
           <div class="font-mono" :style="{ color: tagColor(t) }">{{ t }}</div>
           <div class="mt-0.5 text-gray-300">{{ antiPatterns?.suggestions?.[t] }}</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Phase 11-3 — Last touched (only when withGitBlame populated metadata). -->
+    <div v-if="(graphStore.selectedNode.metadata as any).lastTouchedAt" class="rounded p-2" style="background: rgba(0,0,0,0.25)">
+      <h3 class="font-semibold text-gray-300 mb-1 text-xs">🕒 Last touched</h3>
+      <div class="grid grid-cols-3 gap-2 text-xs">
+        <div>
+          <div class="text-gray-500">when</div>
+          <div class="font-mono text-white" :title="(graphStore.selectedNode.metadata as any).lastTouchedAt">
+            {{ formatLastTouched((graphStore.selectedNode.metadata as any).lastTouchedAt) }}
+          </div>
+        </div>
+        <div>
+          <div class="text-gray-500">author</div>
+          <div class="font-mono text-white truncate" :title="(graphStore.selectedNode.metadata as any).lastAuthor">
+            {{ (graphStore.selectedNode.metadata as any).lastAuthor || '—' }}
+          </div>
+        </div>
+        <div>
+          <div class="text-gray-500">commits / sha</div>
+          <div class="font-mono text-white">
+            {{ (graphStore.selectedNode.metadata as any).commitCount }} ·
+            <span class="text-gray-400">{{ (graphStore.selectedNode.metadata as any).lastCommitSha }}</span>
+          </div>
         </div>
       </div>
     </div>

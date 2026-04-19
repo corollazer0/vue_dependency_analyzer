@@ -177,6 +177,12 @@ export interface GraphMetadata {
   fileCount: number;
   parseErrors: ParseError[];
   config: AnalysisConfig;
+  /**
+   * Phase 11-2 — set when `runAnalysis({ withGitBlame: true })` ran against
+   * a shallow clone. Surface to UI/CLI so users know `lastTouchedAt = null`
+   * means "not in shallow history" not "never touched".
+   */
+  gitBlameShallow?: boolean;
 }
 
 export interface ParseResult {

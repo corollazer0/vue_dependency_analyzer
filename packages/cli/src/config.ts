@@ -7,6 +7,8 @@ import {
   ParseCache,
   findCircularDependencies,
   findOrphanNodes,
+  readGitBlame,
+  blameLookupKey,
   type AnalysisConfig,
   type ProgressInfo,
 } from '@vda/core';
@@ -70,6 +72,14 @@ export async function runAnalysis(
      * monorepos where parsing dominates but the linker is non-trivial.
      */
     signaturesOnly?: boolean;
+    /**
+     * Phase 11-2 — F8 git blame. When true, runs a single batch `git log`
+     * after parsing and stamps node.metadata.{lastTouchedAt, lastAuthor,
+     * commitCount, lastCommitSha}. Fail-soft when no .git is present.
+     * Plan §3 caps wall-time impact at +15%; actual numbers tracked in
+     * phase11-benchmark.md.
+     */
+    withGitBlame?: boolean;
   },
 ): Promise<AnalysisResult> {
   const graph = new DependencyGraph();
@@ -175,6 +185,30 @@ export async function runAnalysis(
 
     circularDeps = findCircularDependencies(graph);
     orphans = findOrphanNodes(graph).map(n => `${n.kind}: ${n.label}`);
+  }
+
+  // Phase 11-2 — F8 git blame stamp. Single batch git log; fail-soft when no
+  // .git is present. Stamps `lastTouchedAt`/`lastAuthor`/`commitCount`/
+  // `lastCommitSha` onto every node whose filePath sits inside the repo.
+  if (options?.withGitBlame) {
+    const blame = readGitBlame(config.projectRoot);
+    if (blame.byFile.size > 0) {
+      for (const node of graph.getAllNodes()) {
+        if (!node.filePath) continue;
+        const key = blameLookupKey(blame, node.filePath);
+        if (!key) continue;
+        const rec = blame.byFile.get(key);
+        if (!rec) continue;
+        const md = (node.metadata ??= {}) as Record<string, unknown>;
+        md.lastTouchedAt = rec.lastTouchedAt;
+        md.lastAuthor = rec.lastAuthor;
+        md.lastCommitSha = rec.lastCommitSha;
+        md.commitCount = rec.commitCount;
+      }
+      if (blame.shallow) {
+        graph.metadata.gitBlameShallow = true;
+      }
+    }
   }
 
   // Release the persistent worker pool so the CLI process can exit.

@@ -27,6 +27,33 @@ let cy: cytoscape.Core | null = null;
 let overlayLayer: { getCanvas: () => HTMLCanvasElement; clear: (ctx: CanvasRenderingContext2D) => void; setTransform: (ctx: CanvasRenderingContext2D) => void; resetTransform: (ctx: CanvasRenderingContext2D) => void } | null = null;
 let overlayRedraw: (() => void) | null = null;
 const useClusters = ref(false);
+// Phase 11-4 — Heat by recency. When `recencyMode` is true, node fill color
+// is overridden based on `metadata.lastTouchedAt` bucket (7d / 30d / 90d /
+// older / unknown). The kind-shape stays so users still see what kind is
+// what — only the color flips.
+const recencyMode = ref(false);
+const RECENCY_COLORS: Record<string, string> = {
+  '7d': '#ef4444',     // hot — last week
+  '30d': '#f97316',    // recent — last month
+  '90d': '#eab308',    // last quarter
+  'older': '#3b82f6',  // cold — > 90 days
+  'unknown': '#6b7280',// no blame data
+};
+function recencyBucket(lastTouchedAt: unknown): keyof typeof RECENCY_COLORS {
+  if (typeof lastTouchedAt !== 'string') return 'unknown';
+  const t = new Date(lastTouchedAt).getTime();
+  if (!isFinite(t)) return 'unknown';
+  const days = (Date.now() - t) / 86_400_000;
+  if (days <= 7) return '7d';
+  if (days <= 30) return '30d';
+  if (days <= 90) return '90d';
+  return 'older';
+}
+function applyRecencyMode(on: boolean): void {
+  if (!cy) return;
+  if (on) cy.nodes().addClass('vda-recency');
+  else cy.nodes().removeClass('vda-recency');
+}
 // Phase 3-3 — staged layout state. We track the active fcose run so a fresh
 // pipeline (or unmount) can `.stop()` mid-iteration; without this, two overlapping
 // layout requests would fight over node positions and never settle.
@@ -43,6 +70,10 @@ function buildElements() {
       fullLabel: n.label,
       kind: n.kind,
       filePath: n.filePath,
+      // Phase 11-4 — recency bucket; falls back to 'unknown' so the recency
+      // stylesheet selector is total. Recomputed on every refresh because
+      // wall-clock time advances.
+      recencyBucket: recencyBucket((n.metadata as any)?.lastTouchedAt),
     },
   }));
 
@@ -294,6 +325,14 @@ function buildStylesheet(): any[] {
     },
     ...nodeKindStyles,
     ...edgeKindStyles,
+    // Phase 11-4 — Heat by recency. The `.vda-recency` class is added to
+    // every node when the mode is on (see applyRecencyMode below); the
+    // bucket-specific selector then overrides background-color while the
+    // kind-driven shape stays.
+    ...Object.entries(RECENCY_COLORS).map(([bucket, color]) => ({
+      selector: `node.vda-recency[recencyBucket = "${bucket}"]`,
+      style: { 'background-color': color },
+    })),
   ];
 }
 
@@ -528,6 +567,8 @@ function refreshGraph() {
     void runStagedLayout({ preserve: true, fit: false });
   }
   applyOverlays();
+  // Phase 11-4 — newly added nodes need the recency class re-applied.
+  if (recencyMode.value) applyRecencyMode(true);
 }
 
 // Phase 3-3 — 3-stage layout pipeline.
@@ -694,6 +735,12 @@ watch(() => graphStore.highlightedPath, (pathIds) => {
   }
 });
 
+// Phase 11-4 — re-apply the recency class whenever the toggle flips,
+// and after refreshGraph (which rebuilds the DOM nodes — class state is
+// lost on rebuild). The latter is handled inside refreshGraph callers via
+// the watcher on filteredNodes; here we just react to the toggle.
+watch(recencyMode, (on) => applyRecencyMode(on));
+
 const onFitGraph = () => fitToView();
 const onExportGraphPng = () => exportGraph('png');
 
@@ -776,6 +823,15 @@ defineExpose({ fitToView, focusNode, exportGraph });
           color: graphStore.showOverlays ? '#fff' : 'var(--text-secondary)',
         }">Overlays</button>
       <button @click="fitToView()" class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">Fit</button>
+      <!-- Phase 11-4: Heat by recency toggle -->
+      <button @click="recencyMode = !recencyMode"
+        class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm"
+        :title="recencyMode ? 'Heat by recency: on (red=7d, orange=30d, yellow=90d, blue=older, gray=unknown)' : 'Heat by recency: off (color by node kind)'"
+        :style="{
+          background: recencyMode ? '#ef4444' : 'var(--surface-elevated)',
+          borderColor: recencyMode ? '#ef4444' : 'var(--border-subtle)',
+          color: recencyMode ? '#fff' : 'var(--text-secondary)',
+        }">Recency</button>
       <button @click="useClusters = !useClusters; if (useClusters) { clustering.fetchClustered(3).then(() => refreshGraph()) } else { refreshGraph() }"
         class="rounded-lg px-3 py-1.5 text-xs border backdrop-blur-sm" style="background: var(--surface-elevated); border-color: var(--border-subtle); color: var(--text-secondary)">
         {{ useClusters ? 'Expand All' : 'Cluster' }}

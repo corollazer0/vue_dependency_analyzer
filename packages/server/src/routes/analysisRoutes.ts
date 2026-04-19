@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import type { AnalysisEngine } from '../engine.js';
 import { readdirSync, statSync } from 'node:fs';
 import { resolve, relative, sep } from 'node:path';
+import { ArchSnapshotStore } from '@vda/core';
 
 export function registerAnalysisRoutes(fastify: FastifyInstance, engine: AnalysisEngine): void {
   fastify.post('/api/analyze', async (request, reply) => {
@@ -57,6 +58,32 @@ export function registerAnalysisRoutes(fastify: FastifyInstance, engine: Analysi
   // Phase 9-9 — F9 anti-pattern classifier.
   fastify.get('/api/analysis/anti-patterns', async () => {
     return engine.getAntiPatterns();
+  });
+
+  // Phase 11-9 — F12 architecture snapshot listing + diff. Pure DB reads
+  // against .vda-cache/snapshots.sqlite written by `vda snapshot`. No
+  // parser invocation; the route is safe to poll from the UI.
+  fastify.get('/api/analysis/snapshots', async () => {
+    const store = new ArchSnapshotStore(engine.getProjectRoot());
+    const snapshots = store.list();
+    store.close();
+    return { snapshots };
+  });
+
+  fastify.get('/api/analysis/diff', async (request, reply) => {
+    const { from, to } = request.query as { from?: string; to?: string };
+    if (!from || !to) {
+      reply.code(400);
+      return { error: 'Both "from" and "to" query parameters are required' };
+    }
+    const store = new ArchSnapshotStore(engine.getProjectRoot());
+    const diff = store.diff(decodeURIComponent(from), decodeURIComponent(to));
+    store.close();
+    if (!diff) {
+      reply.code(404);
+      return { error: 'Snapshot label not found. Use GET /api/analysis/snapshots to list available labels.' };
+    }
+    return diff;
   });
 
   // Phase 10-6 — file-tree picker for ChangeImpactPanel "Files (tree)" mode.
