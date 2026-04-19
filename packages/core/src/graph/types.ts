@@ -18,7 +18,10 @@ export type NodeKind =
   | 'mybatis-statement'
   | 'db-table'
   | 'vue-event'
-  | 'spring-event';
+  | 'spring-event'
+  // Phase 12-1 — top-level MSA service node, one per services[] entry
+  // (or `unassigned` for nodes with no serviceId).
+  | 'msa-service';
 
 export type EdgeKind =
   | 'imports'
@@ -39,7 +42,11 @@ export type EdgeKind =
   | 'mybatis-maps'
   | 'reads-table'
   | 'writes-table'
-  | 'dto-flows';
+  | 'dto-flows'
+  // Phase 12 — inter-service edges, all msa-service → msa-service.
+  | 'service-calls'        // service A → service B endpoint (HTTP)
+  | 'service-shares-db'    // service A's mybatis writes a table service B owns
+  | 'service-shares-dto';  // service A and B both reference the same DTO fqn
 
 export interface SourceLocation {
   filePath: string;
