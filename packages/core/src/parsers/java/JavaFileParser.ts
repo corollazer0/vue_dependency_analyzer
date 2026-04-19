@@ -458,19 +458,44 @@ function extractSpringEvents(content: string, filePath: string, sourceNodeId: st
     });
   }
 
-  // @EventListener methods
-  const listenerPattern = /@EventListener[\s\S]*?(?:public|protected|private)\s+\w+\s+\w+\s*\(\s*(\w+)/g;
-  while ((match = listenerPattern.exec(content)) !== null) {
-    const eventClass = match[1];
-    const line = content.substring(0, match.index).split('\n').length;
+  // @EventListener / @TransactionalEventListener methods (Phase 7a-7).
+  //   Form A: @EventListener public void onX(XEvent e) — type from the
+  //           first method parameter.
+  //   Form B: @EventListener(XEvent.class) public void onX() — type
+  //           specified in the annotation argument when the method takes
+  //           no event parameter (or e.g. wraps it in a wildcard).
+  // @TransactionalEventListener follows the same shapes; both kinds were
+  // previously dropped, masking event chains entirely.
+  const seenListeners = new Set<string>();
+  function addListener(eventClass: string, position: number): void {
+    const dedup = `${eventClass}@${position}`;
+    if (seenListeners.has(dedup)) return;
+    seenListeners.add(dedup);
+    const line = content.substring(0, position).split('\n').length;
     edges.push({
-      id: `${sourceNodeId}:listens-event:event:${eventClass}`,
+      id: `${sourceNodeId}:listens-event:event:${eventClass}@${line}`,
       source: `event:${eventClass}`,
       target: sourceNodeId,
       kind: 'listens-event',
       metadata: { eventClass },
       loc: { filePath, line, column: 0 },
     });
+  }
+
+  // Form A — type pulled off the method's first parameter.
+  const listenerParamPattern = /@(?:Transactional)?EventListener(?:\s*\([^)]*\))?[\s\S]*?(?:public|protected|private)\s+\w+\s+\w+\s*\(\s*(\w+)/g;
+  while ((match = listenerParamPattern.exec(content)) !== null) {
+    const eventClass = match[1];
+    // Skip primitives / collection markers — the annotation form
+    // happens to capture e.g. `void onX()` -> 'void' on no-arg methods.
+    if (/^(void|int|long|short|byte|float|double|boolean|char|String|List|Set|Map|Collection)$/.test(eventClass)) continue;
+    addListener(eventClass, match.index);
+  }
+
+  // Form B — type lifted out of @EventListener(XEvent.class).
+  const listenerAnnotationPattern = /@(?:Transactional)?EventListener\s*\(\s*(?:classes\s*=\s*)?\{?\s*(\w+)\.class/g;
+  while ((match = listenerAnnotationPattern.exec(content)) !== null) {
+    addListener(match[1], match.index);
   }
 
   return edges;

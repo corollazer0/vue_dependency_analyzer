@@ -84,6 +84,113 @@ describe('JavaFileParser', () => {
     });
   });
 
+  describe('Spring Event detection (Phase 7a-7)', () => {
+    it('should emit `emits-event` for publishEvent(new XxxEvent(...))', () => {
+      const content = `
+package com.example.svc;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+
+@Service
+public class OrderService {
+  private final ApplicationEventPublisher publisher;
+  public OrderService(ApplicationEventPublisher p) { this.publisher = p; }
+  public void place() {
+    publisher.publishEvent(new OrderPlacedEvent(42));
+  }
+}
+`;
+      const result = parser.parse('/test/OrderService.java', content, {});
+      const emits = result.edges.filter(e => e.kind === 'emits-event');
+      expect(emits).toHaveLength(1);
+      expect(emits[0].target).toBe('event:OrderPlacedEvent');
+      expect(emits[0].metadata.eventClass).toBe('OrderPlacedEvent');
+    });
+
+    it('should emit `listens-event` for @EventListener with first-param type', () => {
+      const content = `
+package com.example.svc;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
+
+@Service
+public class NotificationService {
+  @EventListener
+  public void onOrderPlaced(OrderPlacedEvent ev) { /* ... */ }
+}
+`;
+      const result = parser.parse('/test/NotificationService.java', content, {});
+      const listens = result.edges.filter(e => e.kind === 'listens-event');
+      expect(listens).toHaveLength(1);
+      expect(listens[0].source).toBe('event:OrderPlacedEvent');
+      expect(listens[0].metadata.eventClass).toBe('OrderPlacedEvent');
+    });
+
+    it('should emit `listens-event` for @TransactionalEventListener', () => {
+      const content = `
+package com.example.svc;
+import org.springframework.transaction.event.TransactionalEventListener;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AuditService {
+  @TransactionalEventListener
+  public void onPaid(PaymentCapturedEvent ev) { /* ... */ }
+}
+`;
+      const result = parser.parse('/test/AuditService.java', content, {});
+      const listens = result.edges.filter(e => e.kind === 'listens-event');
+      expect(listens.find(e => e.metadata.eventClass === 'PaymentCapturedEvent')).toBeDefined();
+    });
+
+    it('should emit `listens-event` from @EventListener(XEvent.class) when method has no event param', () => {
+      const content = `
+package com.example.svc;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
+
+@Service
+public class CleanupService {
+  @EventListener(ContextClosedEvent.class)
+  public void onShutdown() { /* ... */ }
+}
+`;
+      const result = parser.parse('/test/CleanupService.java', content, {});
+      const listens = result.edges.filter(e => e.kind === 'listens-event');
+      expect(listens.find(e => e.metadata.eventClass === 'ContextClosedEvent')).toBeDefined();
+    });
+
+    it('should connect emitter and listener through the same virtual event id', () => {
+      // Both files independently parse — the shared `event:OrderPlacedEvent`
+      // node is materialised by CrossBoundaryResolver downstream. This test
+      // just checks the edge endpoints line up.
+      const emitterSrc = `
+package com.example.svc;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.stereotype.Service;
+@Service public class A {
+  private final ApplicationEventPublisher p;
+  public A(ApplicationEventPublisher p){ this.p = p; }
+  public void fire(){ p.publishEvent(new ChainedEvent()); }
+}
+`;
+      const listenerSrc = `
+package com.example.svc;
+import org.springframework.context.event.EventListener;
+import org.springframework.stereotype.Service;
+@Service public class B {
+  @EventListener public void on(ChainedEvent ev){}
+}
+`;
+      const aRes = parser.parse('/test/A.java', emitterSrc, {});
+      const bRes = parser.parse('/test/B.java', listenerSrc, {});
+      const emitTarget = aRes.edges.find(e => e.kind === 'emits-event')!.target;
+      const listenSource = bRes.edges.find(e => e.kind === 'listens-event')!.source;
+      expect(emitTarget).toBe(listenSource);
+      expect(emitTarget).toBe('event:ChainedEvent');
+    });
+  });
+
   describe('Java @Component detection', () => {
     const content = `
 package com.example.util;
