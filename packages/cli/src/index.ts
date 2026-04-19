@@ -6,6 +6,7 @@ import { exportCommand } from './commands/export.js';
 import { initCommand } from './commands/init.js';
 import { lintCommand } from './commands/lint.js';
 import { snapshotCommand } from './commands/snapshot.js';
+import { diffCommand } from './commands/diff.js';
 import { impactCommand } from './commands/impact.js';
 import { decommissionCommand } from './commands/decommission.js';
 
@@ -89,6 +90,15 @@ program
   .option('--json', 'Print the persisted snapshot record as JSON')
   .option('--no-cache', 'Disable parse cache')
   .action(snapshotCommand);
+
+program
+  .command('diff')
+  .description('Diff two architecture snapshots (Phase 11-8). Range syntax: <from>..<to>')
+  .argument('[range]', 'Snapshot range, e.g. 2026-04-01..2026-04-19')
+  .option('--dir <path>', 'Project directory', '.')
+  .option('--config <path>', 'Config file path', '.vdarc.json')
+  .option('--json', 'Print the diff record as JSON')
+  .action((range, options) => diffCommand(options.dir ?? '.', range, options));
 
 program
   .command('init')
