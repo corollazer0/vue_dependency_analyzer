@@ -59,7 +59,7 @@ program
   .option('--diff <spec>', 'Git diff spec (e.g., HEAD~1..HEAD)')
   .option('--files <list>', 'Comma-separated file paths')
   .option('--json', 'Output as JSON')
-  .option('--format <fmt>', 'Output format: text | github-pr', 'text')
+  .option('--format <fmt>', 'Output format: text | github-pr | gitlab-mr', 'text')
   .option('--breaking', 'Detect B1-B4 breaking changes against the baseline snapshot')
   .option('--baseline <label>', 'Baseline snapshot label (default: main)', 'main')
   .option('--no-cache', 'Disable parse cache')

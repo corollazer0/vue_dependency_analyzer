@@ -45,13 +45,19 @@ export async function impactCommand(
     changedFiles = parseGitDiff(config.projectRoot, 'HEAD');
   }
 
+  // Phase 10-7 — both PR-comment formats reuse formatPrReport; only the
+  // marker prefix differs. Treat both as "report" for control-flow purposes.
+  const isReportFormat = options.format === 'github-pr' || options.format === 'gitlab-mr';
+  const reportFormat = options.format === 'gitlab-mr' ? 'gitlab-mr' : 'github-pr';
+
   if (changedFiles.length === 0) {
-    if (options.format === 'github-pr') {
+    if (isReportFormat) {
       // Always print *something* for the PR-comment workflow.
       console.log(formatPrReport({
         changedFiles: [],
         impact: { summary: { changed: 0, direct: 0, transitive: 0, endpoints: 0, tables: 0 }, changedNodes: [], directImpact: [], transitiveImpact: [], affectedEndpoints: [], affectedTables: [] } as unknown as ImpactSummary,
         ruleViolationDelta: 0,
+        format: reportFormat,
       }));
       return;
     }
@@ -59,7 +65,7 @@ export async function impactCommand(
     return;
   }
 
-  if (options.format !== 'github-pr') {
+  if (!isReportFormat) {
     console.log(`\n🔍 Analyzing impact of ${changedFiles.length} changed file(s)...\n`);
   }
 
@@ -95,12 +101,13 @@ export async function impactCommand(
     store.close();
   }
 
-  if (options.format === 'github-pr') {
+  if (isReportFormat) {
     console.log(formatPrReport({
       changedFiles,
       impact: impact as unknown as ImpactSummary,
       ruleViolationDelta: 0,
       breakingRisksMarkdown: breakingMarkdown,
+      format: reportFormat,
     }));
     return;
   }
