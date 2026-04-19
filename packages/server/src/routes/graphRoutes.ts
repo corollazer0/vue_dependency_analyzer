@@ -214,18 +214,21 @@ export function registerGraphRoutes(fastify: FastifyInstance, engine: AnalysisEn
       },
     },
     async (request, reply) => {
-      const { from, to, maxDepth, edgeKinds } = request.query as { from?: string; to?: string; maxDepth?: string; edgeKinds?: string };
+      const { from, to, maxDepth, edgeKinds, dir } = request.query as { from?: string; to?: string; maxDepth?: string; edgeKinds?: string; dir?: string };
       if (!from || !to) {
         reply.code(400);
         return { error: 'Both "from" and "to" query parameters are required' };
       }
       // Distinguish omitted edgeKinds from an explicitly empty edgeKinds=
       const edgeKindList = edgeKinds !== undefined ? edgeKinds.split(',').filter(Boolean) : undefined;
+      // Phase 10-1 — dir defaults to forward; only 'reverse' opts in to in-edge walk.
+      const direction = dir === 'reverse' ? 'reverse' : 'forward';
       const paths = engine.findPaths(
         decodeURIComponent(from),
         decodeURIComponent(to),
         maxDepth ? parseInt(maxDepth, 10) : 10,
         edgeKindList,
+        direction,
       );
       return { paths, count: paths.length };
     },

@@ -95,11 +95,20 @@ export function impactOf(
   return { nodes, edges };
 }
 
+export type PathDirection = 'forward' | 'reverse';
+
 export interface FindPathsOptions {
   maxDepth?: number;
   edgeKinds?: string[];
   /** Cap total paths returned to avoid exponential blowup on hub-heavy graphs. */
   maxResults?: number;
+  /**
+   * forward (default): walk out-edges from `from` to `to`.
+   * reverse: walk in-edges from `from` to `to` — answers "who can reach `from`?
+   * starting at the consumer side". Returned paths still read source→target order:
+   * each step is a real edge in the graph (target → source of an in-edge).
+   */
+  direction?: PathDirection;
 }
 
 /** Default cap on paths returned from findPaths. Guards against pathological graphs. */
@@ -117,6 +126,7 @@ export function findPaths(
   const maxDepth = opts.maxDepth ?? 10;
   const maxResults = opts.maxResults ?? DEFAULT_FIND_PATHS_CAP;
   const edgeKindSet = opts.edgeKinds ? new Set(opts.edgeKinds) : null;
+  const direction: PathDirection = opts.direction ?? 'forward';
   const paths: string[][] = [];
   // Set tracks membership in O(1); array preserves order for the final path copy.
   const onPath = new Set<string>([from]);
@@ -128,14 +138,18 @@ export function findPaths(
       paths.push([...path]);
       return paths.length >= maxResults;
     }
-    for (const edge of graph.getOutEdges(current)) {
+    const edges = direction === 'forward'
+      ? graph.getOutEdges(current)
+      : graph.getInEdges(current);
+    for (const edge of edges) {
       if (edgeKindSet && !edgeKindSet.has(edge.kind)) continue;
-      if (onPath.has(edge.target)) continue;
-      onPath.add(edge.target);
-      path.push(edge.target);
-      const done = dfs(edge.target, path, depth + 1);
+      const next = direction === 'forward' ? edge.target : edge.source;
+      if (onPath.has(next)) continue;
+      onPath.add(next);
+      path.push(next);
+      const done = dfs(next, path, depth + 1);
       path.pop();
-      onPath.delete(edge.target);
+      onPath.delete(next);
       if (done) return true;
     }
     return false;
