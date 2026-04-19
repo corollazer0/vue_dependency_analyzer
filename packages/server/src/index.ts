@@ -10,6 +10,7 @@ import { existsSync } from 'fs';
 import { registerGraphRoutes } from './routes/graphRoutes.js';
 import { registerAnalysisRoutes } from './routes/analysisRoutes.js';
 import { registerSearchRoutes } from './routes/searchRoutes.js';
+import { registerGitRoutes } from './routes/gitRoutes.js';
 import { registerHealthRoutes } from './routes/healthRoutes.js';
 import { registerAuthRoutes, registerAuthHook } from './middleware/auth.js';
 import { AuditLog, registerAuditHook } from './middleware/auditLog.js';
@@ -134,6 +135,7 @@ export async function startServer(opts: ServerOptions): Promise<void> {
   registerGraphRoutes(fastify, engine);
   registerAnalysisRoutes(fastify, engine);
   registerSearchRoutes(fastify, engine);
+  registerGitRoutes(fastify, engine);
 
   // Admin routes
   fastify.get('/api/admin/audit-log', async (request, reply) => {
