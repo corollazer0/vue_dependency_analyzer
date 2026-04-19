@@ -24,6 +24,28 @@ export type { ResultMap, ResultMapping } from './parsers/java/MyBatisXmlParser.j
 // Analyzers
 export { findCircularDependencies } from './analyzers/CircularDependencyAnalyzer.js';
 export { findOrphanNodes, findUnusedComponents, findUnusedEndpoints } from './analyzers/OrphanDetector.js';
+export {
+  collectEntrypoints,
+  reachableFromEntrypoints,
+  type EntrypointSource,
+  type EntrypointReason,
+} from './analyzers/EntrypointCollector.js';
+export { findDeadNodes, type DeadCodeReport } from './analyzers/DeadCodeDetector.js';
+export {
+  WaiverEngine,
+  loadWaivers,
+  type Waiver,
+  type WaiverMatchInput,
+} from './analyzers/WaiverEngine.js';
+export {
+  compileLayerRules,
+  mergeWithLayerRules,
+  type LayerDefinition,
+  type LayerRule,
+  type LayerDslConfig,
+  type CompiledLayerRules,
+  type DroppedRule,
+} from './analyzers/LayerDsl.js';
 export { calculateComplexity, findHubs } from './analyzers/ComplexityScorer.js';
 export type { ComplexityScore } from './analyzers/ComplexityScorer.js';
 export { analyzeImpact } from './analyzers/ImpactAnalyzer.js';

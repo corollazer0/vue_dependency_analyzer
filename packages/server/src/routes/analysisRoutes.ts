@@ -40,4 +40,9 @@ export function registerAnalysisRoutes(fastify: FastifyInstance, engine: Analysi
   fastify.get('/api/analysis/rule-violations', async (request, reply) => {
     return engine.checkRuleViolations();
   });
+
+  // Phase 7b-4 — F3 layer compliance matrix.
+  fastify.get('/api/analysis/layer-compliance', async () => {
+    return engine.getLayerCompliance();
+  });
 }

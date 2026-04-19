@@ -2,13 +2,43 @@ import { DependencyGraph } from '../graph/DependencyGraph.js';
 import { findCircularDependencies } from './CircularDependencyAnalyzer.js';
 import { filterByKind } from '../graph/query.js';
 import type { ArchitectureRule, RuleViolation, NodeKind, EdgeKind } from '../graph/types.js';
+import type { WaiverEngine } from './WaiverEngine.js';
 
 /**
  * Evaluate architecture rules against the dependency graph.
  * Returns a list of violations found.
+ *
+ * Phase 7b-5 — when `opts.waivers` is supplied, every violation is
+ * checked against the loaded waivers. A matching, non-expired waiver
+ * is recorded on the violation (`waivedBy`) and the violation is moved
+ * to `waived[]` instead of `violations[]`. Production callers should
+ * pass `today` so expiry is deterministic; tests use the same hook.
  */
-export function evaluateRules(graph: DependencyGraph, rules: ArchitectureRule[]): RuleViolation[] {
-  const violations: RuleViolation[] = [];
+export interface EvaluateRulesOptions {
+  waivers?: WaiverEngine;
+  today?: string;
+}
+
+export interface EvaluateRulesResult {
+  violations: (RuleViolation & { waivedBy?: ReturnType<WaiverEngine['isWaived']>['waiver'] })[];
+  waived: (RuleViolation & { waivedBy: ReturnType<WaiverEngine['isWaived']>['waiver'] })[];
+}
+
+export function evaluateRules(
+  graph: DependencyGraph,
+  rules: ArchitectureRule[],
+  opts?: EvaluateRulesOptions,
+): RuleViolation[] {
+  const result = evaluateRulesWithWaivers(graph, rules, opts);
+  return result.violations;
+}
+
+export function evaluateRulesWithWaivers(
+  graph: DependencyGraph,
+  rules: ArchitectureRule[],
+  opts?: EvaluateRulesOptions,
+): EvaluateRulesResult {
+  const raw: RuleViolation[] = [];
 
   for (let i = 0; i < rules.length; i++) {
     const rule = rules[i];
@@ -17,24 +47,57 @@ export function evaluateRules(graph: DependencyGraph, rules: ArchitectureRule[])
 
     switch (rule.type) {
       case 'deny-circular':
-        violations.push(...checkDenyCircular(graph, rule, ruleId, severity));
+        raw.push(...checkDenyCircular(graph, rule, ruleId, severity));
         break;
       case 'deny-direct':
-        violations.push(...checkDenyDirect(graph, rule, ruleId, severity));
+        raw.push(...checkDenyDirect(graph, rule, ruleId, severity));
         break;
       case 'allow-only':
-        violations.push(...checkAllowOnly(graph, rule, ruleId, severity));
+        raw.push(...checkAllowOnly(graph, rule, ruleId, severity));
         break;
       case 'max-depth':
-        violations.push(...checkMaxDepth(graph, rule, ruleId, severity));
+        raw.push(...checkMaxDepth(graph, rule, ruleId, severity));
         break;
       case 'max-dependents':
-        violations.push(...checkMaxDependents(graph, rule, ruleId, severity));
+        raw.push(...checkMaxDependents(graph, rule, ruleId, severity));
         break;
     }
   }
 
-  return violations;
+  if (!opts?.waivers) {
+    return { violations: raw, waived: [] };
+  }
+  const today = opts.today ?? new Date().toISOString().slice(0, 10);
+  const violations: EvaluateRulesResult['violations'] = [];
+  const waived: EvaluateRulesResult['waived'] = [];
+  for (const v of raw) {
+    const target = waiverTargetFor(v, graph);
+    const file = waiverFileFor(v, graph);
+    const match = opts.waivers.isWaived({ ruleId: v.ruleType, target, file }, today);
+    if (match.waived && match.waiver) {
+      waived.push({ ...v, waivedBy: match.waiver });
+    } else {
+      violations.push(v);
+    }
+  }
+  return { violations, waived };
+}
+
+function waiverTargetFor(v: RuleViolation, graph: DependencyGraph): string {
+  if (v.ruleType === 'deny-direct' && v.nodeIds.length === 2) {
+    const a = graph.getNode(v.nodeIds[0]);
+    const b = graph.getNode(v.nodeIds[1]);
+    if (a && b) return `${a.kind}→${b.kind}`;
+  }
+  return v.nodeIds[0] ?? v.ruleId;
+}
+
+function waiverFileFor(v: RuleViolation, graph: DependencyGraph): string | undefined {
+  for (const id of v.nodeIds) {
+    const n = graph.getNode(id);
+    if (n?.filePath) return n.filePath;
+  }
+  return undefined;
 }
 
 function toArray<T>(val: T | T[] | undefined): T[] {

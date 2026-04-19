@@ -1,0 +1,87 @@
+# Phase 7b-7 — F5 PR Report.
+#
+# Runs `vda impact --diff <base>..HEAD --format github-pr` on every PR
+# and posts/updates a single comment on the PR with the markdown
+# output. Single-comment update mirrors the bench workflow pattern:
+# match by a hidden marker so re-runs don't spam the PR.
+#
+# `vda impact --format github-pr` always emits the `<!-- vda:breaking-
+# risks:start --> … <!-- vda:breaking-risks:end -->` block (Phase 8-5
+# fills the slot once the BreakingChangeDetector lands), so this
+# workflow doesn't need to know anything about Phase 8.
+
+name: vda-pr-report
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: vda-pr-report-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pr-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # need the merge-base for `git diff`
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build CLI + core
+        run: npx turbo run build --filter=@vda/cli
+
+      - name: Resolve base / head SHAs
+        id: revs
+        run: |
+          base="${{ github.event.pull_request.base.sha }}"
+          head="${{ github.event.pull_request.head.sha }}"
+          echo "base=$base" >> "$GITHUB_OUTPUT"
+          echo "head=$head" >> "$GITHUB_OUTPUT"
+
+      - name: Run vda impact (Markdown for PR)
+        id: vda
+        run: |
+          set -eo pipefail
+          mkdir -p /tmp/vda
+          # `--diff` accepts the same `<from>..<to>` syntax as `git diff`.
+          # `|| true` so a missing-fixture / no-files edge case doesn't
+          # fail the workflow — the formatter still emits the marker block.
+          npx -w @vda/cli vda impact --diff "${{ steps.revs.outputs.base }}..${{ steps.revs.outputs.head }}" --format github-pr \
+            > /tmp/vda/pr-report.md || true
+
+      - name: Post / update PR comment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const body = fs.readFileSync('/tmp/vda/pr-report.md', 'utf-8');
+            const MARKER = '<!-- vda:pr-report -->';
+            const tagged = `${MARKER}\n${body}`;
+            const { owner, repo } = context.repo;
+            const issue_number = context.payload.pull_request.number;
+            const { data: comments } = await github.rest.issues.listComments({
+              owner, repo, issue_number, per_page: 100,
+            });
+            const existing = comments.find(c => c.user.type === 'Bot' && c.body && c.body.startsWith(MARKER));
+            if (existing) {
+              await github.rest.issues.updateComment({
+                owner, repo, comment_id: existing.id, body: tagged,
+              });
+            } else {
+              await github.rest.issues.createComment({
+                owner, repo, issue_number, body: tagged,
+              });
+            }

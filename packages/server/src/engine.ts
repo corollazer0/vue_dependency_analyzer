@@ -798,6 +798,113 @@ export class AnalysisEngine {
     return { violations, count: violations.length };
   }
 
+  /**
+   * Phase 7b-4 — Layer compliance matrix.
+   *
+   * Computes a layer × layer grid of edges and labels each cell as
+   * `allowed`, `denied`, or `undefined` based on the configured layer
+   * DSL (compileLayerRules + the engine's evaluateRules cross-check).
+   * The view consumes this directly so no client-side rule logic ships.
+   */
+  getLayerCompliance(): {
+    layers: Array<{ name: string; kinds: string[]; nodeIds: string[] }>;
+    matrix: Array<{
+      from: string;
+      to: string;
+      count: number;
+      status: 'allowed' | 'denied' | 'undefined';
+      sampleEdgeIds: string[];
+    }>;
+  } {
+    const cfg = this.config as unknown as {
+      layers?: Array<{ name: string; match: string[] }>;
+      layerRules?: Array<{ from: string; to: string; policy: 'deny' | 'allow-only' }>;
+    };
+    const layers = cfg.layers ?? [];
+    const layerRules = cfg.layerRules ?? [];
+    if (layers.length === 0) {
+      return { layers: [], matrix: [] };
+    }
+
+    // Map kind → first matching layer (layers earlier in the list win
+    // when a kind appears in multiple definitions).
+    const kindToLayer = new Map<string, string>();
+    for (const l of layers) {
+      for (const k of l.match) {
+        if (!kindToLayer.has(k)) kindToLayer.set(k, l.name);
+      }
+    }
+
+    // Index nodes per layer.
+    const nodeIdsByLayer = new Map<string, string[]>();
+    for (const l of layers) nodeIdsByLayer.set(l.name, []);
+    for (const node of this.graph.nodesIter()) {
+      const layer = kindToLayer.get(node.kind);
+      if (!layer) continue;
+      nodeIdsByLayer.get(layer)!.push(node.id);
+    }
+
+    // Index policies: ('A','B') → 'deny' | 'allow-only'
+    const policyKey = (a: string, b: string) => `${a}|${b}`;
+    const denyPairs = new Set<string>();
+    const allowedTargets = new Map<string, Set<string>>();
+    for (const r of layerRules) {
+      if (r.policy === 'deny') denyPairs.add(policyKey(r.from, r.to));
+      else if (r.policy === 'allow-only') {
+        if (!allowedTargets.has(r.from)) allowedTargets.set(r.from, new Set());
+        allowedTargets.get(r.from)!.add(r.to);
+      }
+    }
+
+    // Walk every edge once, bucket into (fromLayer, toLayer) cells.
+    const cells = new Map<string, { count: number; sampleEdgeIds: string[] }>();
+    for (const edge of this.graph.edgesIter()) {
+      const src = this.graph.getNode(edge.source);
+      const tgt = this.graph.getNode(edge.target);
+      if (!src || !tgt) continue;
+      const fl = kindToLayer.get(src.kind);
+      const tl = kindToLayer.get(tgt.kind);
+      if (!fl || !tl) continue;
+      const k = policyKey(fl, tl);
+      let c = cells.get(k);
+      if (!c) {
+        c = { count: 0, sampleEdgeIds: [] };
+        cells.set(k, c);
+      }
+      c.count += 1;
+      if (c.sampleEdgeIds.length < 5) c.sampleEdgeIds.push(edge.id);
+    }
+
+    const matrix: ReturnType<typeof this.getLayerCompliance>['matrix'] = [];
+    for (const from of layers) {
+      for (const to of layers) {
+        const k = policyKey(from.name, to.name);
+        const cell = cells.get(k);
+        const allowedSet = allowedTargets.get(from.name);
+        const status: 'allowed' | 'denied' | 'undefined' =
+          denyPairs.has(k) ? 'denied'
+          : allowedSet ? (allowedSet.has(to.name) ? 'allowed' : 'denied')
+          : 'undefined';
+        matrix.push({
+          from: from.name,
+          to: to.name,
+          count: cell?.count ?? 0,
+          status,
+          sampleEdgeIds: cell?.sampleEdgeIds ?? [],
+        });
+      }
+    }
+
+    return {
+      layers: layers.map(l => ({
+        name: l.name,
+        kinds: l.match,
+        nodeIds: nodeIdsByLayer.get(l.name) ?? [],
+      })),
+      matrix,
+    };
+  }
+
   findPaths(from: string, to: string, maxDepth: number = 10, edgeKinds?: string[]) {
     return findPathsFn(this.graph, from, to, { maxDepth, edgeKinds });
   }

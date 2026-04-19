@@ -54,6 +54,9 @@ export class JavaFileParser implements FileParser {
           edges.push(...ep.edges);
         }
       } else if (isService || isRepository || isMapper || isConfiguration || isComponent) {
+        // Phase 7b-1 — flag classes with @Scheduled methods so the
+        // EntrypointCollector can treat them as runtime entry points.
+        const hasScheduled = /@Scheduled\b/.test(content);
         nodes.push({
           id: `spring-service:${filePath}`,
           kind: 'spring-service',
@@ -62,6 +65,7 @@ export class JavaFileParser implements FileParser {
           metadata: {
             className, packageName, fqn,
             isRepository, isMapper, isConfiguration, isComponent,
+            ...(hasScheduled ? { hasScheduled: true } : {}),
           },
         });
 
